@@ -1,0 +1,78 @@
+# LLM-Spec Configuration File
+# Copy this file to your project root as `llm-spec.toml` or `.llm-spec.toml`
+
+# =============================================================================
+# Report Configuration
+# =============================================================================
+
+[report]
+# Output format: "terminal", "json", or "both"
+format = "terminal"
+
+# Directory to save JSON reports (optional)
+# output_dir = "./reports"
+
+# Show valid fields in terminal output
+show_valid = true
+
+# Show verbose details
+verbose = false
+
+# Include raw API response in reports
+include_raw_response = false
+
+# =============================================================================
+# OpenAI Configuration
+# =============================================================================
+
+[openai]
+# API key (can also use OPENAI_API_KEY environment variable)
+# api_key = "sk-..."
+
+# Base URL override (for proxies or compatible APIs)
+base_url = "https://api.openai.com/v1"
+
+# Request timeout in seconds
+timeout = 60.0
+
+# =============================================================================
+# Anthropic Configuration
+# =============================================================================
+
+[anthropic]
+# API key (can also use ANTHROPIC_API_KEY environment variable)
+# api_key = "sk-ant-..."
+
+# Base URL override
+base_url = "https://api.anthropic.com/v1"
+
+# Request timeout in seconds
+timeout = 60.0
+
+# =============================================================================
+# Google Gemini Configuration
+# =============================================================================
+
+[gemini]
+# API key (can also use GEMINI_API_KEY environment variable)
+# api_key = "..."
+
+# Base URL override
+base_url = "https://generativelanguage.googleapis.com/v1beta"
+
+# Request timeout in seconds
+timeout = 60.0
+
+# =============================================================================
+# xAI (Grok) Configuration
+# =============================================================================
+
+[xai]
+# API key (can also use XAI_API_KEY environment variable)
+# api_key = "..."
+
+# Base URL override
+base_url = "https://api.x.ai/v1"
+
+# Request timeout in seconds
+timeout = 60.0
