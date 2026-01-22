@@ -1,3 +1,13 @@
+# 日志配置
+[log]
+enabled = true              # 是否启用日志
+level = "INFO"              # DEBUG, INFO, WARNING, ERROR
+console = false              # 输出到控制台
+# file = "./logs/llm-spec.log"  # 输出到文件（可选）
+log_request_body = true     # 记录请求体
+log_response_body = false   # 记录响应体（较大）
+max_body_length = 1000      # 最大记录长度
+
 # 报告配置
 [report]
 format = "both"        # terminal, json, both
@@ -10,7 +20,7 @@ include_raw_response = false
 [openai]
 api_key = "sk-PTGBWXMWPEfcvivlEd5b4189041c4fE89e455b274e9d86Ab"
 base_url = "https://api.huamedia.tv/v1"
-timeout = 60.0
+timeout = 300.0
 
 [anthropic]
 api_key = "sk-ant-..."

@@ -17,71 +17,117 @@ from tests.base import assert_report_valid, print_report_summary
 class TestChatCompletions:
     """Tests for /v1/chat/completions endpoint."""
 
-    def test_basic_completion(self, openai_client: OpenAIClient) -> None:
-        """Test basic chat completion with common parameters."""
-        report = openai_client.validate_chat_completion(
-            temperature=0.5,
-            max_tokens=50,
-        )
-        report.print()
-        assert_report_valid(report)
-
-    def test_with_system_message(self, openai_client: OpenAIClient) -> None:
-        """Test chat completion with system message."""
+    def test_basic_params(self, openai_client: OpenAIClient) -> None:
+        """Test basic parameters: temperature, top_p, penalties, max_tokens, seed, system message."""
         report = openai_client.validate_chat_completion(
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": "Say 'test'."},
-            ]
+            ],
+            temperature=0.7,
+            top_p=0.9,
+            presence_penalty=0.5,
+            frequency_penalty=0.5,
+            max_tokens=50,
+            seed=42,
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
-    def test_multi_turn_conversation(self, openai_client: OpenAIClient) -> None:
-        """Test multi-turn conversation."""
+    def test_multi_choice_and_stop(self, openai_client: OpenAIClient) -> None:
+        """Test n choices, stop sequence, max_completion_tokens, and multi-turn conversation."""
         report = openai_client.validate_chat_completion(
             messages=[
                 {"role": "user", "content": "My name is Alice."},
                 {"role": "assistant", "content": "Hello Alice!"},
-                {"role": "user", "content": "What is my name?"},
-            ]
+                {"role": "user", "content": "Count 1 to 10."},
+            ],
+            n=2,
+            stop=["5"],
+            max_completion_tokens=50,
         )
-        report.print()
+        report.output()
+        assert_report_valid(report)
+        # Verify 2 choices
+        if report.raw_response:
+            choices = report.raw_response.get("choices", [])
+            assert len(choices) == 2, f"Expected 2 choices, got {len(choices)}"
+
+    def test_json_response_format(self, openai_client: OpenAIClient) -> None:
+        """Test JSON mode response format."""
+        report = openai_client.validate_chat_completion(
+            messages=[
+                {"role": "system", "content": "You respond in JSON format."},
+                {"role": "user", "content": "Return a JSON object with a 'status' field set to 'ok'."},
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=50,
+        )
+        report.output()
         assert_report_valid(report)
 
     @pytest.mark.parametrize("model", ["gpt-4o-mini", "gpt-4o"])
     def test_different_models(self, openai_client: OpenAIClient, model: str) -> None:
         """Test chat completion with different models."""
         report = openai_client.validate_chat_completion(model=model)
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_with_tool_definition(self, openai_client: OpenAIClient) -> None:
-        """Test chat completion with tool/function definition."""
+        """Test chat completion with multiple tools and parallel_tool_calls.
+
+        Uses multiple tools to test parallel_tool_calls=True, which allows
+        the model to call multiple tools in a single response.
+        """
         tools = [
             {
                 "type": "function",
                 "function": {
-                    "name": "get_weather",
-                    "description": "Get the current weather in a location",
+                    "name": "get_current_weather",
+                    "description": "Get the current weather in a given location",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "location": {
                                 "type": "string",
-                                "description": "The city name",
-                            }
+                                "description": "The city and state, e.g. San Francisco, CA",
+                            },
+                            "unit": {
+                                "type": "string",
+                                "enum": ["celsius", "fahrenheit"],
+                            },
                         },
                         "required": ["location"],
                     },
                 },
-            }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_current_time",
+                    "description": "Get the current time in a given timezone",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "timezone": {
+                                "type": "string",
+                                "description": "The timezone, e.g. America/New_York",
+                            },
+                        },
+                        "required": ["timezone"],
+                    },
+                },
+            },
         ]
         report = openai_client.validate_chat_completion(
-            messages=[{"role": "user", "content": "What's the weather in Tokyo?"}],
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "What's the weather and current time in Boston?"}],
             tools=tools,
+            tool_choice="auto",
+            parallel_tool_calls=True,
+            max_tokens=150,
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_with_image_input(self, openai_client: OpenAIClient) -> None:
@@ -112,8 +158,80 @@ class TestChatCompletions:
             messages=messages,
             max_tokens=300,
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
+
+    def test_with_logprobs(self, openai_client: OpenAIClient) -> None:
+        """Test chat completion with logprobs and logit_bias.
+
+        Based on official OpenAI example:
+        https://platform.openai.com/docs/api-reference/chat/create
+        """
+        report = openai_client.validate_chat_completion(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "Hello!"}],
+            logprobs=True,
+            top_logprobs=2,
+            logit_bias={"15496": -100},  # Suppress "Hello" token
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_streaming_with_usage(self, openai_client: OpenAIClient) -> None:
+        """Test streaming chat completion with stream_options.
+
+        Tests stream and stream_options parameters. When stream_options.include_usage
+        is true, the final chunk includes a usage object with token counts.
+        """
+        messages = [
+            {"role": "developer", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Say hello."},
+        ]
+
+        chunks, report = openai_client.validate_chat_completion_stream(
+            model="gpt-4o-mini",
+            messages=messages,
+            stream_options={"include_usage": True},
+        )
+
+        # Output report for parameter coverage
+        report.output()
+
+        print(f"\nReceived {len(chunks)} chunks")
+
+        # Verify we got chunks
+        assert len(chunks) > 0, "Should receive at least one chunk"
+
+        # Verify first chunk has role in delta
+        first_chunk = chunks[0]
+        assert first_chunk.get("object") == "chat.completion.chunk"
+        assert first_chunk.get("choices", [{}])[0].get("delta", {}).get("role") == "assistant"
+
+        # Find chunk with finish_reason
+        finish_chunk = next(
+            (c for c in chunks if c.get("choices") and c["choices"][0].get("finish_reason") == "stop"),
+            None,
+        )
+        assert finish_chunk is not None, "Should have a chunk with finish_reason='stop'"
+
+        # Verify all chunks have consistent id
+        chunk_ids = {c.get("id") for c in chunks}
+        assert len(chunk_ids) == 1, "All chunks should have same id"
+
+        # Find the usage chunk (should have usage field)
+        usage_chunk = next(
+            (c for c in chunks if c.get("usage") is not None),
+            None,
+        )
+        assert usage_chunk is not None, "Should have a chunk with usage when stream_options.include_usage=true"
+
+        # Verify usage structure
+        usage = usage_chunk["usage"]
+        assert "prompt_tokens" in usage, "Usage should have prompt_tokens"
+        assert "completion_tokens" in usage, "Usage should have completion_tokens"
+        assert "total_tokens" in usage, "Usage should have total_tokens"
+
+        assert report.success, "Streaming should complete successfully"
 
 
 # =============================================================================
@@ -128,14 +246,14 @@ class TestResponses:
     def test_basic_response(self, openai_client: OpenAIClient) -> None:
         """Test basic responses API call."""
         report = openai_client.validate_responses()
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     @pytest.mark.parametrize("model", ["gpt-4o-mini", "gpt-4o"])
     def test_different_models(self, openai_client: OpenAIClient, model: str) -> None:
         """Test responses API with different models."""
         report = openai_client.validate_responses(model=model)
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_with_instructions(self, openai_client: OpenAIClient) -> None:
@@ -144,7 +262,7 @@ class TestResponses:
             input_text="What is 2+2?",
             instructions="Answer concisely with just the number.",
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_with_tool_definition(self, openai_client: OpenAIClient) -> None:
@@ -179,7 +297,7 @@ class TestResponses:
             tools=tools,
             tool_choice="auto",
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_with_web_search(self, openai_client: OpenAIClient) -> None:
@@ -193,7 +311,7 @@ class TestResponses:
             input_text="What was a positive news story from today?",
             tools=tools,
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_with_file_search(self, openai_client: OpenAIClient) -> None:
@@ -221,13 +339,14 @@ class TestResponses:
             input_text="What are the attributes of an ancient brown dragon?",
             tools=tools,
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_with_image_input(self, openai_client: OpenAIClient) -> None:
         """Test responses API with image input (vision).
 
-        Note: This test requires a model that supports vision.
+        Based on official OpenAI example:
+        https://platform.openai.com/docs/api-reference/responses
         """
         input_messages = [
             {
@@ -245,7 +364,7 @@ class TestResponses:
             model="gpt-4o",
             input_messages=input_messages,
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_with_file_input(self, openai_client: OpenAIClient) -> None:
@@ -270,7 +389,7 @@ class TestResponses:
             model="gpt-4o",
             input_messages=input_messages,
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_with_conversation_history(self, openai_client: OpenAIClient) -> None:
@@ -283,7 +402,7 @@ class TestResponses:
         report = openai_client.validate_responses(
             input_messages=input_messages,
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_with_reasoning(self, openai_client: OpenAIClient) -> None:
@@ -296,7 +415,7 @@ class TestResponses:
             input_text="How much wood would a woodchuck chuck?",
             reasoning={"effort": "high"},
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_bedtime_story(self, openai_client: OpenAIClient) -> None:
@@ -305,7 +424,7 @@ class TestResponses:
             model="gpt-4o-mini",
             input_text="Tell me a three sentence bedtime story about a unicorn.",
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_streaming_response(self, openai_client: OpenAIClient) -> None:
@@ -353,7 +472,7 @@ class TestEmbeddings:
     def test_single_text(self, openai_client: OpenAIClient) -> None:
         """Test embedding a single text."""
         report = openai_client.validate_embeddings()
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_batch_texts(self, openai_client: OpenAIClient) -> None:
@@ -361,7 +480,7 @@ class TestEmbeddings:
         report = openai_client.validate_embeddings(
             input_text=["Hello", "World", "Test"]
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     @pytest.mark.parametrize(
@@ -370,7 +489,7 @@ class TestEmbeddings:
     def test_different_models(self, openai_client: OpenAIClient, model: str) -> None:
         """Test embeddings with different models."""
         report = openai_client.validate_embeddings(model=model)
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_with_dimensions(self, openai_client: OpenAIClient) -> None:
@@ -379,7 +498,7 @@ class TestEmbeddings:
             model="text-embedding-3-small",
             dimensions=512,
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_base64_encoding(self, openai_client: OpenAIClient) -> None:
@@ -387,7 +506,7 @@ class TestEmbeddings:
         report = openai_client.validate_embeddings(
             encoding_format="base64",
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
 
@@ -441,7 +560,7 @@ class TestImageGeneration:
             size="256x256",
             n=1,
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
     def test_b64_json_format(
@@ -456,7 +575,7 @@ class TestImageGeneration:
             response_format="b64_json",
             size="256x256",
         )
-        report.print()
+        report.output()
         assert_report_valid(report)
 
 

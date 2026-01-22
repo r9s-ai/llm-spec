@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import httpx
 
-from llm_spec.core.config import ProviderConfig
+from llm_spec.core.config import ProviderConfig, get_config
 from llm_spec.core.exceptions import RequestError
+from llm_spec.core.logger import (
+    get_logger,
+    log_error,
+    log_request,
+    log_response,
+    setup_logging,
+)
 from llm_spec.core.report import ValidationReport
 
 
@@ -38,6 +46,11 @@ class BaseClient(ABC):
 
         self._sync_client: httpx.Client | None = None
         self._async_client: httpx.AsyncClient | None = None
+
+        # Setup logging
+        self._log_config = get_config().log
+        setup_logging(self._log_config)
+        self._logger = get_logger(f"llm_spec.{self.provider_name}")
 
     @property
     def api_key(self) -> str | None:
@@ -118,15 +131,49 @@ class BaseClient(ABC):
             files: Files to upload (for multipart/form-data)
         """
         client = self._get_sync_client()
+        url = f"{self.base_url}{endpoint}"
+
+        # Log request
+        if self._log_config.enabled:
+            log_request(
+                self._logger,
+                method,
+                url,
+                body=json,
+                log_body=self._log_config.log_request_body,
+                max_length=self._log_config.max_body_length,
+            )
+
+        start_time = time.perf_counter()
         try:
             response = client.request(
                 method, endpoint, json=json, params=params, data=data, files=files
             )
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+
+            # Log response
+            if self._log_config.enabled:
+                log_response(
+                    self._logger,
+                    response.status_code,
+                    elapsed_ms=elapsed_ms,
+                    body=result,
+                    log_body=self._log_config.log_response_body,
+                    max_length=self._log_config.max_body_length,
+                )
+
+            return result
         except httpx.HTTPStatusError as e:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            if self._log_config.enabled:
+                log_error(self._logger, method, url, e, elapsed_ms)
             raise RequestError(str(e), status_code=e.response.status_code) from e
         except httpx.RequestError as e:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            if self._log_config.enabled:
+                log_error(self._logger, method, url, e, elapsed_ms)
             raise RequestError(str(e)) from e
 
     def request_binary(
@@ -138,13 +185,39 @@ class BaseClient(ABC):
     ) -> bytes:
         """Make a synchronous HTTP request returning binary data."""
         client = self._get_sync_client()
+        url = f"{self.base_url}{endpoint}"
+
+        # Log request
+        if self._log_config.enabled:
+            log_request(
+                self._logger,
+                method,
+                url,
+                body=json,
+                log_body=self._log_config.log_request_body,
+                max_length=self._log_config.max_body_length,
+            )
+
+        start_time = time.perf_counter()
         try:
             response = client.request(method, endpoint, json=json)
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
             response.raise_for_status()
+
+            # Log response (no body for binary)
+            if self._log_config.enabled:
+                log_response(self._logger, response.status_code, elapsed_ms=elapsed_ms)
+
             return response.content
         except httpx.HTTPStatusError as e:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            if self._log_config.enabled:
+                log_error(self._logger, method, url, e, elapsed_ms)
             raise RequestError(str(e), status_code=e.response.status_code) from e
         except httpx.RequestError as e:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            if self._log_config.enabled:
+                log_error(self._logger, method, url, e, elapsed_ms)
             raise RequestError(str(e)) from e
 
     async def async_request(
@@ -157,13 +230,47 @@ class BaseClient(ABC):
     ) -> dict[str, Any]:
         """Make an asynchronous HTTP request."""
         client = self._get_async_client()
+        url = f"{self.base_url}{endpoint}"
+
+        # Log request
+        if self._log_config.enabled:
+            log_request(
+                self._logger,
+                method,
+                url,
+                body=json,
+                log_body=self._log_config.log_request_body,
+                max_length=self._log_config.max_body_length,
+            )
+
+        start_time = time.perf_counter()
         try:
             response = await client.request(method, endpoint, json=json, params=params)
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+
+            # Log response
+            if self._log_config.enabled:
+                log_response(
+                    self._logger,
+                    response.status_code,
+                    elapsed_ms=elapsed_ms,
+                    body=result,
+                    log_body=self._log_config.log_response_body,
+                    max_length=self._log_config.max_body_length,
+                )
+
+            return result
         except httpx.HTTPStatusError as e:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            if self._log_config.enabled:
+                log_error(self._logger, method, url, e, elapsed_ms)
             raise RequestError(str(e), status_code=e.response.status_code) from e
         except httpx.RequestError as e:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            if self._log_config.enabled:
+                log_error(self._logger, method, url, e, elapsed_ms)
             raise RequestError(str(e)) from e
 
     def stream(
@@ -175,15 +282,41 @@ class BaseClient(ABC):
     ) -> Iterator[str]:
         """Make a synchronous streaming request (SSE)."""
         client = self._get_sync_client()
+        url = f"{self.base_url}{endpoint}"
+
+        # Log request
+        if self._log_config.enabled:
+            log_request(
+                self._logger,
+                method,
+                url,
+                body=json,
+                log_body=self._log_config.log_request_body,
+                max_length=self._log_config.max_body_length,
+            )
+
+        start_time = time.perf_counter()
         try:
             with client.stream(method, endpoint, json=json) as response:
                 response.raise_for_status()
+
+                # Log response start
+                if self._log_config.enabled:
+                    elapsed_ms = (time.perf_counter() - start_time) * 1000
+                    self._logger.info(f"<- {response.status_code} STREAM ({elapsed_ms:.0f}ms)")
+
                 for line in response.iter_lines():
                     if line.startswith("data: "):
                         yield line[6:]
         except httpx.HTTPStatusError as e:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            if self._log_config.enabled:
+                log_error(self._logger, method, url, e, elapsed_ms)
             raise RequestError(str(e), status_code=e.response.status_code) from e
         except httpx.RequestError as e:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            if self._log_config.enabled:
+                log_error(self._logger, method, url, e, elapsed_ms)
             raise RequestError(str(e)) from e
 
     async def async_stream(
@@ -195,15 +328,41 @@ class BaseClient(ABC):
     ) -> AsyncIterator[str]:
         """Make an asynchronous streaming request (SSE)."""
         client = self._get_async_client()
+        url = f"{self.base_url}{endpoint}"
+
+        # Log request
+        if self._log_config.enabled:
+            log_request(
+                self._logger,
+                method,
+                url,
+                body=json,
+                log_body=self._log_config.log_request_body,
+                max_length=self._log_config.max_body_length,
+            )
+
+        start_time = time.perf_counter()
         try:
             async with client.stream(method, endpoint, json=json) as response:
                 response.raise_for_status()
+
+                # Log response start
+                if self._log_config.enabled:
+                    elapsed_ms = (time.perf_counter() - start_time) * 1000
+                    self._logger.info(f"<- {response.status_code} STREAM ({elapsed_ms:.0f}ms)")
+
                 async for line in response.aiter_lines():
                     if line.startswith("data: "):
                         yield line[6:]
         except httpx.HTTPStatusError as e:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            if self._log_config.enabled:
+                log_error(self._logger, method, url, e, elapsed_ms)
             raise RequestError(str(e), status_code=e.response.status_code) from e
         except httpx.RequestError as e:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            if self._log_config.enabled:
+                log_error(self._logger, method, url, e, elapsed_ms)
             raise RequestError(str(e)) from e
 
     @abstractmethod

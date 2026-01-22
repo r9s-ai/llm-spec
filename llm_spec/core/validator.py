@@ -23,8 +23,18 @@ class SchemaValidator:
         self,
         response: dict[str, Any],
         schema: type[BaseModel],
+        request_params: dict[str, Any] | None = None,
     ) -> ValidationReport:
-        """Validate a response dict against a Pydantic model schema."""
+        """Validate a response dict against a Pydantic model schema.
+
+        Args:
+            response: The API response dict to validate
+            schema: The Pydantic model to validate against
+            request_params: Optional request parameters used to get this response
+
+        Returns:
+            ValidationReport with field-level results
+        """
         self._results = []
         self._validate_object(response, schema, path="")
 
@@ -44,6 +54,7 @@ class SchemaValidator:
             valid_count=valid_count,
             invalid_count=invalid_count,
             fields=self._results,
+            request_params=request_params,
             raw_response=response,
         )
 
@@ -107,11 +118,15 @@ class SchemaValidator:
         if value is None:
             if annotation is type(None):
                 self._results.append(
-                    FieldResult(field=path, status=FieldStatus.VALID, expected="None")
+                    FieldResult(
+                        field=path, status=FieldStatus.VALID, expected="None", actual="null"
+                    )
                 )
             elif self._is_optional(annotation):
                 self._results.append(
-                    FieldResult(field=path, status=FieldStatus.VALID, expected="None")
+                    FieldResult(
+                        field=path, status=FieldStatus.VALID, expected="None", actual="null"
+                    )
                 )
             else:
                 self._results.append(
@@ -133,6 +148,7 @@ class SchemaValidator:
                         field=path,
                         status=FieldStatus.VALID,
                         expected=self._type_name(annotation),
+                        actual=repr(value),
                     )
                 )
             else:
@@ -181,7 +197,12 @@ class SchemaValidator:
                 )
                 return
             self._results.append(
-                FieldResult(field=path, status=FieldStatus.VALID, expected="list")
+                FieldResult(
+                    field=path,
+                    status=FieldStatus.VALID,
+                    expected="list",
+                    actual=f"list[{len(value)}]",
+                )
             )
             if args:
                 item_type = args[0]
@@ -202,7 +223,9 @@ class SchemaValidator:
                 )
                 return
             self._results.append(
-                FieldResult(field=path, status=FieldStatus.VALID, expected="dict")
+                FieldResult(
+                    field=path, status=FieldStatus.VALID, expected="dict", actual="dict"
+                )
             )
             return
 
@@ -229,6 +252,7 @@ class SchemaValidator:
                     field=path,
                     status=FieldStatus.VALID,
                     expected=self._type_name(annotation),
+                    actual=self._format_actual_value(value),
                 )
             )
         else:
@@ -306,6 +330,25 @@ class SchemaValidator:
         if annotation is dict:
             return dict
         return None
+
+    def _format_actual_value(self, value: Any) -> str:
+        """Format actual value for display in reports.
+
+        For basic types, show the type name. For strings, show truncated value.
+        """
+        if isinstance(value, str):
+            # Truncate long strings
+            if len(value) > 50:
+                return f'str: "{value[:47]}..."'
+            return f'str: "{value}"'
+        elif isinstance(value, bool):
+            return f"bool: {value}"
+        elif isinstance(value, int):
+            return f"int: {value}"
+        elif isinstance(value, float):
+            return f"float: {value}"
+        else:
+            return type(value).__name__
 
     def _type_name(self, annotation: Any) -> str:
         """Get a readable name for a type annotation."""

@@ -9,10 +9,11 @@ from typing import Any, Literal
 from llm_spec.core import config as global_config
 from llm_spec.core.client import BaseClient
 from llm_spec.core.config import ProviderConfig
-from llm_spec.core.report import ValidationReport
+from llm_spec.core.report import FieldResult, FieldStatus, ValidationReport
 from llm_spec.core.validator import SchemaValidator
 from llm_spec.providers.openai.schemas import (
     ChatCompletionResponse,
+    ChatCompletionStreamResponse,
     EmbeddingResponse,
     ImageResponse,
     ResponseObject,
@@ -58,17 +59,98 @@ class OpenAIClient(BaseClient):
         if messages is None:
             messages = [{"role": "user", "content": "Say 'test' and nothing else."}]
 
-        request_body = {
+        request_body: dict[str, Any] = {
             "model": model,
             "messages": messages,
-            "max_tokens": 10,
             **kwargs,
         }
+        # Only add max_tokens if neither max_tokens nor max_completion_tokens is specified
+        if "max_tokens" not in request_body and "max_completion_tokens" not in request_body:
+            request_body["max_tokens"] = 150
 
         response = self.request("POST", "/chat/completions", json=request_body)
 
         validator = SchemaValidator(provider=self.provider_name, endpoint="chat/completions")
-        return validator.validate(response, ChatCompletionResponse)
+        return validator.validate(response, ChatCompletionResponse, request_params=request_body)
+
+    def validate_chat_completion_stream(
+        self,
+        *,
+        model: str = "gpt-4o-mini",
+        messages: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> tuple[list[dict[str, Any]], ValidationReport]:
+        """Validate streaming chat completion endpoint.
+
+        Based on official OpenAI example:
+        https://platform.openai.com/docs/api-reference/chat-streaming
+
+        Args:
+            model: Model to use for the test request
+            messages: Optional custom messages, defaults to a simple test message
+            **kwargs: Additional parameters to pass to the API
+
+        Returns:
+            Tuple of (list of chunk events, ValidationReport for the stream)
+        """
+        import json
+
+        if messages is None:
+            messages = [{"role": "user", "content": "Say 'test' and nothing else."}]
+
+        request_body = {
+            "model": model,
+            "messages": messages,
+            "stream": True,
+            **kwargs,
+        }
+
+        chunks: list[dict[str, Any]] = []
+        all_fields: list[FieldResult] = []
+        has_errors = False
+
+        for data in self.stream("POST", "/chat/completions", json=request_body):
+            if data.strip() == "[DONE]":
+                break
+            try:
+                chunk = json.loads(data)
+                chunks.append(chunk)
+
+                # Validate each chunk against schema
+                validator = SchemaValidator(
+                    provider=self.provider_name, endpoint="chat/completions/stream"
+                )
+                chunk_report = validator.validate(chunk, ChatCompletionStreamResponse)
+                if not chunk_report.success:
+                    has_errors = True
+                    # Only collect error fields to avoid duplicates
+                    for f in chunk_report.fields:
+                        if f.status != FieldStatus.VALID:
+                            all_fields.append(f)
+            except json.JSONDecodeError:
+                continue
+
+        # Check if we got a complete response
+        has_finish_reason = any(
+            chunk.get("choices", [{}])[0].get("finish_reason") is not None
+            for chunk in chunks
+            if chunk.get("choices")
+        )
+
+        # Create a summary report for the entire stream
+        report = ValidationReport(
+            provider=self.provider_name,
+            endpoint="chat/completions",
+            success=not has_errors and len(chunks) > 0 and has_finish_reason,
+            total_fields=len(chunks),  # Number of chunks validated
+            valid_count=len(chunks) - len(all_fields),
+            invalid_count=len(all_fields),
+            fields=all_fields,
+            request_params=request_body,
+            raw_response={"chunks": chunks, "chunk_count": len(chunks)},
+        )
+
+        return chunks, report
 
     def validate_embeddings(
         self,
@@ -96,7 +178,7 @@ class OpenAIClient(BaseClient):
         response = self.request("POST", "/embeddings", json=request_body)
 
         validator = SchemaValidator(provider=self.provider_name, endpoint="embeddings")
-        return validator.validate(response, EmbeddingResponse)
+        return validator.validate(response, EmbeddingResponse, request_params=request_body)
 
     def validate_responses(
         self,
@@ -143,7 +225,7 @@ class OpenAIClient(BaseClient):
         response = self.request("POST", "/responses", json=request_body)
 
         validator = SchemaValidator(provider=self.provider_name, endpoint="responses")
-        return validator.validate(response, ResponseObject)
+        return validator.validate(response, ResponseObject, request_params=request_body)
 
     def validate_responses_stream(
         self,
@@ -364,7 +446,7 @@ class OpenAIClient(BaseClient):
         response = self.request("POST", "/images/generations", json=request_body)
 
         validator = SchemaValidator(provider=self.provider_name, endpoint="images/generations")
-        return validator.validate(response, ImageResponse)
+        return validator.validate(response, ImageResponse, request_params=request_body)
 
     def validate_image_edit(
         self,

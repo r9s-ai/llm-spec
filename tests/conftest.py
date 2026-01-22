@@ -39,6 +39,38 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Save collected reports at the end of the test session."""
+    from llm_spec.core.config import get_config
+    from llm_spec.core.report import get_collector, reset_collector
+
+    config = get_config().report
+    collector = get_collector()
+
+    # Only save if we have reports and JSON output is enabled
+    if collector.count > 0 and config.format in ("json", "both"):
+        saved_paths = collector.save()
+        print(f"\nValidation reports saved ({len(saved_paths)} files):")
+        for path in saved_paths:
+            print(f"  - {path}")
+        print(f"Total: {collector.count} tests collected")
+
+    # Reset collector for next session
+    reset_collector()
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    """Store current test name before test runs."""
+    from llm_spec.core.report import set_current_test_name
+    set_current_test_name(item.name)
+
+
+def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None) -> None:
+    """Clear current test name after test finishes."""
+    from llm_spec.core.report import set_current_test_name
+    set_current_test_name(None)
+
+
 @pytest.fixture
 def run_expensive(request: pytest.FixtureRequest) -> bool:
     """Check if expensive tests should run."""

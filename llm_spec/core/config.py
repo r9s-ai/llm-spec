@@ -16,6 +16,32 @@ from typing import Any, Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# =============================================================================
+# Log Configuration
+# =============================================================================
+
+
+class LogConfig(BaseSettings):
+    """Configuration for request logging."""
+
+    model_config = SettingsConfigDict(env_prefix="LLM_SPEC_LOG_", extra="ignore")
+
+    enabled: bool = Field(default=False, description="Enable request logging")
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
+        default="INFO", description="Log level"
+    )
+    console: bool = Field(default=True, description="Output to console")
+    file: Path | None = Field(default=None, description="Log file path")
+    format: str = Field(
+        default="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        description="Log message format",
+    )
+    log_request_body: bool = Field(default=True, description="Log request body")
+    log_response_body: bool = Field(
+        default=False, description="Log response body (can be large)"
+    )
+    max_body_length: int = Field(default=1000, description="Max body length to log")
+
 
 # =============================================================================
 # Report Configuration
@@ -37,6 +63,10 @@ class ReportConfig(BaseSettings):
         default=True, description="Show valid fields in terminal output"
     )
     verbose: bool = Field(default=False, description="Show verbose details")
+    verbose_tests: bool = Field(
+        default=False,
+        description="Include all field details in test results (even for passed tests)",
+    )
     include_raw_response: bool = Field(
         default=False, description="Include raw API response in reports"
     )
@@ -110,6 +140,9 @@ class GlobalConfig(BaseSettings):
     # Report configuration
     report: ReportConfig = Field(default_factory=ReportConfig)
 
+    # Log configuration
+    log: LogConfig = Field(default_factory=LogConfig)
+
 
 # =============================================================================
 # Configuration File Loader
@@ -169,10 +202,10 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     """Load YAML configuration file."""
     try:
         import yaml
-    except ImportError:
+    except ImportError as e:
         raise ImportError(
             "PyYAML is required for YAML config files: pip install pyyaml"
-        )
+        ) from e
 
     with open(path) as f:
         return yaml.safe_load(f) or {}
@@ -225,6 +258,7 @@ def create_config(config_file: Path | str | None = None) -> GlobalConfig:
     gemini_file = file_config.get("gemini", {})
     xai_file = file_config.get("xai", {})
     report_file = file_config.get("report", {})
+    log_file = file_config.get("log", {})
 
     return GlobalConfig(
         openai=OpenAIConfig(**openai_file),
@@ -232,6 +266,7 @@ def create_config(config_file: Path | str | None = None) -> GlobalConfig:
         gemini=GeminiConfig(**gemini_file),
         xai=XAIConfig(**xai_file),
         report=ReportConfig(**report_file),
+        log=LogConfig(**log_file),
     )
 
 
