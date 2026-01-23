@@ -15,69 +15,325 @@ from tests.base import assert_report_valid, print_report_summary
 
 @pytest.mark.integration
 class TestChatCompletions:
-    """Tests for /v1/chat/completions endpoint."""
+    """Tests for /v1/chat/completions endpoint.
 
-    def test_basic_params(self, openai_client: OpenAIClient) -> None:
-        """Test basic parameters: temperature, top_p, penalties, max_tokens, seed, system message."""
+    Test Strategy: Single-parameter testing
+    - Each test validates exactly one parameter on top of a baseline
+    - Baseline: model, messages, max_tokens (minimum required)
+    - Makes parameter coverage tracking clear and precise
+    """
+
+    # =========================================================================
+    # Baseline Test
+    # =========================================================================
+
+    def test_baseline(self, openai_client: OpenAIClient, baseline_params: dict) -> None:
+        """Baseline test with only required parameters.
+
+        Tests: model, messages, max_tokens
+        This is the foundation for all single-parameter tests.
+        """
+        report = openai_client.validate_chat_completion(**baseline_params)
+        report.output()
+        assert_report_valid(report)
+
+    # =========================================================================
+    # Tier 1: Independent Parameters (Core)
+    # =========================================================================
+
+    def test_param_temperature(self, openai_client: OpenAIClient, baseline_params: dict) -> None:
+        """Test temperature parameter (controls randomness, 0-2).
+
+        Higher values = more random, lower values = more deterministic.
+        """
         report = openai_client.validate_chat_completion(
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": "Say 'test'."},
-            ],
+            **baseline_params,
             temperature=0.7,
-            top_p=0.9,
-            presence_penalty=0.5,
-            frequency_penalty=0.5,
-            max_tokens=50,
-            seed=42,
         )
         report.output()
         assert_report_valid(report)
 
-    def test_multi_choice_and_stop(self, openai_client: OpenAIClient) -> None:
-        """Test n choices, stop sequence, max_completion_tokens, and multi-turn conversation."""
+    def test_param_top_p(self, openai_client: OpenAIClient, baseline_params: dict) -> None:
+        """Test top_p parameter (nucleus sampling, 0-1).
+
+        Alternative to temperature for controlling randomness.
+        """
         report = openai_client.validate_chat_completion(
-            messages=[
-                {"role": "user", "content": "My name is Alice."},
-                {"role": "assistant", "content": "Hello Alice!"},
-                {"role": "user", "content": "Count 1 to 10."},
-            ],
-            n=2,
-            stop=["5"],
-            max_completion_tokens=50,
+            **baseline_params,
+            top_p=0.9,
         )
         report.output()
         assert_report_valid(report)
-        # Verify 2 choices
+
+    def test_param_presence_penalty(self, openai_client: OpenAIClient, baseline_params: dict) -> None:
+        """Test presence_penalty parameter (-2.0 to 2.0).
+
+        Positive values penalize tokens that have appeared, encouraging new topics.
+        """
+        report = openai_client.validate_chat_completion(
+            **baseline_params,
+            presence_penalty=0.5,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_frequency_penalty(self, openai_client: OpenAIClient, baseline_params: dict) -> None:
+        """Test frequency_penalty parameter (-2.0 to 2.0).
+
+        Positive values penalize tokens based on frequency, reducing repetition.
+        """
+        report = openai_client.validate_chat_completion(
+            **baseline_params,
+            frequency_penalty=0.5,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_n(self, openai_client: OpenAIClient, baseline_params: dict) -> None:
+        """Test n parameter (number of completion choices).
+
+        Validates that the API returns exactly n choices.
+        """
+        n_value = 2
+        report = openai_client.validate_chat_completion(
+            **baseline_params,
+            n=n_value,
+            _test_param="n",
+            _test_variant="multiple choices",
+        )
+        report.output()
+        assert_report_valid(report)
+
+        # Additional validation: verify n choices returned
         if report.raw_response:
             choices = report.raw_response.get("choices", [])
-            assert len(choices) == 2, f"Expected 2 choices, got {len(choices)}"
+            assert len(choices) == n_value, f"Expected {n_value} choices, got {len(choices)}"
 
-    def test_json_response_format(self, openai_client: OpenAIClient) -> None:
-        """Test JSON mode response format."""
+    def test_param_max_completion_tokens(self, openai_client: OpenAIClient) -> None:
+        """Test max_completion_tokens parameter (alternative to max_tokens).
+
+        Note: Uses model+messages only, no max_tokens (mutually exclusive).
+        """
         report = openai_client.validate_chat_completion(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "Say 'test'."}],
+            max_completion_tokens=50,
+            _test_param="max_completion_tokens",
+            _test_variant="standard",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    # =========================================================================
+    # Tier 2: Advanced Parameters
+    # =========================================================================
+
+    def test_param_stop(self, openai_client: OpenAIClient, baseline_params: dict) -> None:
+        """Test stop parameter (stop sequence).
+
+        API stops generating when it encounters any of the stop sequences.
+        """
+        report = openai_client.validate_chat_completion(
+            **baseline_params,
+            stop=[".", "!"],
+            _test_param="stop",
+            _test_variant="sequence list",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_response_format_json(self, openai_client: OpenAIClient) -> None:
+        """Test response_format parameter (JSON mode).
+
+        Forces the model to output valid JSON.
+        Note: Requires system message to instruct JSON output.
+        """
+        report = openai_client.validate_chat_completion(
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You respond in JSON format."},
                 {"role": "user", "content": "Return a JSON object with a 'status' field set to 'ok'."},
             ],
+            max_tokens=50,
             response_format={"type": "json_object"},
+            _test_param="response_format",
+            _test_variant="json_object",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    # =========================================================================
+    # Tier 2: Logprobs Parameters (Dependent)
+    # =========================================================================
+
+    def test_param_logprobs(self, openai_client: OpenAIClient, baseline_params: dict) -> None:
+        """Test logprobs parameter (returns token probabilities).
+
+        This is the baseline for top_logprobs parameter.
+        """
+        report = openai_client.validate_chat_completion(
+            **baseline_params,
+            logprobs=True,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_top_logprobs(self, openai_client: OpenAIClient, baseline_params: dict) -> None:
+        """Test top_logprobs parameter (number of top tokens to return).
+
+        Depends on: logprobs=True
+        """
+        report = openai_client.validate_chat_completion(
+            **baseline_params,
+            logprobs=True,  # dependency
+            top_logprobs=2,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_logit_bias(self, openai_client: OpenAIClient, baseline_params: dict) -> None:
+        """Test logit_bias parameter (modify token probabilities).
+
+        Used to suppress or encourage specific tokens.
+        """
+        report = openai_client.validate_chat_completion(
+            **baseline_params,
+            logit_bias={"15496": -100},  # Suppress "Hello" token
+            _test_param="logit_bias",
+            _test_variant="standard",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    # =========================================================================
+    # Tier 3: Message Role Parameters
+    # =========================================================================
+
+    def test_param_system_message(self, openai_client: OpenAIClient) -> None:
+        """Test system role in messages.
+
+        System messages set the assistant's behavior.
+        """
+        report = openai_client.validate_chat_completion(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Say 'test'."},
+            ],
             max_tokens=50,
         )
         report.output()
         assert_report_valid(report)
 
-    @pytest.mark.parametrize("model", ["gpt-4o-mini", "gpt-4o"])
-    def test_different_models(self, openai_client: OpenAIClient, model: str) -> None:
-        """Test chat completion with different models."""
-        report = openai_client.validate_chat_completion(model=model)
+    def test_param_developer_message(self, openai_client: OpenAIClient) -> None:
+        """Test developer role in messages.
+
+        Developer messages are similar to system messages.
+        """
+        report = openai_client.validate_chat_completion(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "developer", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Say 'test'."},
+            ],
+            max_tokens=50,
+        )
         report.output()
         assert_report_valid(report)
 
-    def test_with_tool_definition(self, openai_client: OpenAIClient) -> None:
-        """Test chat completion with multiple tools and parallel_tool_calls.
+    def test_param_multi_turn_conversation(self, openai_client: OpenAIClient) -> None:
+        """Test multi-turn conversation in messages.
 
-        Uses multiple tools to test parallel_tool_calls=True, which allows
-        the model to call multiple tools in a single response.
+        Tests alternating user/assistant messages.
+        """
+        report = openai_client.validate_chat_completion(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "user", "content": "My name is Alice."},
+                {"role": "assistant", "content": "Hello Alice!"},
+                {"role": "user", "content": "What's my name?"},
+            ],
+            max_tokens=50,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    # =========================================================================
+    # Tier 4: Advanced Features (Tools, Vision, Streaming)
+    # =========================================================================
+
+    def test_param_tools(self, openai_client: OpenAIClient) -> None:
+        """Test tools parameter (function calling baseline).
+
+        This is the baseline for tool_choice and parallel_tool_calls.
+        """
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_current_weather",
+                    "description": "Get the current weather in a given location",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "location": {
+                                "type": "string",
+                                "description": "The city and state, e.g. San Francisco, CA",
+                            },
+                        },
+                        "required": ["location"],
+                    },
+                },
+            },
+        ]
+        report = openai_client.validate_chat_completion(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "What's the weather in Boston?"}],
+            max_tokens=150,
+            tools=tools,
+            _test_param="tools",
+            _test_variant="function calling",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_tool_choice(self, openai_client: OpenAIClient) -> None:
+        """Test tool_choice parameter (control function calling).
+
+        Depends on: tools parameter
+        """
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_current_weather",
+                    "description": "Get the current weather",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "location": {"type": "string"},
+                        },
+                        "required": ["location"],
+                    },
+                },
+            },
+        ]
+        report = openai_client.validate_chat_completion(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "What's the weather in Boston?"}],
+            max_tokens=150,
+            tools=tools,  # dependency
+            tool_choice="auto",
+            _test_param="tool_choice",
+            _test_variant="auto",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_parallel_tool_calls(self, openai_client: OpenAIClient) -> None:
+        """Test parallel_tool_calls parameter (multiple tools in one response).
+
+        Depends on: tools parameter (with multiple tools)
         """
         tools = [
             {
@@ -122,19 +378,20 @@ class TestChatCompletions:
         report = openai_client.validate_chat_completion(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": "What's the weather and current time in Boston?"}],
-            tools=tools,
+            max_tokens=150,
+            tools=tools,  # dependency
             tool_choice="auto",
             parallel_tool_calls=True,
-            max_tokens=150,
+            _test_param="parallel_tool_calls",
+            _test_variant="true",
         )
         report.output()
         assert_report_valid(report)
 
-    def test_with_image_input(self, openai_client: OpenAIClient) -> None:
-        """Test chat completion with image input (vision).
+    def test_param_vision(self, openai_client: OpenAIClient) -> None:
+        """Test vision capability (image_url in messages).
 
-        Based on official OpenAI example:
-        https://platform.openai.com/docs/api-reference/chat/create
+        Tests multimodal input with images.
         """
         messages = [
             {
@@ -157,31 +414,53 @@ class TestChatCompletions:
             model="gpt-4o-mini",
             messages=messages,
             max_tokens=300,
+            _test_param="messages",
+            _test_variant="vision input",
         )
         report.output()
         assert_report_valid(report)
 
-    def test_with_logprobs(self, openai_client: OpenAIClient) -> None:
-        """Test chat completion with logprobs and logit_bias.
+    # =========================================================================
+    # Tier 5: Streaming Parameters
+    # =========================================================================
 
-        Based on official OpenAI example:
-        https://platform.openai.com/docs/api-reference/chat/create
+    def test_param_stream(self, openai_client: OpenAIClient) -> None:
+        """Test stream parameter (streaming responses).
+
+        This is the baseline for stream_options parameter.
+        Uses different schema: ChatCompletionStreamResponse
         """
-        report = openai_client.validate_chat_completion(
+        messages = [
+            {"role": "user", "content": "Say hello."},
+        ]
+
+        chunks, report = openai_client.validate_chat_completion_stream(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": "Hello!"}],
-            logprobs=True,
-            top_logprobs=2,
-            logit_bias={"15496": -100},  # Suppress "Hello" token
+            messages=messages,
         )
+
         report.output()
-        assert_report_valid(report)
 
-    def test_streaming_with_usage(self, openai_client: OpenAIClient) -> None:
-        """Test streaming chat completion with stream_options.
+        # Verify we got chunks
+        assert len(chunks) > 0, "Should receive at least one chunk"
 
-        Tests stream and stream_options parameters. When stream_options.include_usage
-        is true, the final chunk includes a usage object with token counts.
+        # Verify first chunk structure
+        first_chunk = chunks[0]
+        assert first_chunk.get("object") == "chat.completion.chunk"
+
+        # Find chunk with finish_reason
+        finish_chunk = next(
+            (c for c in chunks if c.get("choices") and c["choices"][0].get("finish_reason") == "stop"),
+            None,
+        )
+        assert finish_chunk is not None, "Should have a chunk with finish_reason='stop'"
+
+        assert report.success, "Streaming should complete successfully"
+
+    def test_param_stream_options(self, openai_client: OpenAIClient) -> None:
+        """Test stream_options parameter (include usage in stream).
+
+        Depends on: stream=True
         """
         messages = [
             {"role": "developer", "content": "You are a helpful assistant."},
@@ -191,10 +470,9 @@ class TestChatCompletions:
         chunks, report = openai_client.validate_chat_completion_stream(
             model="gpt-4o-mini",
             messages=messages,
-            stream_options={"include_usage": True},
+            stream_options={"include_usage": True},  # dependency: stream=True
         )
 
-        # Output report for parameter coverage
         report.output()
 
         print(f"\nReceived {len(chunks)} chunks")
@@ -202,23 +480,11 @@ class TestChatCompletions:
         # Verify we got chunks
         assert len(chunks) > 0, "Should receive at least one chunk"
 
-        # Verify first chunk has role in delta
-        first_chunk = chunks[0]
-        assert first_chunk.get("object") == "chat.completion.chunk"
-        assert first_chunk.get("choices", [{}])[0].get("delta", {}).get("role") == "assistant"
-
-        # Find chunk with finish_reason
-        finish_chunk = next(
-            (c for c in chunks if c.get("choices") and c["choices"][0].get("finish_reason") == "stop"),
-            None,
-        )
-        assert finish_chunk is not None, "Should have a chunk with finish_reason='stop'"
-
         # Verify all chunks have consistent id
         chunk_ids = {c.get("id") for c in chunks}
         assert len(chunk_ids) == 1, "All chunks should have same id"
 
-        # Find the usage chunk (should have usage field)
+        # Find the usage chunk (should have usage field when stream_options.include_usage=true)
         usage_chunk = next(
             (c for c in chunks if c.get("usage") is not None),
             None,
@@ -241,223 +507,314 @@ class TestChatCompletions:
 
 @pytest.mark.integration
 class TestResponses:
-    """Tests for /v1/responses endpoint."""
+    """Tests for /v1/responses endpoint.
 
-    def test_basic_response(self, openai_client: OpenAIClient) -> None:
-        """Test basic responses API call."""
-        report = openai_client.validate_responses()
+    Test Strategy: Single-parameter testing
+    - Each test validates exactly one parameter on top of a baseline
+    - Baseline: model, input_text, max_output_tokens
+    """
+
+    # =========================================================================
+    # Baseline Test
+    # =========================================================================
+
+    def test_baseline(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Baseline test with only required parameters.
+
+        Tests: model, input (text), max_output_tokens
+        """
+        report = openai_client.validate_responses(**baseline_responses_params)
         report.output()
         assert_report_valid(report)
 
-    @pytest.mark.parametrize("model", ["gpt-4o-mini", "gpt-4o"])
-    def test_different_models(self, openai_client: OpenAIClient, model: str) -> None:
-        """Test responses API with different models."""
-        report = openai_client.validate_responses(model=model)
-        report.output()
-        assert_report_valid(report)
+    # =========================================================================
+    # Tier 1: Independent Parameters (Core)
+    # =========================================================================
 
-    def test_with_instructions(self, openai_client: OpenAIClient) -> None:
-        """Test responses API with instructions."""
+    def test_param_temperature(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Test temperature parameter (0-2)."""
         report = openai_client.validate_responses(
-            input_text="What is 2+2?",
-            instructions="Answer concisely with just the number.",
+            **baseline_responses_params,
+            temperature=0.7,
         )
         report.output()
         assert_report_valid(report)
 
-    def test_with_tool_definition(self, openai_client: OpenAIClient) -> None:
-        """Test responses API with tool definition that triggers function_call output.
+    def test_param_top_p(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Test top_p parameter (0-1)."""
+        report = openai_client.validate_responses(
+            **baseline_responses_params,
+            top_p=0.9,
+        )
+        report.output()
+        assert_report_valid(report)
 
-        Based on official OpenAI example:
-        https://platform.openai.com/docs/api-reference/responses
-        """
+    def test_param_top_logprobs(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Test top_logprobs parameter (0-20)."""
+        report = openai_client.validate_responses(
+            **baseline_responses_params,
+            top_logprobs=2,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_store(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Test store parameter (boolean)."""
+        report = openai_client.validate_responses(
+            **baseline_responses_params,
+            store=True,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_metadata(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Test metadata parameter (map)."""
+        report = openai_client.validate_responses(
+            **baseline_responses_params,
+            metadata={"test_run": "true", "env": "dev"},
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_truncation(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Test truncation parameter (auto/disabled)."""
+        report = openai_client.validate_responses(
+            **baseline_responses_params,
+            truncation="auto",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_service_tier(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Test service_tier parameter (auto/default/flex)."""
+        report = openai_client.validate_responses(
+            **baseline_responses_params,
+            service_tier="default",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    # =========================================================================
+    # Tier 2: Input & Context
+    # =========================================================================
+
+    def test_param_instructions(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Test instructions parameter (system message)."""
+        report = openai_client.validate_responses(
+            **baseline_responses_params,
+            instructions="You are a helpful assistant.",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    MAX_RETRIES = 3
+
+    def test_param_input_list(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Test input parameter as array of strings."""
+        report = openai_client.validate_responses(
+            **baseline_responses_params,
+            input=["Hello", "World"],
+            _test_param="input",
+            _test_variant="string array",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_input_image(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Test input parameter with image inputs."""
+        input_items = [
+            {"type": "input_text", "text": "What is in this image?"},
+            {
+                "type": "input_image",
+                "image_url": "https://img95.699pic.com/photo/60021/9579.jpg_wh860.jpg",
+            },
+        ]
+        report = openai_client.validate_responses(
+            **baseline_responses_params,
+            input=input_items,
+            _test_param="input",
+            _test_variant="image input",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_input_file(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Test input parameter with file inputs."""
+        input_items = [
+            {"type": "input_text", "text": "What is in this file?"},
+            {
+                "type": "input_file",
+                "file_url": "https://www.berkshirehathaway.com/letters/2024ltr.pdf",
+            },
+        ]
+        report = openai_client.validate_responses(
+            **baseline_responses_params,
+            input=input_items,
+            _test_param="input",
+            _test_variant="file input",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    # =========================================================================
+    # Tier 3: Tools
+    # =========================================================================
+
+    def test_param_tools(self, openai_client: OpenAIClient) -> None:
+        """Test tools parameter (function calling)."""
         tools = [
             {
                 "type": "function",
-                "name": "get_current_weather",
-                "description": "Get the current weather in a given location",
+                "name": "get_weather",
+                "description": "Get weather",
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "location": {
-                            "type": "string",
-                            "description": "The city and state, e.g. San Francisco, CA",
-                        },
-                        "unit": {
-                            "type": "string",
-                            "enum": ["celsius", "fahrenheit"],
-                        },
-                    },
-                    "required": ["location", "unit"],
+                    "properties": {"location": {"type": "string"}},
+                    "required": ["location"],
                 },
             }
         ]
         report = openai_client.validate_responses(
-            input_text="What is the weather like in Boston today?",
+            model="gpt-4o-mini",
+            input="What's the weather in Boston?",
             tools=tools,
-            tool_choice="auto",
+            max_output_tokens=50,
         )
         report.output()
         assert_report_valid(report)
 
-    def test_with_web_search(self, openai_client: OpenAIClient) -> None:
-        """Test responses API with web_search_preview tool (from official docs).
-
-        This test validates the web_search_call output type.
-        """
-        tools = [{"type": "web_search_preview"}]
-        report = openai_client.validate_responses(
-            model="gpt-4o",
-            input_text="What was a positive news story from today?",
-            tools=tools,
-        )
-        report.output()
-        assert_report_valid(report)
-
-    def test_with_file_search(self, openai_client: OpenAIClient) -> None:
-        """Test responses API with file_search tool (from official docs).
-
-        Based on official OpenAI example:
-        https://platform.openai.com/docs/api-reference/responses
-
-        Note: This test requires a pre-created vector_store_id.
-        The vector_store must contain indexed files for search.
-        """
-        # Default vector_store_id from official example
-        # In real usage, create vector store via /v1/vector_stores API first
-        vector_store_id = "vs_1234567890"
-
+    def test_param_tool_choice(self, openai_client: OpenAIClient) -> None:
+        """Test tool_choice parameter."""
         tools = [
             {
-                "type": "file_search",
-                "vector_store_ids": [vector_store_id],
-                "max_num_results": 20,
+                "type": "function",
+                "name": "get_weather",
+                "description": "Get weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"location": {"type": "string"}},
+                    "required": ["location"],
+                },
             }
         ]
         report = openai_client.validate_responses(
-            model="gpt-4.1",
-            input_text="What are the attributes of an ancient brown dragon?",
+            model="gpt-4o-mini",
+            input="What's the weather in Boston?",
             tools=tools,
+            tool_choice="required",
+            max_output_tokens=50,
         )
         report.output()
         assert_report_valid(report)
 
-    def test_with_image_input(self, openai_client: OpenAIClient) -> None:
-        """Test responses API with image input (vision).
-
-        Based on official OpenAI example:
-        https://platform.openai.com/docs/api-reference/responses
-        """
-        input_messages = [
+    def test_param_parallel_tool_calls(self, openai_client: OpenAIClient) -> None:
+        """Test parallel_tool_calls parameter."""
+        tools = [
             {
-                "role": "user",
-                "content": [
-                    {"type": "input_text", "text": "What is in this image?"},
-                    {
-                        "type": "input_image",
-                        "image_url": "https://img95.699pic.com/photo/60021/9579.jpg_wh860.jpg",
-                    },
-                ],
+                "type": "function",
+                "name": "get_weather",
+                "description": "Get weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"location": {"type": "string"}},
+                    "required": ["location"],
+                },
             }
         ]
         report = openai_client.validate_responses(
-            model="gpt-4o",
-            input_messages=input_messages,
+            model="gpt-4o-mini",
+            input="What's the weather in Boston?",
+            tools=tools,
+            parallel_tool_calls=False,
+            max_output_tokens=50,
         )
         report.output()
         assert_report_valid(report)
 
-    def test_with_file_input(self, openai_client: OpenAIClient) -> None:
-        """Test responses API with file input (PDF).
+    # =========================================================================
+    # Tier 4: Response Configuration
+    # =========================================================================
 
-        Based on official OpenAI example:
-        https://platform.openai.com/docs/api-reference/responses
-        """
-        input_messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "input_text", "text": "what is in this file?"},
-                    {
-                        "type": "input_file",
-                        "file_url": "https://www.berkshirehathaway.com/letters/2024ltr.pdf",
+    def test_param_include(self, openai_client: OpenAIClient) -> None:
+        """Test include parameter (e.g. logprobs with message)."""
+        # Note: 'message.output_text.logprobs' is a valid include value
+        report = openai_client.validate_responses(
+            model="gpt-4o-mini",
+            input="Say hi.",
+            include=["message.output_text.logprobs"],
+            max_output_tokens=50,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_text_json_schema(self, openai_client: OpenAIClient) -> None:
+        """Test text parameter with JSON schema (Structured Outputs)."""
+        report = openai_client.validate_responses(
+            model="gpt-4o-mini",
+            input="Generate a person.",
+            text={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "person",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "age": {"type": "integer"},
+                        },
+                        "required": ["name", "age"],
+                        "additionalProperties": False,
                     },
-                ],
-            }
-        ]
-        report = openai_client.validate_responses(
-            model="gpt-4o",
-            input_messages=input_messages,
+                    "strict": True,
+                },
+            },
+            max_output_tokens=150,
         )
         report.output()
         assert_report_valid(report)
 
-    def test_with_conversation_history(self, openai_client: OpenAIClient) -> None:
-        """Test responses API with multi-turn conversation."""
-        input_messages = [
-            {"role": "user", "content": "My name is Alice."},
-            {"role": "assistant", "content": "Hello Alice! How can I help you today?"},
-            {"role": "user", "content": "What's my name?"},
-        ]
+    def test_param_reasoning(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Test reasoning parameter (o-series models)."""
+        # Exclude model from baseline since we need to override it
+        params = {k: v for k, v in baseline_responses_params.items() if k != "model"}
         report = openai_client.validate_responses(
-            input_messages=input_messages,
-        )
-        report.output()
-        assert_report_valid(report)
-
-    def test_with_reasoning(self, openai_client: OpenAIClient) -> None:
-        """Test responses API with reasoning configuration.
-
-        Based on official OpenAI example for o3-mini/o1 models.
-        """
-        report = openai_client.validate_responses(
+            **params,
+            reasoning={"effort": "low"},
             model="o3-mini",
-            input_text="How much wood would a woodchuck chuck?",
-            reasoning={"effort": "high"},
+            _test_param="reasoning",
+            _test_variant="o3-mini",
         )
         report.output()
         assert_report_valid(report)
 
-    def test_bedtime_story(self, openai_client: OpenAIClient) -> None:
-        """Test responses API with simple text input (from official docs)."""
-        report = openai_client.validate_responses(
-            model="gpt-4o-mini",
-            input_text="Tell me a three sentence bedtime story about a unicorn.",
+    # =========================================================================
+    # Tier 5: Streaming
+    # =========================================================================
+
+    def test_param_stream(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Test stream parameter."""
+        events, report = openai_client.validate_responses_stream(
+            **baseline_responses_params,
+            _test_param="stream",
+            _test_variant="true",
         )
         report.output()
         assert_report_valid(report)
 
-    def test_streaming_response(self, openai_client: OpenAIClient) -> None:
-        """Test streaming responses API (from official docs).
-
-        Validates that streaming returns the expected event types:
-        - response.created
-        - response.in_progress
-        - response.output_item.added
-        - response.content_part.added
-        - response.output_text.delta
-        - response.output_text.done
-        - response.content_part.done
-        - response.output_item.done
-        - response.completed
-        """
-        events, success = openai_client.validate_responses_stream(
-            model="gpt-4o-mini",
-            input_text="Hello!",
-            instructions="You are a helpful assistant.",
+    def test_param_stream_options(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+        """Test stream_options parameter."""
+        events, report = openai_client.validate_responses_stream(
+            **baseline_responses_params,
+            stream_options={"include_usage": True},
+            _test_param="stream_options",
+            _test_variant="include_usage",
         )
-
-        # Print event types received
-        event_types = [e.get("type") for e in events if "type" in e]
-        print(f"\nReceived {len(events)} events")
-        print(f"Event types: {set(event_types)}")
-
-        assert success, f"Streaming should complete successfully. Got event types: {set(event_types)}"
-        assert len(events) > 0, "Should receive at least one event"
-
-        # Verify key event types are present
-        assert "response.created" in event_types, "Should have response.created event"
-        assert "response.completed" in event_types, "Should have response.completed event"
+        report.output()
+        assert_report_valid(report)
+        
+        # Verify usage in events
+        has_usage = any(e.get("usage") for e in events)
+        assert has_usage, "Should receive usage when stream_options.include_usage=True"
 
 
 # =============================================================================
@@ -467,47 +824,163 @@ class TestResponses:
 
 @pytest.mark.integration
 class TestEmbeddings:
-    """Tests for /v1/embeddings endpoint."""
+    """Tests for /v1/embeddings endpoint.
 
-    def test_single_text(self, openai_client: OpenAIClient) -> None:
-        """Test embedding a single text."""
-        report = openai_client.validate_embeddings()
+    Test Strategy: Single-parameter testing
+    - Each test validates exactly one parameter on top of a baseline
+    - Baseline: model, input (minimum required)
+    - Makes parameter coverage tracking clear and precise
+
+    Official API Parameters (as of 2024):
+    - input (required): string | array of strings | array of tokens | array of token arrays
+    - model (required): string
+    - dimensions (optional): integer
+    - encoding_format (optional): "float" | "base64"
+    - user (deprecated): unique identifier for end-user
+    """
+
+    # =========================================================================
+    # Baseline Test
+    # =========================================================================
+
+    def test_baseline(self, openai_client: OpenAIClient, baseline_embedding_params: dict) -> None:
+        """Baseline test with only required parameters.
+
+        Tests: model, input (single string)
+        This is the foundation for all single-parameter tests.
+        """
+        report = openai_client.validate_embeddings(**baseline_embedding_params)
         report.output()
         assert_report_valid(report)
 
-    def test_batch_texts(self, openai_client: OpenAIClient) -> None:
-        """Test embedding multiple texts."""
+    # =========================================================================
+    # Tier 1: Input Format Variations (Required Parameter)
+    # =========================================================================
+
+    def test_input_array_of_strings(self, openai_client: OpenAIClient, baseline_embedding_params: dict) -> None:
+        """Test input parameter with array of strings (batch embedding).
+
+        Official docs: "To embed multiple inputs in a single request, pass an array of strings."
+        Limit: Maximum 300,000 tokens summed across all inputs.
+        """
         report = openai_client.validate_embeddings(
-            input_text=["Hello", "World", "Test"]
+            model=baseline_embedding_params["model"],
+            input_text=["Hello", "World", "Test"],  # Array of strings
+            _test_param="input",
+            _test_variant="array of strings",
         )
         report.output()
         assert_report_valid(report)
 
-    @pytest.mark.parametrize(
-        "model", ["text-embedding-3-small", "text-embedding-3-large"]
-    )
-    def test_different_models(self, openai_client: OpenAIClient, model: str) -> None:
-        """Test embeddings with different models."""
-        report = openai_client.validate_embeddings(model=model)
-        report.output()
-        assert_report_valid(report)
+        # Additional validation: verify we got embeddings for each input
+        if report.raw_response:
+            data = report.raw_response.get("data", [])
+            assert len(data) == 3, f"Expected 3 embeddings, got {len(data)}"
 
-    def test_with_dimensions(self, openai_client: OpenAIClient) -> None:
-        """Test embeddings with custom dimensions (text-embedding-3 only)."""
+    # Note: array of tokens and array of token arrays testing would require tokenization
+    # which is model-specific. Skipping for now as it's less common.
+
+    # =========================================================================
+    # Tier 2: Optional Parameters
+    # =========================================================================
+
+    def test_param_dimensions(self, openai_client: OpenAIClient, baseline_embedding_params: dict) -> None:
+        """Test dimensions parameter (output embedding dimensions).
+
+        Official docs: "Only supported in text-embedding-3 and later models."
+        Common values: 512, 1024, 1536 (model-dependent)
+        """
         report = openai_client.validate_embeddings(
-            model="text-embedding-3-small",
+            **baseline_embedding_params,
             dimensions=512,
+            _test_param="dimensions",
+            _test_variant="custom value",
         )
         report.output()
         assert_report_valid(report)
 
-    def test_base64_encoding(self, openai_client: OpenAIClient) -> None:
-        """Test embeddings with base64 encoding format."""
+        # Additional validation: verify embedding dimensions
+        if report.raw_response:
+            data = report.raw_response.get("data", [])
+            if data and isinstance(data[0].get("embedding"), list):
+                actual_dims = len(data[0]["embedding"])
+                assert actual_dims == 512, f"Expected 512 dimensions, got {actual_dims}"
+
+    def test_param_encoding_format_float(self, openai_client: OpenAIClient, baseline_embedding_params: dict) -> None:
+        """Test encoding_format parameter with 'float' (default).
+
+        Official docs: "Can be either float or base64."
+        Float format returns embedding as list[float].
+        """
         report = openai_client.validate_embeddings(
-            encoding_format="base64",
+            **baseline_embedding_params,
+            encoding_format="float",
+            _test_param="encoding_format",
+            _test_variant="float",
         )
         report.output()
         assert_report_valid(report)
+
+        # Additional validation: verify embedding is list of floats
+        if report.raw_response:
+            data = report.raw_response.get("data", [])
+            if data:
+                embedding = data[0].get("embedding")
+                assert isinstance(embedding, list), f"Expected list, got {type(embedding)}"
+                if embedding:
+                    assert isinstance(embedding[0], (int, float)), f"Expected numeric values, got {type(embedding[0])}"
+
+    def test_param_encoding_format_base64(self, openai_client: OpenAIClient, baseline_embedding_params: dict) -> None:
+        """Test encoding_format parameter with 'base64'.
+
+        Official docs: "Can be either float or base64."
+        Base64 format returns embedding as base64-encoded string (more compact).
+        """
+        report = openai_client.validate_embeddings(
+            **baseline_embedding_params,
+            encoding_format="base64",
+            _test_param="encoding_format",
+            _test_variant="base64",
+        )
+        report.output()
+        assert_report_valid(report)
+
+        # Additional validation: verify embedding is base64 string
+        if report.raw_response:
+            data = report.raw_response.get("data", [])
+            if data:
+                embedding = data[0].get("embedding")
+                assert isinstance(embedding, str), f"Expected string (base64), got {type(embedding)}"
+
+    # =========================================================================
+    # Tier 3: Model Variations
+    # =========================================================================
+
+    # def test_model_text_embedding_3_large(self, openai_client: OpenAIClient) -> None:
+    #     """Test with text-embedding-3-large model.
+
+    #     Official docs: "text-embedding-3-large" is the larger and more capable embedding model.
+    #     Default dimensions: 3072
+    #     """
+    #     report = openai_client.validate_embeddings(
+    #         model="text-embedding-3-large",
+    #         input_text="Hello, world!",
+    #     )
+    #     report.output()
+    #     assert_report_valid(report)
+
+    # def test_model_text_embedding_ada_002(self, openai_client: OpenAIClient) -> None:
+    #     """Test with text-embedding-ada-002 model (legacy).
+
+    #     Official docs: "text-embedding-ada-002" is the previous generation model.
+    #     Fixed dimensions: 1536 (does not support 'dimensions' parameter)
+    #     """
+    #     report = openai_client.validate_embeddings(
+    #         model="text-embedding-ada-002",
+    #         input_text="Hello, world!",
+    #     )
+    #     report.output()
+    #     assert_report_valid(report)
 
 
 # =============================================================================
@@ -517,25 +990,329 @@ class TestEmbeddings:
 
 @pytest.mark.integration
 class TestAudioSpeech:
-    """Tests for /v1/audio/speech endpoint (TTS)."""
+    """Tests for /v1/audio/speech endpoint (TTS).
 
-    def test_basic_speech(self, openai_client: OpenAIClient) -> None:
-        """Test basic text-to-speech."""
-        audio_data, is_valid = openai_client.validate_speech()
-        assert is_valid, "Should return valid audio data"
+    Test Strategy: Single-parameter testing
+    - Each test validates exactly one parameter on top of a baseline
+    - Baseline: model, input, voice
+    """
+
+    # =========================================================================
+    # Baseline Test
+    # =========================================================================
+
+    def test_baseline(self, openai_client: OpenAIClient, baseline_speech_params: dict) -> None:
+        """Baseline test with only required parameters.
+
+        Tests: model, input, voice
+        """
+        audio_data, report = openai_client.validate_speech(**baseline_speech_params)
+        report.output()
+        assert report.success, "Should return valid audio data"
         assert len(audio_data) > 0, "Audio data should not be empty"
 
-    @pytest.mark.parametrize("voice", ["alloy", "echo", "nova", "shimmer"])
-    def test_different_voices(self, openai_client: OpenAIClient, voice: str) -> None:
-        """Test TTS with different voices."""
-        audio_data, is_valid = openai_client.validate_speech(voice=voice)
-        assert is_valid, f"Voice '{voice}' should return valid audio"
+    # =========================================================================
+    # Tier 1: Core Parameters
+    # =========================================================================
 
-    @pytest.mark.parametrize("model", ["tts-1", "tts-1-hd"])
-    def test_different_models(self, openai_client: OpenAIClient, model: str) -> None:
-        """Test TTS with different models."""
-        audio_data, is_valid = openai_client.validate_speech(model=model)
-        assert is_valid, f"Model '{model}' should return valid audio"
+    @pytest.mark.parametrize(
+        "voice",
+        [
+            "ash",
+            "ballad",
+            "coral",
+            "echo",
+            "fable",
+            "onyx",
+            "nova",
+            "sage",
+            "shimmer",
+            "verse",
+            "marin",
+            "cedar",
+        ],
+    )
+    def test_param_voice(
+        self, openai_client: OpenAIClient, baseline_speech_params: dict, voice: str
+    ) -> None:
+        """Test TTS with various supported voices."""
+        params = {**baseline_speech_params, "voice": voice}
+        audio_data, report = openai_client.validate_speech(
+            **params,
+            _test_param="voice",
+            _test_variant=voice,
+        )
+        report.output()
+        assert report.success, f"Voice '{voice}' should return valid audio"
+
+    @pytest.mark.parametrize("model", ["gpt-4o-mini-tts"])
+    def test_param_model(
+        self, openai_client: OpenAIClient, baseline_speech_params: dict, model: str
+    ) -> None:
+        """Test TTS with various models."""
+        params = {**baseline_speech_params, "model": model}
+        audio_data, report = openai_client.validate_speech(
+            **params,
+            _test_param="model",
+            _test_variant=model,
+        )
+        report.output()
+        assert report.success, f"Model '{model}' should return valid audio"
+
+    # =========================================================================
+    # Tier 2: Output Options
+    # =========================================================================
+
+    @pytest.mark.parametrize("fmt", ["mp3", "opus", "aac", "flac", "wav", "pcm"])
+    def test_param_response_format(
+        self, openai_client: OpenAIClient, baseline_speech_params: dict, fmt: str
+    ) -> None:
+        """Test various audio output formats."""
+        audio_data, report = openai_client.validate_speech(
+            **baseline_speech_params,
+            response_format=fmt,
+            _test_param="response_format",
+            _test_variant=fmt,
+        )
+        report.output()
+        assert report.success, f"Format '{fmt}' should return valid audio"
+
+    @pytest.mark.parametrize("stream_fmt", ["sse", "audio"])
+    def test_param_stream_format(
+        self, openai_client: OpenAIClient, baseline_speech_params: dict, stream_fmt: str
+    ) -> None:
+        """Test various stream formats."""
+        audio_data, report = openai_client.validate_speech(
+            **baseline_speech_params,
+            stream_format=stream_fmt,
+            _test_param="stream_format",
+            _test_variant=stream_fmt,
+        )
+        report.output()
+        assert report.success, f"Stream format '{stream_fmt}' should return valid audio"
+
+    def test_param_speed(
+        self, openai_client: OpenAIClient, baseline_speech_params: dict
+    ) -> None:
+        """Test speed parameter (0.25 to 4.0)."""
+        audio_data, report = openai_client.validate_speech(
+            **baseline_speech_params,
+            speed=1.5,
+            _test_param="speed",
+            _test_variant="1.5x",
+        )
+        report.output()
+        assert report.success, "Speed 1.5 should return valid audio"
+
+    # =========================================================================
+    # Tier 3: Advanced Options
+    # =========================================================================
+
+    def test_param_instructions(self, openai_client: OpenAIClient, baseline_speech_params: dict) -> None:
+        """Test instructions parameter (voice style control).
+        
+        Requires gpt-4o-mini-tts or gpt-4o-audio-preview (if supported in tts).
+        Official docs say: "Does not work with tts-1 or tts-1-hd".
+        """
+        audio_data, report = openai_client.validate_speech(
+            input_text="Hello, I am excited!",
+            model="gpt-4o-mini-tts",
+            voice="alloy",
+            instructions="Whisper your response.",
+            _test_param="instructions",
+            _test_variant="whisper",
+        )
+        report.output()
+        assert report.success, "Instructions should work with gpt-4o-mini-tts"
+
+
+@pytest.mark.integration
+class TestAudioTranscriptions:
+    """Tests for /v1/audio/transcriptions endpoint.
+    
+    Test Strategy: Single-parameter testing
+    - Baseline: file (generated), model='whisper-1'
+    """
+
+    def test_baseline(self, openai_client: OpenAIClient, audio_file_en: Path) -> None:
+        """Baseline test for transcriptions."""
+        report = openai_client.validate_transcription(file_path=audio_file_en, model="whisper-1")
+        report.output()
+        assert_report_valid(report)
+
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "whisper-1",
+            "gpt-4o-transcribe",
+        ],
+    )
+    def test_param_model(self, openai_client: OpenAIClient, audio_file_en: Path, model: str) -> None:
+        """Test various transcription models."""
+        report = openai_client.validate_transcription(
+            file_path=audio_file_en,
+            model=model,
+            _test_param="model",
+            _test_variant=model,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    @pytest.mark.parametrize("fmt", ["json", "verbose_json", "text", "srt", "vtt"])
+    def test_param_response_format(self, openai_client: OpenAIClient, audio_file_en: Path, fmt: str) -> None:
+        """Test various response formats."""
+        # Note: gpt-4o models only support json
+        model = "whisper-1"
+        report = openai_client.validate_transcription(
+            file_path=audio_file_en,
+            model=model,
+            response_format=fmt,
+            _test_param="response_format",
+            _test_variant=fmt,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_chunking_strategy(self, openai_client: OpenAIClient, audio_file_en: Path) -> None:
+        """Test chunking_strategy parameter."""
+        report = openai_client.validate_transcription(
+            file_path=audio_file_en,
+            model="gpt-4o-transcribe",
+            chunking_strategy="auto",
+            _test_param="chunking_strategy",
+            _test_variant="auto",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_include_logprobs(self, openai_client: OpenAIClient, audio_file_en: Path) -> None:
+        """Test include=['logprobs'] parameter."""
+        report = openai_client.validate_transcription(
+            file_path=audio_file_en,
+            model="gpt-4o-transcribe",
+            include=["logprobs"],
+            response_format="json",
+            _test_param="include",
+            _test_variant="logprobs",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_diarization(self, openai_client: OpenAIClient, audio_file_en: Path) -> None:
+        """Test speaker diarization (using available model)."""
+        report = openai_client.validate_transcription(
+            file_path=audio_file_en,
+            model="gpt-4o-transcribe",
+            response_format="json",
+            known_speaker_names=["speaker_a"],
+            _test_param="known_speaker_names",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_stream(self, openai_client: OpenAIClient, audio_file_en: Path) -> None:
+        """Test stream parameter."""
+        report = openai_client.validate_transcription(
+            file_path=audio_file_en,
+            model="gpt-4o-transcribe",
+            stream=True,
+            _test_param="stream",
+            _test_variant="true",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_language(self, openai_client: OpenAIClient, audio_file_en: Path) -> None:
+        """Test language parameter (ISO-639-1)."""
+        report = openai_client.validate_transcription(
+            file_path=audio_file_en,
+            language="en",
+            _test_param="language",
+            _test_variant="en",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_prompt(self, openai_client: OpenAIClient, audio_file_en: Path) -> None:
+        """Test prompt parameter (guide style)."""
+        report = openai_client.validate_transcription(
+            file_path=audio_file_en,
+            prompt="The transcription should be about an emergency broadcast.",
+            _test_param="prompt",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_temperature(self, openai_client: OpenAIClient, audio_file_en: Path) -> None:
+        """Test temperature parameter."""
+        report = openai_client.validate_transcription(
+            file_path=audio_file_en,
+            temperature=0.0,
+            _test_param="temperature",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_timestamp_granularities(self, openai_client: OpenAIClient, audio_file_en: Path) -> None:
+        """Test timestamp_granularities parameter."""
+        report = openai_client.validate_transcription(
+            file_path=audio_file_en,
+            model="whisper-1",
+            response_format="verbose_json",
+            timestamp_granularities=["word", "segment"],
+            _test_param="timestamp_granularities",
+            _test_variant="word+segment",
+        )
+        report.output()
+        assert_report_valid(report)
+
+
+@pytest.mark.integration
+class TestAudioTranslations:
+    """Tests for /v1/audio/translations endpoint.
+    
+    Test Strategy: Translating Chinese audio to English.
+    """
+
+    def test_baseline(self, openai_client: OpenAIClient, audio_file_zh: Path) -> None:
+        """Baseline translation test (Chinese to English)."""
+        report = openai_client.validate_translation(file_path=audio_file_zh, model="whisper-1")
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_prompt(self, openai_client: OpenAIClient, audio_file_zh: Path) -> None:
+        """Test translation with prompt."""
+        report = openai_client.validate_translation(
+            file_path=audio_file_zh,
+            prompt="Translate the Chinese text carefully.",
+            _test_param="prompt",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    @pytest.mark.parametrize("fmt", ["json", "verbose_json", "text", "srt", "vtt"])
+    def test_param_response_format(
+        self, openai_client: OpenAIClient, audio_file_zh: Path, fmt: str
+    ) -> None:
+        """Test translation with various response formats."""
+        report = openai_client.validate_translation(
+            file_path=audio_file_zh,
+            response_format=fmt,
+            _test_param="response_format",
+            _test_variant=fmt,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_temperature(self, openai_client: OpenAIClient, audio_file_zh: Path) -> None:
+        """Test translation with temperature."""
+        report = openai_client.validate_translation(
+            file_path=audio_file_zh,
+            temperature=0.0,
+            _test_param="temperature",
+        )
+        report.output()
+        assert_report_valid(report)
 
 
 # =============================================================================

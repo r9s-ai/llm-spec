@@ -89,3 +89,7 @@ Thumbs.db
 config.yaml
 config.local.yaml
 *.log
+
+
+reports/
+*/reports/temp/

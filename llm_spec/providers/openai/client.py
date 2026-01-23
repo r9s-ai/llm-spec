@@ -19,6 +19,7 @@ from llm_spec.providers.openai.schemas import (
     ResponseObject,
     TranscriptionResponse,
     TranscriptionVerboseResponse,
+    TranscriptionDiarizedResponse,
     TranslationResponse,
     TranslationVerboseResponse,
 )
@@ -34,7 +35,7 @@ class OpenAIClient(BaseClient):
         return global_config.openai
 
     def _build_headers(self) -> dict[str, str]:
-        headers = {"Content-Type": "application/json"}
+        headers = {}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
@@ -59,6 +60,10 @@ class OpenAIClient(BaseClient):
         if messages is None:
             messages = [{"role": "user", "content": "Say 'test' and nothing else."}]
 
+        # Extract special test metadata
+        test_param = kwargs.pop("_test_param", None)
+        test_variant = kwargs.pop("_test_variant", None)
+
         request_body: dict[str, Any] = {
             "model": model,
             "messages": messages,
@@ -68,10 +73,40 @@ class OpenAIClient(BaseClient):
         if "max_tokens" not in request_body and "max_completion_tokens" not in request_body:
             request_body["max_tokens"] = 150
 
-        response = self.request("POST", "/chat/completions", json=request_body)
+        try:
+            response = self.request("POST", "/chat/completions", json=request_body)
 
-        validator = SchemaValidator(provider=self.provider_name, endpoint="chat/completions")
-        return validator.validate(response, ChatCompletionResponse, request_params=request_body)
+            validator = SchemaValidator(provider=self.provider_name, endpoint="chat/completions")
+            report = validator.validate(response, ChatCompletionResponse, request_params=request_body)
+            report.test_param = test_param
+            report.test_variant = test_variant
+            return report
+        except Exception as e:
+            # For HTTP failures, still record the test parameters for statistics
+            from llm_spec.core.report import ValidationReport, get_collector, get_current_test_name
+
+            # Create a minimal failed report for parameter tracking
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="chat/completions",
+                success=False,
+                total_fields=0,
+                valid_count=0,
+                invalid_count=0,
+                fields=[],
+                request_params=request_body,
+                raw_response=None,
+                metadata={"test_name": get_current_test_name(), "error": str(e)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+
+            # Save to collector for statistics (but don't output to JSON)
+            collector = get_collector()
+            collector.add(report, test_name=get_current_test_name(), save_to_output=False)
+
+            # Re-raise the exception so the test still fails
+            raise
 
     def validate_chat_completion_stream(
         self,
@@ -169,16 +204,50 @@ class OpenAIClient(BaseClient):
         Returns:
             ValidationReport with field-level results
         """
+        # Extract special test metadata
+        test_param = kwargs.pop("_test_param", None)
+        test_variant = kwargs.pop("_test_variant", None)
+
         request_body = {
             "model": model,
             "input": input_text,
             **kwargs,
         }
 
-        response = self.request("POST", "/embeddings", json=request_body)
+        try:
+            response = self.request("POST", "/embeddings", json=request_body)
 
-        validator = SchemaValidator(provider=self.provider_name, endpoint="embeddings")
-        return validator.validate(response, EmbeddingResponse, request_params=request_body)
+            validator = SchemaValidator(provider=self.provider_name, endpoint="embeddings")
+            report = validator.validate(response, EmbeddingResponse, request_params=request_body)
+            report.test_param = test_param
+            report.test_variant = test_variant
+            return report
+        except Exception as e:
+            # For HTTP failures, still record the test parameters for statistics
+            from llm_spec.core.report import ValidationReport, get_collector, get_current_test_name
+
+            # Create a minimal failed report for parameter tracking
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="embeddings",
+                success=False,
+                total_fields=0,
+                valid_count=0,
+                invalid_count=0,
+                fields=[],
+                request_params=request_body,
+                raw_response=None,
+                metadata={"test_name": get_current_test_name(), "error": str(e)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+
+            # Save to collector for statistics (but don't output to JSON)
+            collector = get_collector()
+            collector.add(report, test_name=get_current_test_name(), save_to_output=False)
+
+            # Re-raise the exception so the test still fails
+            raise
 
     def validate_responses(
         self,
@@ -203,13 +272,16 @@ class OpenAIClient(BaseClient):
         Returns:
             ValidationReport with field-level results
         """
-        # Determine input
         if input_messages is not None:
             input_value: str | list[dict[str, Any]] = input_messages
         elif input_text is not None:
             input_value = input_text
         else:
             input_value = "Say 'test' and nothing else."
+
+        # Extract special test metadata
+        test_param = kwargs.pop("_test_param", None)
+        test_variant = kwargs.pop("_test_variant", None)
 
         request_body: dict[str, Any] = {
             "model": model,
@@ -222,10 +294,39 @@ class OpenAIClient(BaseClient):
         if tools is not None:
             request_body["tools"] = tools
 
-        response = self.request("POST", "/responses", json=request_body)
+        try:
+            response = self.request("POST", "/responses", json=request_body)
+            validator = SchemaValidator(provider=self.provider_name, endpoint="responses")
+            report = validator.validate(response, ResponseObject, request_params=request_body)
+            report.test_param = test_param
+            report.test_variant = test_variant
+            return report
+        except Exception as e:
+            # For HTTP failures, still record the test parameters for statistics
+            from llm_spec.core.report import ValidationReport, get_collector, get_current_test_name
 
-        validator = SchemaValidator(provider=self.provider_name, endpoint="responses")
-        return validator.validate(response, ResponseObject, request_params=request_body)
+            # Create a minimal failed report for parameter tracking
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="responses",
+                success=False,
+                total_fields=0,
+                valid_count=0,
+                invalid_count=0,
+                fields=[],
+                request_params=request_body,
+                raw_response=None,
+                metadata={"test_name": get_current_test_name(), "error": str(e)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+
+            # Save to collector for statistics (but don't output to JSON)
+            collector = get_collector()
+            collector.add(report, test_name=get_current_test_name(), save_to_output=False)
+
+            # Re-raise the exception so the test still fails
+            raise
 
     def validate_responses_stream(
         self,
@@ -236,7 +337,7 @@ class OpenAIClient(BaseClient):
         instructions: str | None = None,
         tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
-    ) -> tuple[list[dict[str, Any]], bool]:
+    ) -> tuple[list[dict[str, Any]], ValidationReport]:
         """Validate streaming responses endpoint.
 
         Args:
@@ -260,6 +361,10 @@ class OpenAIClient(BaseClient):
         else:
             input_value = "Say 'test' and nothing else."
 
+        # Extract special test metadata
+        test_param = kwargs.pop("_test_param", None)
+        test_variant = kwargs.pop("_test_variant", None)
+
         request_body: dict[str, Any] = {
             "model": model,
             "input": input_value,
@@ -275,25 +380,70 @@ class OpenAIClient(BaseClient):
         events: list[dict[str, Any]] = []
         seen_event_types: set[str] = set()
 
-        for data in self.stream("POST", "/responses", json=request_body):
-            if data.strip() == "[DONE]":
-                break
-            try:
-                event = json.loads(data)
-                events.append(event)
-                if "type" in event:
-                    seen_event_types.add(event["type"])
-            except json.JSONDecodeError:
-                continue
+        try:
+            for data in self.stream("POST", "/responses", json=request_body):
+                if data.strip() == "[DONE]":
+                    break
+                try:
+                    event = json.loads(data)
+                    events.append(event)
+                    if "type" in event:
+                        seen_event_types.add(event["type"])
+                except json.JSONDecodeError:
+                    continue
 
-        # Check if we got a completed response
-        has_completed = "response.completed" in seen_event_types
-        has_basic_events = (
-            "response.created" in seen_event_types
-            and "response.output_text.done" in seen_event_types
-        )
+            # Check if we got a completed response
+            has_completed = "response.completed" in seen_event_types
+            has_basic_events = (
+                "response.created" in seen_event_types
+                and "response.output_text.done" in seen_event_types
+            )
+            success = has_completed and has_basic_events
 
-        return events, has_completed and has_basic_events
+            # Create a summary report for the entire stream
+            from llm_spec.core.report import ValidationReport
+
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="responses",
+                success=success,
+                total_fields=len(events),
+                valid_count=len(events) if success else 0,
+                invalid_count=0 if success else 1,
+                fields=[],
+                request_params=request_body,
+                raw_response={"events": events, "event_count": len(events)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+
+            return events, report
+        except Exception as e:
+            # For HTTP failures, still record the test parameters for statistics
+            from llm_spec.core.report import ValidationReport, get_collector, get_current_test_name
+
+            # Create a minimal failed report for parameter tracking
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="responses",
+                success=False,
+                total_fields=0,
+                valid_count=0,
+                invalid_count=0,
+                fields=[],
+                request_params=request_body,
+                raw_response=None,
+                metadata={"test_name": get_current_test_name(), "error": str(e)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+
+            # Save to collector for statistics (but don't output to JSON)
+            collector = get_collector()
+            collector.add(report, test_name=get_current_test_name(), save_to_output=False)
+
+            # Re-raise the exception so the test still fails
+            raise
 
     # =========================================================================
     # Audio API
@@ -302,47 +452,103 @@ class OpenAIClient(BaseClient):
     def validate_speech(
         self,
         *,
-        model: Literal["tts-1", "tts-1-hd", "gpt-4o-mini-tts"] = "tts-1",
+        model: Literal[
+            "tts-1", "tts-1-hd", "gpt-4o-mini-tts", "gpt-4o-mini-tts-2025-12-15"
+        ] = "gpt-4o-mini-tts",
         input_text: str = "Hello, this is a test.",
         voice: str = "alloy",
+        stream_format: Literal["sse", "audio"] | None = None,
         **kwargs: Any,
-    ) -> tuple[bytes, bool]:
+    ) -> tuple[bytes, ValidationReport]:
         """Validate speech (TTS) endpoint.
 
         Note: Speech API returns binary audio data, not JSON.
-        Returns the audio bytes and a boolean indicating if the response
-        appears to be valid audio data.
+        Returns the audio bytes and a ValidationReport for parameter tracking.
 
         Args:
             model: TTS model to use
             input_text: Text to convert to speech
             voice: Voice to use
+            stream_format: Optional stream format (sse or audio)
             **kwargs: Additional parameters
 
         Returns:
-            Tuple of (audio_bytes, is_valid)
+            Tuple of (audio_bytes, ValidationReport)
         """
-        request_body = {
+        # Extract special test metadata
+        test_param = kwargs.pop("_test_param", None)
+        test_variant = kwargs.pop("_test_variant", None)
+
+        request_body: dict[str, Any] = {
             "model": model,
             "input": input_text,
             "voice": voice,
             **kwargs,
         }
+        if stream_format is not None:
+            request_body["stream_format"] = stream_format
 
-        audio_data = self.request_binary("POST", "/audio/speech", json=request_body)
+        try:
+            audio_data = self.request_binary("POST", "/audio/speech", json=request_body)
 
-        # Basic validation: check if we got non-empty binary data
-        is_valid = len(audio_data) > 0
-        return audio_data, is_valid
+            # Speech returns binary, so we create a simple report
+            # Basic validation: check if we got non-empty binary data
+            is_valid = len(audio_data) > 0
+
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="audio/speech",
+                success=is_valid,
+                total_fields=1,
+                valid_count=1 if is_valid else 0,
+                invalid_count=0 if is_valid else 1,
+                fields=[
+                    FieldResult(
+                        field="audio_data",
+                        status=FieldStatus.VALID if is_valid else FieldStatus.MISSING,
+                        expected="binary data",
+                        actual=f"{len(audio_data)} bytes" if is_valid else "0 bytes",
+                    )
+                ],
+                request_params=request_body,
+                raw_response={"size": len(audio_data)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+            return audio_data, report
+        except Exception as e:
+            from llm_spec.core.report import get_current_test_name
+
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="audio/speech",
+                success=False,
+                total_fields=0,
+                valid_count=0,
+                invalid_count=0,
+                fields=[],
+                request_params=request_body,
+                raw_response=None,
+                metadata={"test_name": get_current_test_name(), "error": str(e)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+            return b"", report
 
     def validate_transcription(
         self,
         *,
         file_path: str | Path,
         model: Literal[
-            "whisper-1", "gpt-4o-transcribe", "gpt-4o-mini-transcribe"
+            "whisper-1",
+            "gpt-4o-transcribe",
+            "gpt-4o-mini-transcribe",
+            "gpt-4o-mini-transcribe-2025-12-15",
+            "gpt-4o-transcribe-diarize",
         ] = "whisper-1",
-        response_format: Literal["json", "verbose_json"] = "json",
+        response_format: Literal[
+            "json", "text", "srt", "verbose_json", "vtt", "diarized_json"
+        ] = "json",
         **kwargs: Any,
     ) -> ValidationReport:
         """Validate transcription endpoint response against schema.
@@ -350,34 +556,103 @@ class OpenAIClient(BaseClient):
         Args:
             file_path: Path to audio file to transcribe
             model: Transcription model to use
-            response_format: Output format (json or verbose_json)
-            **kwargs: Additional parameters
+            response_format: Output format (json, text, srt, verbose_json, vtt, or diarized_json)
+            **kwargs: Additional parameters (chunking_strategy, include, language, prompt, temperature, etc.)
 
         Returns:
             ValidationReport with field-level results
         """
+        # Extract special test metadata
+        test_param = kwargs.pop("_test_param", None)
+        test_variant = kwargs.pop("_test_variant", None)
+
         file_path = Path(file_path)
 
-        with open(file_path, "rb") as f:
-            files = {"file": (file_path.name, f, "audio/mpeg")}
-            data = {"model": model, "response_format": response_format, **kwargs}
+        # Build request parameters for reporting
+        request_body = {
+            "file": file_path.name,
+            "model": model,
+            "response_format": response_format,
+            **kwargs,
+        }
 
-            response = self.request("POST", "/audio/transcriptions", data=data, files=files)
+        try:
+            with open(file_path, "rb") as f:
+                files = {"file": (file_path.name, f, "audio/mpeg")}
+                data = {"model": model, "response_format": response_format, **kwargs}
+                
+                # Use request_raw because text/srt/vtt formats return strings, not JSON
+                response_text = self.request_raw(
+                    "POST", "/audio/transcriptions", data=data, files=files
+                )
 
-        schema = (
-            TranscriptionVerboseResponse
-            if response_format == "verbose_json"
-            else TranscriptionResponse
-        )
-        validator = SchemaValidator(provider=self.provider_name, endpoint="audio/transcriptions")
-        return validator.validate(response, schema)
+            # Determine if result is JSON or Text
+            is_json = response_format in ["json", "verbose_json", "diarized_json"]
+            
+            if is_json:
+                import json as json_lib
+                response_data = json_lib.loads(response_text)
+                
+                if response_format == "verbose_json":
+                    schema = TranscriptionVerboseResponse
+                elif response_format == "diarized_json":
+                    schema = TranscriptionDiarizedResponse
+                else:
+                    schema = TranscriptionResponse
+                
+                validator = SchemaValidator(provider=self.provider_name, endpoint="audio/transcriptions")
+                report = validator.validate(response_data, schema, request_params=request_body)
+            else:
+                # Basic validation for text formats: must be non-empty string
+                is_valid = len(response_text.strip()) > 0
+                report = ValidationReport(
+                    provider=self.provider_name,
+                    endpoint="audio/transcriptions",
+                    success=is_valid,
+                    total_fields=1,
+                    valid_count=1 if is_valid else 0,
+                    invalid_count=0 if is_valid else 1,
+                    fields=[
+                        FieldResult(
+                            field="text_content",
+                            status=FieldStatus.VALID if is_valid else FieldStatus.MISSING,
+                            expected="non-empty string",
+                            actual=f"{len(response_text)} chars" if is_valid else "empty",
+                        )
+                    ],
+                    request_params=request_body,
+                    raw_response={"content": response_text[:100] + "..." if len(response_text) > 100 else response_text},
+                )
+
+            report.test_param = test_param
+            report.test_variant = test_variant
+            return report
+        except Exception as e:
+            from llm_spec.core.report import get_collector, get_current_test_name
+
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="audio/transcriptions",
+                success=False,
+                total_fields=0,
+                valid_count=0,
+                invalid_count=0,
+                fields=[],
+                request_params=request_body,
+                raw_response=None,
+                metadata={"test_name": get_current_test_name(), "error": str(e)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+            # Add to collector but don't re-raise, let the test handle it via report.output() and assertion
+            return report
 
     def validate_translation(
         self,
         *,
         file_path: str | Path,
         model: Literal["whisper-1"] = "whisper-1",
-        response_format: Literal["json", "verbose_json"] = "json",
+        response_format: Literal["json", "text", "srt", "verbose_json", "vtt"] = "json",
         **kwargs: Any,
     ) -> ValidationReport:
         """Validate translation endpoint response against schema.
@@ -391,21 +666,86 @@ class OpenAIClient(BaseClient):
         Returns:
             ValidationReport with field-level results
         """
+        # Extract special test metadata
+        test_param = kwargs.pop("_test_param", None)
+        test_variant = kwargs.pop("_test_variant", None)
+
         file_path = Path(file_path)
 
-        with open(file_path, "rb") as f:
-            files = {"file": (file_path.name, f, "audio/mpeg")}
-            data = {"model": model, "response_format": response_format, **kwargs}
+        # Build request parameters for reporting
+        request_body = {
+            "file": file_path.name,
+            "model": model,
+            "response_format": response_format,
+            **kwargs,
+        }
 
-            response = self.request("POST", "/audio/translations", data=data, files=files)
+        try:
+            with open(file_path, "rb") as f:
+                files = {"file": (file_path.name, f, "audio/mpeg")}
+                data = {"model": model, "response_format": response_format, **kwargs}
+                
+                # Use request_raw for non-JSON formats
+                response_text = self.request_raw(
+                    "POST", "/audio/translations", data=data, files=files
+                )
 
-        schema = (
-            TranslationVerboseResponse
-            if response_format == "verbose_json"
-            else TranslationResponse
-        )
-        validator = SchemaValidator(provider=self.provider_name, endpoint="audio/translations")
-        return validator.validate(response, schema)
+            is_json = response_format in ["json", "verbose_json"]
+            
+            if is_json:
+                import json as json_lib
+                response_data = json_lib.loads(response_text)
+                
+                schema = (
+                    TranslationVerboseResponse
+                    if response_format == "verbose_json"
+                    else TranslationResponse
+                )
+                validator = SchemaValidator(provider=self.provider_name, endpoint="audio/translations")
+                report = validator.validate(response_data, schema, request_params=request_body)
+            else:
+                # Basic validation for text formats
+                is_valid = len(response_text.strip()) > 0
+                report = ValidationReport(
+                    provider=self.provider_name,
+                    endpoint="audio/translations",
+                    success=is_valid,
+                    total_fields=1,
+                    valid_count=1 if is_valid else 0,
+                    invalid_count=0 if is_valid else 1,
+                    fields=[
+                        FieldResult(
+                            field="text_content",
+                            status=FieldStatus.VALID if is_valid else FieldStatus.MISSING,
+                            expected="non-empty string",
+                            actual=f"{len(response_text)} chars" if is_valid else "empty",
+                        )
+                    ],
+                    request_params=request_body,
+                    raw_response={"content": response_text[:100] + "..." if len(response_text) > 100 else response_text},
+                )
+
+            report.test_param = test_param
+            report.test_variant = test_variant
+            return report
+        except Exception as e:
+            from llm_spec.core.report import get_current_test_name
+
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="audio/translations",
+                success=False,
+                total_fields=0,
+                valid_count=0,
+                invalid_count=0,
+                fields=[],
+                request_params=request_body,
+                raw_response=None,
+                metadata={"test_name": get_current_test_name(), "error": str(e)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+            return report
 
     # =========================================================================
     # Images API

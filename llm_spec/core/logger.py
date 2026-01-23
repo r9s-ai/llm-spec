@@ -170,4 +170,15 @@ def log_error(
         error: The exception that occurred
         elapsed_ms: Request duration in milliseconds
     """
-    logger.error(f"<- ERROR {method} {url} ({elapsed_ms:.0f}ms): {error}")
+    error_msg = f"<- ERROR {method} {url} ({elapsed_ms:.0f}ms): {error}"
+
+    # Include HTTP response body if available
+    if hasattr(error, 'response') and error.response is not None:
+        try:
+            response_body = error.response.text
+            if response_body:
+                error_msg += f"\nResponse body: {response_body}"
+        except Exception:
+            pass
+
+    logger.error(error_msg)

@@ -120,7 +120,25 @@ class BaseClient(ABC):
         data: dict[str, Any] | None = None,
         files: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Make a synchronous HTTP request.
+        """Make a synchronous HTTP request and parse result as JSON."""
+        response_text = self.request_raw(
+            method, endpoint, json=json, params=params, data=data, files=files
+        )
+        import json as json_lib
+
+        return json_lib.loads(response_text)
+
+    def request_raw(
+        self,
+        method: str,
+        endpoint: str,
+        *,
+        json: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        files: dict[str, Any] | None = None,
+    ) -> str:
+        """Make a synchronous HTTP request and return raw text.
 
         Args:
             method: HTTP method
@@ -139,7 +157,7 @@ class BaseClient(ABC):
                 self._logger,
                 method,
                 url,
-                body=json,
+                body=json or data,
                 log_body=self._log_config.log_request_body,
                 max_length=self._log_config.max_body_length,
             )
@@ -151,7 +169,7 @@ class BaseClient(ABC):
             )
             elapsed_ms = (time.perf_counter() - start_time) * 1000
             response.raise_for_status()
-            result = response.json()
+            result = response.text
 
             # Log response
             if self._log_config.enabled:
@@ -228,7 +246,21 @@ class BaseClient(ABC):
         json: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Make an asynchronous HTTP request."""
+        """Make an asynchronous HTTP request and parse result as JSON."""
+        response_text = await self.async_request_raw(method, endpoint, json=json, params=params)
+        import json as json_lib
+
+        return json_lib.loads(response_text)
+
+    async def async_request_raw(
+        self,
+        method: str,
+        endpoint: str,
+        *,
+        json: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> str:
+        """Make an asynchronous HTTP request and return raw text."""
         client = self._get_async_client()
         url = f"{self.base_url}{endpoint}"
 
@@ -248,7 +280,7 @@ class BaseClient(ABC):
             response = await client.request(method, endpoint, json=json, params=params)
             elapsed_ms = (time.perf_counter() - start_time) * 1000
             response.raise_for_status()
-            result = response.json()
+            result = response.text
 
             # Log response
             if self._log_config.enabled:

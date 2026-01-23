@@ -214,6 +214,30 @@ def test_openai_chat_completion():
     ...
 ```
 
+### Targeted Parameter Testing (目标参数测试)
+为确保测试报告的精确性，避免 False Negatives（即因为 A 参数失败导致 B 参数被误判为 Unsupported），应使用 **Targeted Testing** 模式：
+
+1. **原则**：每个测试用例应明确指定其主要验证的参数 (`_test_param`)。
+2. **行为**：如果测试失败，系统仅将失败归咎于目标参数，同一请求中的其他参数仍被视为 Effective/Supported。
+3. **变体**：支持指定 `_test_variant` 来描述具体不支持的用法（如 "string array" vs "string"）。
+
+```python
+def test_param_input_list(self, openai_client):
+    """测试 input 参数的数组形式"""
+    openai_client.validate_responses(
+        # 基础参数确保请求有效
+        model="gpt-4o",
+        max_output_tokens=50,
+        
+        # 待测参数
+        input=["Hello", "World"],
+        
+        # 元数据：指定这是针对 input 的 "string array" 变体验证
+        _test_param="input",
+        _test_variant="string array",
+    )
+```
+
 ## 依赖管理
 
 核心依赖：
@@ -234,7 +258,7 @@ def test_openai_chat_completion():
 uv sync
 
 # 运行测试
-pytest
+uv run pytest
 
 # 运行集成测试（需要 API Key）
 pytest -m integration

@@ -32,11 +32,40 @@ def pytest_configure(config: pytest.Config) -> None:
 def pytest_addoption(parser: pytest.Parser) -> None:
     """Add custom command line options."""
     parser.addoption(
-        "--run-expensive",
+        "--keep-temp",
         action="store_true",
         default=False,
-        help="Run expensive tests (image generation, etc.)",
+        help="Keep temporary files after tests",
     )
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Prepare environment at the start of the session."""
+    from llm_spec.core.config import PROJECT_ROOT
+
+    temp_dir = PROJECT_ROOT / "temp"
+    if temp_dir.exists():
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call):
+    """Capture test results for statistics."""
+    outcome = yield
+    report = outcome.get_result()
+
+    # Only record call phase (actual test execution) results
+    if report.when == "call":
+        # Save test outcome to item for later use
+        item.test_outcome = report.outcome  # 'passed', 'failed', 'skipped'
+
+        # For failed tests, try to extract request parameters from exception
+        if report.outcome == "failed" and report.longrepr:
+            # Store failure info for parameter extraction
+            item.test_failed = True
+            item.test_exception = getattr(call, 'excinfo', None)
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
@@ -47,13 +76,50 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     config = get_config().report
     collector = get_collector()
 
+    # Collect pytest test outcomes by endpoint
+    # Map test class names to endpoint slugs
+    endpoint_mapping = {
+        "TestChatCompletions": ("openai", "chat_completions"),
+        "TestResponses": ("openai", "responses"),
+        "TestEmbeddings": ("openai", "embeddings"),
+        "TestAudioSpeech": ("openai", "audio_speech"),
+        "TestAudioTranscriptions": ("openai", "audio_transcriptions"),
+        "TestAudioTranslations": ("openai", "audio_translations"),
+        # Add more mappings as needed
+    }
+
+    # Collect test outcomes grouped by endpoint
+    test_outcomes_by_endpoint: dict[tuple[str, str], list[str]] = {}
+
+    for item in session.items:
+        # Get test class name
+        class_name = item.parent.name if hasattr(item.parent, 'name') else None
+        if not class_name or class_name not in endpoint_mapping:
+            continue
+
+        provider_endpoint = endpoint_mapping[class_name]
+
+        if hasattr(item, 'test_outcome'):
+            if provider_endpoint not in test_outcomes_by_endpoint:
+                test_outcomes_by_endpoint[provider_endpoint] = []
+            test_outcomes_by_endpoint[provider_endpoint].append(item.test_outcome)
+
+    # Pass test outcomes to collector
+    collector.set_test_outcomes(test_outcomes_by_endpoint)
+
     # Only save if we have reports and JSON output is enabled
     if collector.count > 0 and config.format in ("json", "both"):
         saved_paths = collector.save()
-        print(f"\nValidation reports saved ({len(saved_paths)} files):")
+        print(f"\\nValidation reports saved ({len(saved_paths)} files):")
         for path in saved_paths:
             print(f"  - {path}")
         print(f"Total: {collector.count} tests collected")
+
+    # Print parameter support matrix for terminal output
+
+    # Print parameter support matrix for terminal output
+    if collector.count > 0 and config.format in ("terminal", "both"):
+        collector.print_all_parameter_support_matrices()
 
     # Reset collector for next session
     reset_collector()
@@ -72,13 +138,7 @@ def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None) -> 
 
 
 @pytest.fixture
-def run_expensive(request: pytest.FixtureRequest) -> bool:
-    """Check if expensive tests should run."""
-    return request.config.getoption("--run-expensive")
-
-
-@pytest.fixture
-def temp_dir() -> Generator[Path, None, None]:
+def temp_dir(request: pytest.FixtureRequest) -> Generator[Path, None, None]:
     """Create a temporary directory for test artifacts.
 
     The directory is automatically cleaned up after the test.
@@ -86,10 +146,19 @@ def temp_dir() -> Generator[Path, None, None]:
     Yields:
         Path to the temporary directory
     """
-    tmp_path = Path(tempfile.mkdtemp(prefix="llm_spec_test_"))
+    from llm_spec.core.config import PROJECT_ROOT
+    
+    temp_root = PROJECT_ROOT / "temp"
+    if not temp_root.exists():
+        temp_root.mkdir(parents=True, exist_ok=True)
+        
+    tmp_path = Path(tempfile.mkdtemp(dir=temp_root, prefix="test_"))
     yield tmp_path
-    # Cleanup after test
-    shutil.rmtree(tmp_path, ignore_errors=True)
+    
+    # Cleanup after test unless --keep-temp is specified
+    if not request.config.getoption("--keep-temp"):
+        import shutil
+        shutil.rmtree(tmp_path, ignore_errors=True)
 
 
 @pytest.fixture
@@ -150,3 +219,117 @@ def xai_client() -> XAIClient:
     if not api_key:
         pytest.skip("XAI_API_KEY not set (env or config)")
     return XAIClient()
+
+
+# =============================================================================
+# Baseline Parameters for Single-Parameter Testing
+# =============================================================================
+
+
+@pytest.fixture
+def baseline_params() -> dict:
+    """Baseline parameters for chat completion tests.
+
+    Contains only the minimum required parameters:
+    - model: The model to use
+    - messages: A simple test message
+    - max_tokens: Explicitly set to control response length (50 tokens)
+
+    This fixture is used for single-parameter testing where each test
+    adds exactly one new parameter on top of this baseline.
+    """
+    from typing import Any
+
+    return {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "Say 'test'."}],
+        "max_tokens": 50,
+    }
+
+
+@pytest.fixture
+def baseline_embedding_params() -> dict:
+    """Baseline parameters for embeddings tests.
+
+    Contains only the minimum required parameters:
+    - model: The embedding model to use
+    - input_text: A simple test string
+
+    This fixture is used for single-parameter testing where each test
+    adds exactly one new parameter on top of this baseline.
+    """
+    from typing import Any
+
+    return {
+        "model": "text-embedding-3-small",
+        "input_text": "Hello, world!",
+    }
+
+
+@pytest.fixture
+def baseline_responses_params() -> dict:
+    """Baseline parameters for responses endpoint tests.
+
+    Contains only the minimum required parameters:
+    - model: The model to use
+    - input_text: A simple test string
+    - max_output_tokens: Explicitly set to control response length (50 tokens)
+
+    This fixture is used for single-parameter testing where each test
+    adds exactly one new parameter on top of this baseline.
+    """
+    return {
+        "model": "gpt-4o-mini",
+        "input_text": "Say 'test'.",
+        "max_output_tokens": 50,
+    }
+
+
+@pytest.fixture
+def baseline_speech_params() -> dict:
+    """Baseline parameters for speech (TTS) tests."""
+    return {
+        "model": "gpt-4o-mini-tts",
+        "input_text": "Hello, world!",
+        "voice": "alloy",
+    }
+
+
+@pytest.fixture
+def audio_file_en(openai_client: OpenAIClient, temp_dir: Path) -> Path:
+    """Fixture that provides an English audio file for testing.
+    
+    Generates it using the TTS API if not present in cache.
+    """
+    cached_path = Path("tests/assets/hello_en.mp3")
+    if cached_path.exists():
+        return cached_path
+    
+    # Generate and save to temp_dir
+    audio_data, _ = openai_client.validate_speech(
+        input_text="Hello, this is a test of the emergency broadcast system.",
+        model="gpt-4o-mini-tts",
+        voice="alloy"
+    )
+    
+    file_path = temp_dir / "hello_en.mp3"
+    file_path.write_bytes(audio_data)
+    return file_path
+
+
+@pytest.fixture
+def audio_file_zh(openai_client: OpenAIClient, temp_dir: Path) -> Path:
+    """Fixture that provides a Chinese audio file for testing.
+    
+    Used for testing translations (Chinese to English).
+    """
+    # Generate and save to temp_dir
+    audio_data, _ = openai_client.validate_speech(
+        input_text="你好，这是一个测试。",
+        model="gpt-4o-mini-tts",
+        voice="alloy"
+    )
+    
+    file_path = temp_dir / "hello_zh.mp3"
+    file_path.write_bytes(audio_data)
+    return file_path

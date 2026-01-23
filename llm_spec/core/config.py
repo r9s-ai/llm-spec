@@ -16,6 +16,22 @@ from typing import Any, Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
+def _find_project_root() -> Path:
+    """Find the project root by searching for pyproject.toml."""
+    current = Path.cwd()
+    for _ in range(10):  # Limit depth
+        if (current / "pyproject.toml").exists():
+            return current
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return Path.cwd()  # Fallback to CWD
+
+
+PROJECT_ROOT = _find_project_root()
+
 # =============================================================================
 # Log Configuration
 # =============================================================================
@@ -56,8 +72,8 @@ class ReportConfig(BaseSettings):
     format: Literal["terminal", "json", "both"] = Field(
         default="terminal", description="Output format: terminal, json, or both"
     )
-    output_dir: Path | None = Field(
-        default=None, description="Directory to save JSON reports"
+    output_dir: Path = Field(
+        default=PROJECT_ROOT / "reports", description="Directory to save JSON reports"
     )
     show_valid: bool = Field(
         default=True, description="Show valid fields in terminal output"

@@ -279,4 +279,26 @@ class TestMyFeature:
         """昂贵操作测试。"""
         # 需要 --run-expensive 才会运行
         ...
+
+### 编写 Targeted Parameter Tests
+
+当测试特定的参数变体（尤其是可能不被支持的用法）时，请使用 `_test_param` 和 `_test_variant` 参数：
+
+```python
+def test_param_input_list(self, openai_client):
+    """测试 input 参数为字符串数组（可能不支持）。"""
+    openai_client.validate_responses(
+        # 1. 传入所有必要的基线参数 (Model, Tokens等)
+        #    这样即使 input 失败，model 仍会被记为 Supported
+        model="gpt-4o",
+        max_output_tokens=50,
+        
+        # 2. 传入待测参数
+        input=["Hello", "World"],
+        
+        # 3. 指定测试目标元数据
+        _test_param="input",           # 指定该失败只归咎于 input
+        _test_variant="string array",  # 描述具体用法，出现在报告中
+    )
+```
 ```

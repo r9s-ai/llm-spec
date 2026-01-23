@@ -105,10 +105,13 @@ class ResponseRequest(BaseModel):
         description="Available tools (function, web_search, code_interpreter, mcp, image_generation)",
     )
     tool_choice: str | dict[str, Any] | None = Field(default=None, description="Tool choice")
+    parallel_tool_calls: bool | None = Field(default=None, description="Enable parallel tool calls")
     temperature: float | None = Field(default=None, ge=0, le=2, description="Sampling temperature")
     top_p: float | None = Field(default=None, ge=0, le=1, description="Nucleus sampling")
+    top_logprobs: int | None = Field(default=None, ge=0, le=20, description="Number of top logprobs to return")
     max_output_tokens: int | None = Field(default=None, description="Maximum output tokens")
     stream: bool | None = Field(default=None, description="Enable streaming")
+    stream_options: dict[str, Any] | None = Field(default=None, description="Stream options (e.g., include_usage)")
     store: bool | None = Field(default=None, description="Store the response (default true)")
     metadata: dict[str, str] | None = Field(default=None, description="Custom metadata")
     include: list[str] | None = Field(
@@ -119,6 +122,7 @@ class ResponseRequest(BaseModel):
         default=None, description="Text format configuration for structured outputs"
     )
     truncation: str | None = Field(default=None, description="Truncation strategy")
+    service_tier: str | None = Field(default=None, description="Service tier (auto, default, flex)")
     user: str | None = Field(default=None, description="User identifier")
 
 
