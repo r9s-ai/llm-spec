@@ -10,10 +10,9 @@ API Reference:
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field
-
 
 # ============================================================================
 # Image Generation Models
@@ -71,7 +70,7 @@ class ImageGenerationRequest(BaseModel):
     background: Literal["transparent", "opaque", "auto"] | None = Field(
         default=None, description="Background transparency for GPT image models only"
     )
-    compression: int | None = Field(
+    output_compression: int | None = Field(
         default=None,
         ge=0,
         le=100,
@@ -79,6 +78,15 @@ class ImageGenerationRequest(BaseModel):
     )
     moderation: Literal["low", "auto"] | None = Field(
         default=None, description="Moderation level for GPT image models"
+    )
+    stream: bool | None = Field(
+        default=None, description="Generate the image in streaming mode. GPT image models only"
+    )
+    partial_images: int | None = Field(
+        default=None,
+        ge=0,
+        le=3,
+        description="Number of partial images for streaming. 0-3. GPT image models only",
     )
 
 
@@ -122,7 +130,7 @@ class ImageEditRequest(BaseModel):
     background: Literal["transparent", "opaque", "auto"] | None = Field(
         default=None, description="Background transparency for GPT image models"
     )
-    compression: int | None = Field(
+    output_compression: int | None = Field(
         default=None, ge=0, le=100, description="Compression level for webp/jpeg"
     )
     input_fidelity: Literal["high", "low"] | None = Field(

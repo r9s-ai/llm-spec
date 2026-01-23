@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import os
-import shutil
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING
 
 import pytest
 
 if TYPE_CHECKING:
-    from llm_spec.providers.openai import OpenAIClient
     from llm_spec.providers.anthropic import AnthropicClient
     from llm_spec.providers.gemini import GeminiClient
+    from llm_spec.providers.openai import OpenAIClient
     from llm_spec.providers.xai import XAIClient
 
 
@@ -36,6 +36,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         action="store_true",
         default=False,
         help="Keep temporary files after tests",
+    )
+    parser.addoption(
+        "--run-expensive",
+        action="store_true",
+        default=False,
+        help="Run expensive integration tests (e.g. image generation)",
     )
 
 
@@ -147,14 +153,14 @@ def temp_dir(request: pytest.FixtureRequest) -> Generator[Path, None, None]:
         Path to the temporary directory
     """
     from llm_spec.core.config import PROJECT_ROOT
-    
+
     temp_root = PROJECT_ROOT / "temp"
     if not temp_root.exists():
         temp_root.mkdir(parents=True, exist_ok=True)
-        
+
     tmp_path = Path(tempfile.mkdtemp(dir=temp_root, prefix="test_"))
     yield tmp_path
-    
+
     # Cleanup after test unless --keep-temp is specified
     if not request.config.getoption("--keep-temp"):
         import shutil
@@ -221,6 +227,16 @@ def xai_client() -> XAIClient:
     return XAIClient()
 
 
+@pytest.fixture
+def run_expensive(pytestconfig: pytest.Config) -> bool:
+    """Fixture to check if expensive tests should be run.
+
+    Returns:
+        True if --run-expensive was passed, False otherwise
+    """
+    return bool(pytestconfig.getoption("--run-expensive"))
+
+
 # =============================================================================
 # Baseline Parameters for Single-Parameter Testing
 # =============================================================================
@@ -238,7 +254,6 @@ def baseline_params() -> dict:
     This fixture is used for single-parameter testing where each test
     adds exactly one new parameter on top of this baseline.
     """
-    from typing import Any
 
     return {
         "model": "gpt-4o-mini",
@@ -258,7 +273,6 @@ def baseline_embedding_params() -> dict:
     This fixture is used for single-parameter testing where each test
     adds exactly one new parameter on top of this baseline.
     """
-    from typing import Any
 
     return {
         "model": "text-embedding-3-small",
@@ -296,40 +310,108 @@ def baseline_speech_params() -> dict:
 
 
 @pytest.fixture
-def audio_file_en(openai_client: OpenAIClient, temp_dir: Path) -> Path:
+def audio_file_en(openai_client: OpenAIClient) -> Path:
     """Fixture that provides an English audio file for testing.
-    
-    Generates it using the TTS API if not present in cache.
+
+    Uses cached audio from test_assets/ if available, generates on first run.
     """
-    cached_path = Path("tests/assets/hello_en.mp3")
+    from llm_spec.core.config import PROJECT_ROOT
+
+    cached_path = PROJECT_ROOT / "test_assets/audio/hello_en.mp3"
     if cached_path.exists():
         return cached_path
-    
-    # Generate and save to temp_dir
+
+    # First-time generation
+    cached_path.parent.mkdir(parents=True, exist_ok=True)
     audio_data, _ = openai_client.validate_speech(
         input_text="Hello, this is a test of the emergency broadcast system.",
         model="gpt-4o-mini-tts",
-        voice="alloy"
+        voice="alloy",
     )
-    
-    file_path = temp_dir / "hello_en.mp3"
-    file_path.write_bytes(audio_data)
-    return file_path
+
+    cached_path.write_bytes(audio_data)
+    return cached_path
 
 
 @pytest.fixture
-def audio_file_zh(openai_client: OpenAIClient, temp_dir: Path) -> Path:
+def audio_file_zh(openai_client: OpenAIClient) -> Path:
     """Fixture that provides a Chinese audio file for testing.
-    
+
     Used for testing translations (Chinese to English).
+    Uses cached audio from test_assets/ if available, generates on first run.
     """
-    # Generate and save to temp_dir
+    from llm_spec.core.config import PROJECT_ROOT
+
+    cached_path = PROJECT_ROOT / "test_assets/audio/hello_zh.mp3"
+    if cached_path.exists():
+        return cached_path
+
+    # First-time generation
+    cached_path.parent.mkdir(parents=True, exist_ok=True)
     audio_data, _ = openai_client.validate_speech(
         input_text="你好，这是一个测试。",
         model="gpt-4o-mini-tts",
-        voice="alloy"
+        voice="alloy",
     )
-    
-    file_path = temp_dir / "hello_zh.mp3"
-    file_path.write_bytes(audio_data)
-    return file_path
+
+    cached_path.write_bytes(audio_data)
+    return cached_path
+@pytest.fixture
+def baseline_image_params() -> dict:
+    """Baseline parameters for image generation tests.
+
+    Contains only the minimum required parameters:
+    - prompt: A simple description
+    - model: dall-e-2 (default)
+    - n: 1
+    - size: 256x256 (for speed and cost)
+    """
+    return {
+        "prompt": "A simple red circle.",
+        "model": "dall-e-2",
+        "n": 1,
+        "size": "256x256",
+    }
+
+
+@pytest.fixture
+def test_image_png(openai_client: OpenAIClient) -> Path:
+    """Fixture that provides a test PNG image for image editing tests.
+
+    Uses cached image from test_assets/ if available, generates on first run.
+    """
+    from llm_spec.core.config import PROJECT_ROOT
+
+    cached_path = PROJECT_ROOT / "test_assets/images/test_base.png"
+    if cached_path.exists():
+        return cached_path
+
+    # First-time generation
+    cached_path.parent.mkdir(parents=True, exist_ok=True)
+    image_bytes, _ = openai_client.generate_image(
+        prompt="A simple white square on black background",
+        model="dall-e-2",
+        n=1,
+        size="256x256",
+    )
+
+    cached_path.write_bytes(image_bytes)
+    return cached_path
+
+
+@pytest.fixture
+def baseline_image_edit_params(test_image_png: Path) -> dict:
+    """Baseline parameters for image edit tests.
+
+    Contains only the minimum required parameters:
+    - image_path: Path to test image
+    - prompt: Edit description
+    - model: dall-e-2 (for speed and cost)
+    - size: 256x256 (matches input image size)
+    """
+    return {
+        "image_path": test_image_png,
+        "prompt": "Add a blue border",
+        "model": "dall-e-2",
+        "size": "256x256",
+    }

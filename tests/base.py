@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from llm_spec.core.report import FieldStatus, ValidationReport
 
 

@@ -116,13 +116,7 @@ class SchemaValidator:
 
         # Handle None
         if value is None:
-            if annotation is type(None):
-                self._results.append(
-                    FieldResult(
-                        field=path, status=FieldStatus.VALID, expected="None", actual="null"
-                    )
-                )
-            elif self._is_optional(annotation):
+            if annotation is type(None) or self._is_optional(annotation):
                 self._results.append(
                     FieldResult(
                         field=path, status=FieldStatus.VALID, expected="None", actual="null"

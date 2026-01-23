@@ -16,10 +16,11 @@ from llm_spec.providers.openai.schemas import (
     ChatCompletionStreamResponse,
     EmbeddingResponse,
     ImageResponse,
+    ImageStreamEvent,
     ResponseObject,
+    TranscriptionDiarizedResponse,
     TranscriptionResponse,
     TranscriptionVerboseResponse,
-    TranscriptionDiarizedResponse,
     TranslationResponse,
     TranslationVerboseResponse,
 )
@@ -580,7 +581,7 @@ class OpenAIClient(BaseClient):
             with open(file_path, "rb") as f:
                 files = {"file": (file_path.name, f, "audio/mpeg")}
                 data = {"model": model, "response_format": response_format, **kwargs}
-                
+
                 # Use request_raw because text/srt/vtt formats return strings, not JSON
                 response_text = self.request_raw(
                     "POST", "/audio/transcriptions", data=data, files=files
@@ -588,18 +589,18 @@ class OpenAIClient(BaseClient):
 
             # Determine if result is JSON or Text
             is_json = response_format in ["json", "verbose_json", "diarized_json"]
-            
+
             if is_json:
                 import json as json_lib
                 response_data = json_lib.loads(response_text)
-                
+
                 if response_format == "verbose_json":
                     schema = TranscriptionVerboseResponse
                 elif response_format == "diarized_json":
                     schema = TranscriptionDiarizedResponse
                 else:
                     schema = TranscriptionResponse
-                
+
                 validator = SchemaValidator(provider=self.provider_name, endpoint="audio/transcriptions")
                 report = validator.validate(response_data, schema, request_params=request_body)
             else:
@@ -628,7 +629,7 @@ class OpenAIClient(BaseClient):
             report.test_variant = test_variant
             return report
         except Exception as e:
-            from llm_spec.core.report import get_collector, get_current_test_name
+            from llm_spec.core.report import get_current_test_name
 
             report = ValidationReport(
                 provider=self.provider_name,
@@ -684,18 +685,18 @@ class OpenAIClient(BaseClient):
             with open(file_path, "rb") as f:
                 files = {"file": (file_path.name, f, "audio/mpeg")}
                 data = {"model": model, "response_format": response_format, **kwargs}
-                
+
                 # Use request_raw for non-JSON formats
                 response_text = self.request_raw(
                     "POST", "/audio/translations", data=data, files=files
                 )
 
             is_json = response_format in ["json", "verbose_json"]
-            
+
             if is_json:
                 import json as json_lib
                 response_data = json_lib.loads(response_text)
-                
+
                 schema = (
                     TranslationVerboseResponse
                     if response_format == "verbose_json"
@@ -755,10 +756,10 @@ class OpenAIClient(BaseClient):
         self,
         *,
         prompt: str = "A white cat",
-        model: Literal["dall-e-2", "dall-e-3"] = "dall-e-2",
-        n: int = 1,
-        size: str = "256x256",
-        response_format: Literal["url", "b64_json"] = "url",
+        model: str = "dall-e-2",
+        n: int | None = None,
+        size: str | None = None,
+        response_format: str | None = None,
         **kwargs: Any,
     ) -> ValidationReport:
         """Validate image generation endpoint response against schema.
@@ -774,19 +775,149 @@ class OpenAIClient(BaseClient):
         Returns:
             ValidationReport with field-level results
         """
+        # Extract special test metadata
+        test_param = kwargs.pop("_test_param", None)
+        test_variant = kwargs.pop("_test_variant", None)
+
+        request_body: dict[str, Any] = {
+            "prompt": prompt,
+            "model": model,
+            **kwargs,
+        }
+        if n is not None:
+            request_body["n"] = n
+        if size is not None:
+            request_body["size"] = size
+        if response_format is not None:
+            request_body["response_format"] = response_format
+
+        try:
+            response = self.request("POST", "/images/generations", json=request_body)
+
+            validator = SchemaValidator(provider=self.provider_name, endpoint="images/generations")
+            report = validator.validate(response, ImageResponse, request_params=request_body)
+            report.test_param = test_param
+            report.test_variant = test_variant
+            return report
+        except Exception as e:
+            from llm_spec.core.report import get_collector, get_current_test_name
+
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="images/generations",
+                success=False,
+                total_fields=0,
+                valid_count=0,
+                invalid_count=0,
+                fields=[],
+                request_params=request_body,
+                raw_response=None,
+                metadata={"test_name": get_current_test_name(), "error": str(e)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+            collector = get_collector()
+            collector.add(report, test_name=get_current_test_name(), save_to_output=False)
+            raise
+
+    def validate_image_generation_stream(
+        self,
+        *,
+        prompt: str = "A white cat",
+        model: str = "gpt-image-1.5",
+        **kwargs: Any,
+    ) -> tuple[list[dict[str, Any]], ValidationReport]:
+        """Validate streaming image generation endpoint.
+
+        Args:
+            prompt: Text description of the image
+            model: Model to use (must support streaming)
+            **kwargs: Additional parameters
+
+        Returns:
+            Tuple of (list of events, ValidationReport)
+        """
+        import json
+
+        # Extract special test metadata
+        test_param = kwargs.pop("_test_param", None)
+        test_variant = kwargs.pop("_test_variant", None)
+
         request_body = {
             "prompt": prompt,
             "model": model,
-            "n": n,
-            "size": size,
-            "response_format": response_format,
+            "stream": True,
             **kwargs,
         }
 
-        response = self.request("POST", "/images/generations", json=request_body)
+        events: list[dict[str, Any]] = []
+        all_fields: list[FieldResult] = []
+        has_errors = False
 
-        validator = SchemaValidator(provider=self.provider_name, endpoint="images/generations")
-        return validator.validate(response, ImageResponse, request_params=request_body)
+        try:
+            for data in self.stream("POST", "/images/generations", json=request_body):
+                if data.strip() == "[DONE]":
+                    break
+                try:
+                    event = json.loads(data)
+                    events.append(event)
+
+                    # Validate each event against schema
+                    validator = SchemaValidator(
+                        provider=self.provider_name, endpoint="images/generations/stream"
+                    )
+                    event_report = validator.validate(event, ImageStreamEvent)
+                    if not event_report.success:
+                        has_errors = True
+                        for f in event_report.fields:
+                            if f.status != FieldStatus.VALID:
+                                all_fields.append(f)
+                except json.JSONDecodeError:
+                    continue
+
+            # Check if we got a completed event
+            has_completed = any(
+                event.get("type") == "image_generation.completed" for event in events
+            )
+
+            success = not has_errors and len(events) > 0 and has_completed
+
+            # Create a summary report
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="images/generations",
+                success=success,
+                total_fields=len(events),
+                valid_count=len(events) - len(all_fields),
+                invalid_count=len(all_fields),
+                fields=all_fields,
+                request_params=request_body,
+                raw_response={"events": events, "event_count": len(events)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+
+            return events, report
+        except Exception as e:
+            from llm_spec.core.report import get_collector, get_current_test_name
+
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="images/generations",
+                success=False,
+                total_fields=0,
+                valid_count=0,
+                invalid_count=0,
+                fields=[],
+                request_params=request_body,
+                raw_response=None,
+                metadata={"test_name": get_current_test_name(), "error": str(e)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+            collector = get_collector()
+            collector.add(report, test_name=get_current_test_name(), save_to_output=False)
+            raise
 
     def validate_image_edit(
         self,

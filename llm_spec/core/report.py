@@ -13,7 +13,6 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-
 # =============================================================================
 # Global Report Collector (singleton)
 # =============================================================================
@@ -453,7 +452,7 @@ class ReportCollector:
 
                 # Count as tested regardless
                 param_stats[param]["tested"] += 1
-                
+
                 if success:
                     param_stats[param]["passed"] += 1
                 else:
@@ -462,7 +461,7 @@ class ReportCollector:
                         if param == targeted_param:
                             param_stats[param]["failed"] += 1
                         else:
-                            # For non-targeted params in a failed targeted test, 
+                            # For non-targeted params in a failed targeted test,
                             # we treat them as "neutral" (tested but not passed/failed)
                             # Effectively, ignore this specific test run for other parameters' pass/fail stats
                             # Since tested was incremented, we need to balance it or rethink logic.
@@ -538,7 +537,7 @@ class ReportCollector:
             else:
                 # At least one test failed - parameter is unsupported
                 failed_tests = self._find_all_failed_tests(key, param)
-                
+
                 unsupported.append({
                     "param": param,
                     "reason": failed_tests # Detailed failure list
@@ -603,11 +602,11 @@ class ReportCollector:
             for item in unsupported:
                 param = item["param"]
                 reasons = item.get("reason", [])
-                
+
                 if not reasons:
                     lines.append(f"  - {param}: Validation failed")
                     continue
-                
+
                 if len(reasons) > 1:
                     lines.append(f"  - {param}:")
                     for failure in reasons:
@@ -874,13 +873,13 @@ class ReportCollector:
 
             # Calculate parameter coverage
             all_params = self._get_all_schema_params(provider, endpoint)
-            
+
             # Get all tested params from _all_test_params to include failed tests
             tested_params = set()
             for test in self._all_test_params.get(key, []):
                 if test.get("params"):
                     tested_params.update(test["params"].keys())
-            
+
             not_tested_params = all_params - tested_params
             param_validation_stats = self._collect_param_validation_stats(key)
 

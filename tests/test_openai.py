@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from llm_spec.providers.openai import OpenAIClient
-from tests.base import assert_report_valid, print_report_summary
-
+from tests.base import assert_report_valid
 
 # =============================================================================
 # Chat Completions API Tests
@@ -65,7 +66,9 @@ class TestChatCompletions:
         report.output()
         assert_report_valid(report)
 
-    def test_param_presence_penalty(self, openai_client: OpenAIClient, baseline_params: dict) -> None:
+    def test_param_presence_penalty(
+        self, openai_client: OpenAIClient, baseline_params: dict
+    ) -> None:
         """Test presence_penalty parameter (-2.0 to 2.0).
 
         Positive values penalize tokens that have appeared, encouraging new topics.
@@ -77,7 +80,9 @@ class TestChatCompletions:
         report.output()
         assert_report_valid(report)
 
-    def test_param_frequency_penalty(self, openai_client: OpenAIClient, baseline_params: dict) -> None:
+    def test_param_frequency_penalty(
+        self, openai_client: OpenAIClient, baseline_params: dict
+    ) -> None:
         """Test frequency_penalty parameter (-2.0 to 2.0).
 
         Positive values penalize tokens based on frequency, reducing repetition.
@@ -152,7 +157,10 @@ class TestChatCompletions:
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You respond in JSON format."},
-                {"role": "user", "content": "Return a JSON object with a 'status' field set to 'ok'."},
+                {
+                    "role": "user",
+                    "content": "Return a JSON object with a 'status' field set to 'ok'.",
+                },
             ],
             max_tokens=50,
             response_format={"type": "json_object"},
@@ -377,7 +385,9 @@ class TestChatCompletions:
         ]
         report = openai_client.validate_chat_completion(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": "What's the weather and current time in Boston?"}],
+            messages=[
+                {"role": "user", "content": "What's the weather and current time in Boston?"}
+            ],
             max_tokens=150,
             tools=tools,  # dependency
             tool_choice="auto",
@@ -450,7 +460,11 @@ class TestChatCompletions:
 
         # Find chunk with finish_reason
         finish_chunk = next(
-            (c for c in chunks if c.get("choices") and c["choices"][0].get("finish_reason") == "stop"),
+            (
+                c
+                for c in chunks
+                if c.get("choices") and c["choices"][0].get("finish_reason") == "stop"
+            ),
             None,
         )
         assert finish_chunk is not None, "Should have a chunk with finish_reason='stop'"
@@ -489,7 +503,9 @@ class TestChatCompletions:
             (c for c in chunks if c.get("usage") is not None),
             None,
         )
-        assert usage_chunk is not None, "Should have a chunk with usage when stream_options.include_usage=true"
+        assert usage_chunk is not None, (
+            "Should have a chunk with usage when stream_options.include_usage=true"
+        )
 
         # Verify usage structure
         usage = usage_chunk["usage"]
@@ -531,7 +547,9 @@ class TestResponses:
     # Tier 1: Independent Parameters (Core)
     # =========================================================================
 
-    def test_param_temperature(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+    def test_param_temperature(
+        self, openai_client: OpenAIClient, baseline_responses_params: dict
+    ) -> None:
         """Test temperature parameter (0-2)."""
         report = openai_client.validate_responses(
             **baseline_responses_params,
@@ -540,7 +558,9 @@ class TestResponses:
         report.output()
         assert_report_valid(report)
 
-    def test_param_top_p(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+    def test_param_top_p(
+        self, openai_client: OpenAIClient, baseline_responses_params: dict
+    ) -> None:
         """Test top_p parameter (0-1)."""
         report = openai_client.validate_responses(
             **baseline_responses_params,
@@ -549,7 +569,9 @@ class TestResponses:
         report.output()
         assert_report_valid(report)
 
-    def test_param_top_logprobs(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+    def test_param_top_logprobs(
+        self, openai_client: OpenAIClient, baseline_responses_params: dict
+    ) -> None:
         """Test top_logprobs parameter (0-20)."""
         report = openai_client.validate_responses(
             **baseline_responses_params,
@@ -558,7 +580,9 @@ class TestResponses:
         report.output()
         assert_report_valid(report)
 
-    def test_param_store(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+    def test_param_store(
+        self, openai_client: OpenAIClient, baseline_responses_params: dict
+    ) -> None:
         """Test store parameter (boolean)."""
         report = openai_client.validate_responses(
             **baseline_responses_params,
@@ -567,7 +591,9 @@ class TestResponses:
         report.output()
         assert_report_valid(report)
 
-    def test_param_metadata(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+    def test_param_metadata(
+        self, openai_client: OpenAIClient, baseline_responses_params: dict
+    ) -> None:
         """Test metadata parameter (map)."""
         report = openai_client.validate_responses(
             **baseline_responses_params,
@@ -576,7 +602,9 @@ class TestResponses:
         report.output()
         assert_report_valid(report)
 
-    def test_param_truncation(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+    def test_param_truncation(
+        self, openai_client: OpenAIClient, baseline_responses_params: dict
+    ) -> None:
         """Test truncation parameter (auto/disabled)."""
         report = openai_client.validate_responses(
             **baseline_responses_params,
@@ -585,7 +613,9 @@ class TestResponses:
         report.output()
         assert_report_valid(report)
 
-    def test_param_service_tier(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+    def test_param_service_tier(
+        self, openai_client: OpenAIClient, baseline_responses_params: dict
+    ) -> None:
         """Test service_tier parameter (auto/default/flex)."""
         report = openai_client.validate_responses(
             **baseline_responses_params,
@@ -598,7 +628,9 @@ class TestResponses:
     # Tier 2: Input & Context
     # =========================================================================
 
-    def test_param_instructions(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+    def test_param_instructions(
+        self, openai_client: OpenAIClient, baseline_responses_params: dict
+    ) -> None:
         """Test instructions parameter (system message)."""
         report = openai_client.validate_responses(
             **baseline_responses_params,
@@ -609,7 +641,9 @@ class TestResponses:
 
     MAX_RETRIES = 3
 
-    def test_param_input_list(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+    def test_param_input_list(
+        self, openai_client: OpenAIClient, baseline_responses_params: dict
+    ) -> None:
         """Test input parameter as array of strings."""
         report = openai_client.validate_responses(
             **baseline_responses_params,
@@ -620,7 +654,9 @@ class TestResponses:
         report.output()
         assert_report_valid(report)
 
-    def test_param_input_image(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+    def test_param_input_image(
+        self, openai_client: OpenAIClient, baseline_responses_params: dict
+    ) -> None:
         """Test input parameter with image inputs."""
         input_items = [
             {"type": "input_text", "text": "What is in this image?"},
@@ -638,7 +674,9 @@ class TestResponses:
         report.output()
         assert_report_valid(report)
 
-    def test_param_input_file(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+    def test_param_input_file(
+        self, openai_client: OpenAIClient, baseline_responses_params: dict
+    ) -> None:
         """Test input parameter with file inputs."""
         input_items = [
             {"type": "input_text", "text": "What is in this file?"},
@@ -773,7 +811,9 @@ class TestResponses:
         report.output()
         assert_report_valid(report)
 
-    def test_param_reasoning(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+    def test_param_reasoning(
+        self, openai_client: OpenAIClient, baseline_responses_params: dict
+    ) -> None:
         """Test reasoning parameter (o-series models)."""
         # Exclude model from baseline since we need to override it
         params = {k: v for k, v in baseline_responses_params.items() if k != "model"}
@@ -791,7 +831,9 @@ class TestResponses:
     # Tier 5: Streaming
     # =========================================================================
 
-    def test_param_stream(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+    def test_param_stream(
+        self, openai_client: OpenAIClient, baseline_responses_params: dict
+    ) -> None:
         """Test stream parameter."""
         events, report = openai_client.validate_responses_stream(
             **baseline_responses_params,
@@ -801,7 +843,9 @@ class TestResponses:
         report.output()
         assert_report_valid(report)
 
-    def test_param_stream_options(self, openai_client: OpenAIClient, baseline_responses_params: dict) -> None:
+    def test_param_stream_options(
+        self, openai_client: OpenAIClient, baseline_responses_params: dict
+    ) -> None:
         """Test stream_options parameter."""
         events, report = openai_client.validate_responses_stream(
             **baseline_responses_params,
@@ -811,7 +855,7 @@ class TestResponses:
         )
         report.output()
         assert_report_valid(report)
-        
+
         # Verify usage in events
         has_usage = any(e.get("usage") for e in events)
         assert has_usage, "Should receive usage when stream_options.include_usage=True"
@@ -857,7 +901,9 @@ class TestEmbeddings:
     # Tier 1: Input Format Variations (Required Parameter)
     # =========================================================================
 
-    def test_input_array_of_strings(self, openai_client: OpenAIClient, baseline_embedding_params: dict) -> None:
+    def test_input_array_of_strings(
+        self, openai_client: OpenAIClient, baseline_embedding_params: dict
+    ) -> None:
         """Test input parameter with array of strings (batch embedding).
 
         Official docs: "To embed multiple inputs in a single request, pass an array of strings."
@@ -884,7 +930,9 @@ class TestEmbeddings:
     # Tier 2: Optional Parameters
     # =========================================================================
 
-    def test_param_dimensions(self, openai_client: OpenAIClient, baseline_embedding_params: dict) -> None:
+    def test_param_dimensions(
+        self, openai_client: OpenAIClient, baseline_embedding_params: dict
+    ) -> None:
         """Test dimensions parameter (output embedding dimensions).
 
         Official docs: "Only supported in text-embedding-3 and later models."
@@ -906,7 +954,9 @@ class TestEmbeddings:
                 actual_dims = len(data[0]["embedding"])
                 assert actual_dims == 512, f"Expected 512 dimensions, got {actual_dims}"
 
-    def test_param_encoding_format_float(self, openai_client: OpenAIClient, baseline_embedding_params: dict) -> None:
+    def test_param_encoding_format_float(
+        self, openai_client: OpenAIClient, baseline_embedding_params: dict
+    ) -> None:
         """Test encoding_format parameter with 'float' (default).
 
         Official docs: "Can be either float or base64."
@@ -928,9 +978,13 @@ class TestEmbeddings:
                 embedding = data[0].get("embedding")
                 assert isinstance(embedding, list), f"Expected list, got {type(embedding)}"
                 if embedding:
-                    assert isinstance(embedding[0], (int, float)), f"Expected numeric values, got {type(embedding[0])}"
+                    assert isinstance(embedding[0], (int, float)), (
+                        f"Expected numeric values, got {type(embedding[0])}"
+                    )
 
-    def test_param_encoding_format_base64(self, openai_client: OpenAIClient, baseline_embedding_params: dict) -> None:
+    def test_param_encoding_format_base64(
+        self, openai_client: OpenAIClient, baseline_embedding_params: dict
+    ) -> None:
         """Test encoding_format parameter with 'base64'.
 
         Official docs: "Can be either float or base64."
@@ -950,7 +1004,9 @@ class TestEmbeddings:
             data = report.raw_response.get("data", [])
             if data:
                 embedding = data[0].get("embedding")
-                assert isinstance(embedding, str), f"Expected string (base64), got {type(embedding)}"
+                assert isinstance(embedding, str), (
+                    f"Expected string (base64), got {type(embedding)}"
+                )
 
     # =========================================================================
     # Tier 3: Model Variations
@@ -1091,9 +1147,7 @@ class TestAudioSpeech:
         report.output()
         assert report.success, f"Stream format '{stream_fmt}' should return valid audio"
 
-    def test_param_speed(
-        self, openai_client: OpenAIClient, baseline_speech_params: dict
-    ) -> None:
+    def test_param_speed(self, openai_client: OpenAIClient, baseline_speech_params: dict) -> None:
         """Test speed parameter (0.25 to 4.0)."""
         audio_data, report = openai_client.validate_speech(
             **baseline_speech_params,
@@ -1108,9 +1162,11 @@ class TestAudioSpeech:
     # Tier 3: Advanced Options
     # =========================================================================
 
-    def test_param_instructions(self, openai_client: OpenAIClient, baseline_speech_params: dict) -> None:
+    def test_param_instructions(
+        self, openai_client: OpenAIClient, baseline_speech_params: dict
+    ) -> None:
         """Test instructions parameter (voice style control).
-        
+
         Requires gpt-4o-mini-tts or gpt-4o-audio-preview (if supported in tts).
         Official docs say: "Does not work with tts-1 or tts-1-hd".
         """
@@ -1129,7 +1185,7 @@ class TestAudioSpeech:
 @pytest.mark.integration
 class TestAudioTranscriptions:
     """Tests for /v1/audio/transcriptions endpoint.
-    
+
     Test Strategy: Single-parameter testing
     - Baseline: file (generated), model='whisper-1'
     """
@@ -1147,7 +1203,9 @@ class TestAudioTranscriptions:
             "gpt-4o-transcribe",
         ],
     )
-    def test_param_model(self, openai_client: OpenAIClient, audio_file_en: Path, model: str) -> None:
+    def test_param_model(
+        self, openai_client: OpenAIClient, audio_file_en: Path, model: str
+    ) -> None:
         """Test various transcription models."""
         report = openai_client.validate_transcription(
             file_path=audio_file_en,
@@ -1159,7 +1217,9 @@ class TestAudioTranscriptions:
         assert_report_valid(report)
 
     @pytest.mark.parametrize("fmt", ["json", "verbose_json", "text", "srt", "vtt"])
-    def test_param_response_format(self, openai_client: OpenAIClient, audio_file_en: Path, fmt: str) -> None:
+    def test_param_response_format(
+        self, openai_client: OpenAIClient, audio_file_en: Path, fmt: str
+    ) -> None:
         """Test various response formats."""
         # Note: gpt-4o models only support json
         model = "whisper-1"
@@ -1173,7 +1233,9 @@ class TestAudioTranscriptions:
         report.output()
         assert_report_valid(report)
 
-    def test_param_chunking_strategy(self, openai_client: OpenAIClient, audio_file_en: Path) -> None:
+    def test_param_chunking_strategy(
+        self, openai_client: OpenAIClient, audio_file_en: Path
+    ) -> None:
         """Test chunking_strategy parameter."""
         report = openai_client.validate_transcription(
             file_path=audio_file_en,
@@ -1253,7 +1315,9 @@ class TestAudioTranscriptions:
         report.output()
         assert_report_valid(report)
 
-    def test_param_timestamp_granularities(self, openai_client: OpenAIClient, audio_file_en: Path) -> None:
+    def test_param_timestamp_granularities(
+        self, openai_client: OpenAIClient, audio_file_en: Path
+    ) -> None:
         """Test timestamp_granularities parameter."""
         report = openai_client.validate_transcription(
             file_path=audio_file_en,
@@ -1270,7 +1334,7 @@ class TestAudioTranscriptions:
 @pytest.mark.integration
 class TestAudioTranslations:
     """Tests for /v1/audio/translations endpoint.
-    
+
     Test Strategy: Translating Chinese audio to English.
     """
 
@@ -1322,38 +1386,513 @@ class TestAudioTranslations:
 
 @pytest.mark.integration
 class TestImageGeneration:
-    """Tests for /v1/images/generations endpoint."""
+    """Tests for /v1/images/generations endpoint.
 
-    def test_basic_generation(
-        self, openai_client: OpenAIClient, run_expensive: bool
+    Test Strategy: Parameterized testing
+    - Uses @pytest.mark.parametrize to test multiple values for each parameter
+    - Follows Audio API testing pattern
+    - Each test validates exactly one parameter on top of a baseline
+    - Only tests supported models: dall-e-2, gpt-image-1.5
+    - Model-specific parameters are tested separately (dall-e-2, GPT)
+    """
+
+    # =========================================================================
+    # Baseline Test
+    # =========================================================================
+
+    def test_baseline(
+        self, openai_client: OpenAIClient, baseline_image_params: dict
     ) -> None:
-        """Test basic image generation."""
-        if not run_expensive:
-            pytest.skip("Image generation is expensive, use --run-expensive to run")
+        """Baseline test with only required parameters."""
+        report = openai_client.validate_image_generation(**baseline_image_params)
+        report.output()
+        assert_report_valid(report)
 
+    # =========================================================================
+    # Tier 1: Core Parameters (dall-e-2)
+    # =========================================================================
+
+    def test_param_n(
+        self, openai_client: OpenAIClient, baseline_image_params: dict
+    ) -> None:
+        """Test n parameter (number of images, 1-10)."""
         report = openai_client.validate_image_generation(
-            prompt="A simple red circle on white background",
+            **baseline_image_params,
+            n=2,
+            _test_param="n",
+            _test_variant="multiple images",
+        )
+        report.output()
+        assert_report_valid(report)
+
+        # Verify 2 images returned
+        if report.raw_response:
+            data = report.raw_response.get("data", [])
+            assert len(data) == 2
+
+    @pytest.mark.parametrize(
+        "size",
+        ["256x256", "512x512", "1024x1024"],
+    )
+    def test_param_size_dalle2(
+        self, openai_client: OpenAIClient, size: str
+    ) -> None:
+        """Test size parameter for dall-e-2 (supports 256x256, 512x512, 1024x1024)."""
+        report = openai_client.validate_image_generation(
+            prompt="A simple geometric shape.",
             model="dall-e-2",
-            size="256x256",
-            n=1,
+            size=size,
+            _test_param="size",
+            _test_variant=f"dall-e-2 {size}",
         )
         report.output()
         assert_report_valid(report)
 
-    def test_b64_json_format(
-        self, openai_client: OpenAIClient, run_expensive: bool
+    @pytest.mark.parametrize(
+        "size",
+        ["1024x1024", "1536x1024", "1024x1536", "auto"],
+    )
+    def test_param_size_gpt(
+        self, openai_client: OpenAIClient, size: str
     ) -> None:
-        """Test image generation with base64 response format."""
-        if not run_expensive:
-            pytest.skip("Image generation is expensive, use --run-expensive to run")
+        """Test size parameter for GPT models (supports 1024x1024, 1536x1024, 1024x1536, auto)."""
+        report = openai_client.validate_image_generation(
+            prompt="A simple geometric shape.",
+            model="gpt-image-1.5",
+            size=size,
+            _test_param="size",
+            _test_variant=f"gpt {size}",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    @pytest.mark.parametrize(
+        "response_format",
+        ["url", "b64_json"],
+    )
+    def test_param_response_format(
+        self, openai_client: OpenAIClient, baseline_image_params: dict, response_format: str
+    ) -> None:
+        """Test response_format parameter for dall-e-2/3 (url, b64_json)."""
+        report = openai_client.validate_image_generation(
+            **baseline_image_params,
+            response_format=response_format,
+            _test_param="response_format",
+            _test_variant=response_format,
+        )
+        report.output()
+        assert_report_valid(report)
+
+        # Verify correct format is present
+        if report.raw_response:
+            data = report.raw_response.get("data", [{}])
+            assert response_format in data[0], f"Expected {response_format} in response"
+
+    def test_param_user(
+        self, openai_client: OpenAIClient, baseline_image_params: dict
+    ) -> None:
+        """Test user parameter (tracking)."""
+        report = openai_client.validate_image_generation(
+            **baseline_image_params,
+            user="test-user-123",
+            _test_param="user",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    # =========================================================================
+    # Tier 2: GPT Model Specific
+    # =========================================================================
+
+    @pytest.mark.parametrize(
+        "background",
+        ["transparent", "opaque", "auto"],
+    )
+    def test_param_background(
+        self, openai_client: OpenAIClient, background: str
+    ) -> None:
+        """Test background parameter for GPT models (transparent, opaque, auto)."""
+        report = openai_client.validate_image_generation(
+            prompt="A red circle.",
+            model="gpt-image-1.5",
+            background=background,
+            output_format="png",  # png/webp support transparency
+            _test_param="background",
+            _test_variant=background,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    @pytest.mark.parametrize(
+        "output_format",
+        ["png", "jpeg", "webp"],
+    )
+    def test_param_output_format(
+        self, openai_client: OpenAIClient, output_format: str
+    ) -> None:
+        """Test output_format parameter for GPT models (png, jpeg, webp)."""
+        report = openai_client.validate_image_generation(
+            prompt="A red circle.",
+            model="gpt-image-1.5",
+            output_format=output_format,
+            _test_param="output_format",
+            _test_variant=output_format,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_output_compression(
+        self, openai_client: OpenAIClient
+    ) -> None:
+        """Test output_compression parameter. GPT models only."""
+        report = openai_client.validate_image_generation(
+            prompt="A red circle.",
+            model="gpt-image-1.5",
+            output_format="jpeg",  # compression supported for jpeg/webp
+            output_compression=50,
+            _test_param="output_compression",
+            _test_variant="50%",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_moderation(self, openai_client: OpenAIClient) -> None:
+        """Test moderation parameter. GPT models only."""
 
         report = openai_client.validate_image_generation(
-            prompt="A simple blue square",
-            response_format="b64_json",
-            size="256x256",
+            prompt="A red circle.",
+            model="gpt-image-1.5",
+            moderation="low",
+            _test_param="moderation",
+            _test_variant="low",
         )
         report.output()
         assert_report_valid(report)
+
+    @pytest.mark.parametrize(
+        "quality",
+        ["high", "medium", "low", "auto"],
+    )
+    def test_param_quality_gpt(
+        self, openai_client: OpenAIClient, quality: str
+    ) -> None:
+        """Test quality parameter for GPT models (high, medium, low, auto)."""
+        report = openai_client.validate_image_generation(
+            prompt="A red circle.",
+            model="gpt-image-1.5",
+            quality=quality,
+            _test_param="quality",
+            _test_variant=f"gpt {quality}",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    # =========================================================================
+    # Tier 3: Streaming (gpt-image-1.5)
+    # =========================================================================
+
+    def test_param_stream(self, openai_client: OpenAIClient) -> None:
+        """Test stream parameter. GPT models only."""
+
+        events, report = openai_client.validate_image_generation_stream(
+            prompt="A red circle.",
+            model="gpt-image-1.5",
+            _test_param="stream",
+            _test_variant="true",
+        )
+        report.output()
+        assert len(events) > 0
+        assert report.success
+
+    def test_param_partial_images(self, openai_client: OpenAIClient) -> None:
+        """Test partial_images parameter. GPT models only with stream."""
+
+        events, report = openai_client.validate_image_generation_stream(
+            prompt="A red circle.",
+            model="gpt-image-1.5",
+            partial_images=2,
+            _test_param="partial_images",
+            _test_variant="2 partial images",
+        )
+        report.output()
+        assert len(events) > 0
+        assert report.success
+
+
+@pytest.mark.integration
+class TestImageEdit:
+    """Tests for /v1/images/edits endpoint.
+
+    Test Strategy: Single-parameter testing
+    - Each test validates exactly one parameter on top of a baseline
+    - Baseline: model, image, prompt (minimum required)
+    - Model-specific tests use appropriate models
+
+    Supported models: dall-e-2, gpt-image-1, gpt-image-1-mini, gpt-image-1.5
+    """
+
+    # =========================================================================
+    # Baseline Test
+    # =========================================================================
+
+    def test_baseline(
+        self, openai_client: OpenAIClient, baseline_image_edit_params: dict
+    ) -> None:
+        """Baseline test with only required parameters.
+
+        Tests: model, image, prompt (DALL-E-2 for speed/cost)
+        """
+        report = openai_client.validate_image_edit(**baseline_image_edit_params)
+        report.output()
+        assert_report_valid(report)
+
+    # =========================================================================
+    # Tier 1: Core Parameters
+    # =========================================================================
+
+    def test_param_n(
+        self, openai_client: OpenAIClient, baseline_image_edit_params: dict
+    ) -> None:
+        """Test n parameter (number of images to generate, 1-10)."""
+        n_value = 2
+        report = openai_client.validate_image_edit(
+            **baseline_image_edit_params,
+            n=n_value,
+            _test_param="n",
+            _test_variant="multiple images",
+        )
+        report.output()
+        assert_report_valid(report)
+
+        # Verify n images returned
+        if report.raw_response:
+            data = report.raw_response.get("data", [])
+            assert len(data) == n_value, f"Expected {n_value} images, got {len(data)}"
+
+    @pytest.mark.parametrize(
+        "size",
+        ["256x256", "512x512", "1024x1024"],
+    )
+    def test_param_size_dalle2(
+        self, openai_client: OpenAIClient, test_image_png: Path, size: str
+    ) -> None:
+        """Test size parameter for DALL-E-2 (256x256, 512x512, 1024x1024)."""
+        report = openai_client.validate_image_edit(
+            image_path=test_image_png,
+            prompt="Add a blue border",
+            model="dall-e-2",
+            size=size,
+            _test_param="size",
+            _test_variant=f"dall-e-2 {size}",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    @pytest.mark.parametrize(
+        "size",
+        ["1024x1024", "1536x1024", "1024x1536", "auto"],
+    )
+    def test_param_size_gpt(
+        self, openai_client: OpenAIClient, test_image_png: Path, size: str
+    ) -> None:
+        """Test size parameter for GPT models (1024x1024, 1536x1024, 1024x1536, auto)."""
+        report = openai_client.validate_image_edit(
+            image_path=test_image_png,
+            prompt="Add a blue border",
+            model="gpt-image-1.5",
+            size=size,
+            _test_param="size",
+            _test_variant=f"gpt {size}",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_user(
+        self, openai_client: OpenAIClient, baseline_image_edit_params: dict
+    ) -> None:
+        """Test user parameter (tracking)."""
+        report = openai_client.validate_image_edit(
+            **baseline_image_edit_params,
+            user="test-user-123",
+            _test_param="user",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    # =========================================================================
+    # Tier 2: DALL-E-2 Specific
+    # =========================================================================
+
+    @pytest.mark.parametrize(
+        "response_format",
+        ["url", "b64_json"],
+    )
+    def test_param_response_format(
+        self, openai_client: OpenAIClient, baseline_image_edit_params: dict, response_format: str
+    ) -> None:
+        """Test response_format parameter for DALL-E-2 (url, b64_json).
+
+        Note: GPT image models always return b64_json, so this test is DALL-E-2 only.
+        """
+        report = openai_client.validate_image_edit(
+            **baseline_image_edit_params,
+            response_format=response_format,
+            _test_param="response_format",
+            _test_variant=response_format,
+        )
+        report.output()
+        assert_report_valid(report)
+
+        # Verify correct format is present
+        if report.raw_response:
+            data = report.raw_response.get("data", [{}])
+            assert response_format in data[0], f"Expected {response_format} in response"
+
+    # =========================================================================
+    # Tier 3: GPT Image Models Specific
+    # =========================================================================
+
+    @pytest.mark.parametrize(
+        "background",
+        ["transparent", "opaque", "auto"],
+    )
+    def test_param_background(
+        self, openai_client: OpenAIClient, test_image_png: Path, background: str
+    ) -> None:
+        """Test background parameter for GPT models (transparent, opaque, auto).
+
+        When transparent, output_format should be png or webp.
+        """
+        report = openai_client.validate_image_edit(
+            image_path=test_image_png,
+            prompt="Add a blue border",
+            model="gpt-image-1.5",
+            background=background,
+            output_format="png",  # png supports transparency
+            _test_param="background",
+            _test_variant=background,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    @pytest.mark.parametrize(
+        "quality",
+        ["high", "medium", "low", "auto"],
+    )
+    def test_param_quality(
+        self, openai_client: OpenAIClient, test_image_png: Path, quality: str
+    ) -> None:
+        """Test quality parameter for GPT models (high, medium, low, auto)."""
+        report = openai_client.validate_image_edit(
+            image_path=test_image_png,
+            prompt="Add a blue border",
+            model="gpt-image-1.5",
+            quality=quality,
+            _test_param="quality",
+            _test_variant=f"gpt {quality}",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    @pytest.mark.parametrize(
+        "output_format",
+        ["png", "jpeg", "webp"],
+    )
+    def test_param_output_format(
+        self, openai_client: OpenAIClient, test_image_png: Path, output_format: str
+    ) -> None:
+        """Test output_format parameter for GPT models (png, jpeg, webp)."""
+        report = openai_client.validate_image_edit(
+            image_path=test_image_png,
+            prompt="Add a blue border",
+            model="gpt-image-1.5",
+            output_format=output_format,
+            _test_param="output_format",
+            _test_variant=output_format,
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_output_compression(
+        self, openai_client: OpenAIClient, test_image_png: Path
+    ) -> None:
+        """Test output_compression parameter. GPT models only."""
+        report = openai_client.validate_image_edit(
+            image_path=test_image_png,
+            prompt="Add a blue border",
+            model="gpt-image-1.5",
+            output_format="jpeg",  # compression supported for jpeg/webp
+            output_compression=50,
+            _test_param="output_compression",
+            _test_variant="50%",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_input_fidelity_low(
+        self, openai_client: OpenAIClient, test_image_png: Path
+    ) -> None:
+        """Test input_fidelity parameter with 'low' value.
+
+        Supported by: gpt-image-1, gpt-image-1.5 (default)
+        """
+        report = openai_client.validate_image_edit(
+            image_path=test_image_png,
+            prompt="Add a blue border",
+            model="gpt-image-1.5",
+            input_fidelity="low",
+            _test_param="input_fidelity",
+            _test_variant="low",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    def test_param_input_fidelity_high(
+        self, openai_client: OpenAIClient, test_image_png: Path
+    ) -> None:
+        """Test input_fidelity parameter with 'high' value.
+
+        Supported by: gpt-image-1 ONLY (NOT gpt-image-1-mini)
+        """
+        report = openai_client.validate_image_edit(
+            image_path=test_image_png,
+            prompt="Add a blue border",
+            model="gpt-image-1",
+            input_fidelity="high",
+            _test_param="input_fidelity",
+            _test_variant="high",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    # =========================================================================
+    # Tier 4: Streaming (GPT Models)
+    # =========================================================================
+
+    # NOTE: Streaming tests for image edit require validate_image_edit_stream()
+    # method in OpenAIClient, which is not yet implemented.
+    #
+    # The schema already supports streaming events:
+    # - ImageEditPartialImageEvent (image_edit.partial_image)
+    # - ImageEditCompletedEvent (image_edit.completed)
+    #
+    # To implement streaming tests:
+    # 1. Add validate_image_edit_stream() method to OpenAIClient (similar to
+    #    validate_image_generation_stream)
+    # 2. Add test_param_stream() and test_param_partial_images() tests here
+    #
+    # Example test structure:
+    # def test_param_stream(self, openai_client, test_image_png):
+    #     events, report = openai_client.validate_image_edit_stream(
+    #         image_path=test_image_png,
+    #         prompt="Add a blue border",
+    #         model="gpt-image-1.5",
+    #         _test_param="stream",
+    #         _test_variant="true",
+    #     )
+    #     report.output()
+    #     assert len(events) > 0
+    #     assert report.success
 
 
 # =============================================================================

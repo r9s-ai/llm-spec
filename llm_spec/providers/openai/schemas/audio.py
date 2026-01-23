@@ -8,11 +8,10 @@ API Reference: https://platform.openai.com/docs/api-reference/audio
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 import pydantic
-from pydantic import BaseModel, Field, model_validator
-
+from pydantic import BaseModel, Field
 
 # ============================================================================
 # Speech (Text-to-Speech) Models
@@ -135,7 +134,7 @@ class TranscriptionRequest(BaseModel):
         if self.model in ["gpt-4o-transcribe", "gpt-4o-mini-transcribe"]:
             if self.response_format and self.response_format != "json":
                 raise ValueError(f"Model {self.model} only supports response_format='json'")
-        
+
         if self.model == "gpt-4o-transcribe-diarize":
             if self.response_format and self.response_format not in ["json", "text", "diarized_json"]:
                 raise ValueError(f"Model {self.model} only supports 'json', 'text', or 'diarized_json'")
@@ -150,7 +149,7 @@ class TranscriptionRequest(BaseModel):
         # 3. stream constraints
         if self.stream and self.model == "whisper-1":
             # Note: Docs say "ignored", but we can warn or validate
-            pass 
+            pass
 
         # 4. prompt constraints
         if self.prompt and self.model == "gpt-4o-transcribe-diarize":
@@ -162,11 +161,11 @@ class TranscriptionRequest(BaseModel):
                 raise ValueError("'timestamp_granularities' requires response_format='verbose_json'")
             if self.model == "gpt-4o-transcribe-diarize":
                 raise ValueError("'timestamp_granularities' not available for diarize model")
-        
+
         # 6. speaker diarization constraints
         if self.known_speaker_names and len(self.known_speaker_names) > 4:
             raise ValueError("Up to 4 known_speaker_names are supported")
-            
+
         return self
 
 
