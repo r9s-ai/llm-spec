@@ -8,18 +8,17 @@ log_request_body = true     # 记录请求体
 log_response_body = false   # 记录响应体（较大）
 max_body_length = 1000      # 最大记录长度
 
+
 # 报告配置
 [report]
 format = "both"        # terminal, json, both
 output_dir = "./reports"   # JSON 报告保存目录
-show_valid = true          # 显示有效字段
-verbose = false            # 详细模式
-include_raw_response = false
+
 
 # Provider 配置
 [openai]
 api_key = "sk-PTGBWXMWPEfcvivlEd5b4189041c4fE89e455b274e9d86Ab"
-base_url = "https://api.huamedia.tv/v1"
+base_url = "https://api.huamedia.tv"
 timeout = 300.0
 
 [anthropic]

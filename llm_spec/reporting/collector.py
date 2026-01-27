@@ -1,0 +1,176 @@
+"""报告收集器，用于累积测试结果"""
+
+import json
+from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+
+class ReportCollector:
+    """测试报告收集器"""
+
+    def __init__(self, provider: str, endpoint: str, base_url: str):
+        """初始化报告收集器
+
+        Args:
+            provider: Provider 名称
+            endpoint: API 端点
+            base_url: 基础 URL
+        """
+        self.provider = provider
+        self.endpoint = endpoint
+        self.base_url = base_url
+        self.test_time = datetime.now().isoformat()
+
+        # 测试统计
+        self.total_tests = 0
+        self.passed_tests = 0
+        self.failed_tests = 0
+
+        # 参数跟踪
+        self.tested_params: set[str] = set()
+        self.unsupported_params: list[dict[str, Any]] = []
+
+        # 响应字段跟踪
+        self.expected_fields: set[str] = set()
+        self.unsupported_fields: list[dict[str, Any]] = []
+
+        # 错误跟踪
+        self.errors: list[dict[str, Any]] = []
+
+    def record_test(
+        self,
+        test_name: str,
+        params: dict[str, Any],
+        status_code: int,
+        response_body: Any,
+        error: str | None = None,
+        missing_fields: list[str] | None = None,
+        expected_fields: list[str] | None = None,
+    ) -> None:
+        """记录单个测试结果
+
+        Args:
+            test_name: 测试名称
+            params: 请求参数
+            status_code: HTTP 状态码
+            response_body: 响应体
+            error: 错误消息（如果有）
+            missing_fields: 缺失的响应字段
+            expected_fields: 期望的响应字段（从 schema 提取）
+        """
+        self.total_tests += 1
+
+        # 记录测试的参数
+        for key in params.keys():
+            self.tested_params.add(key)
+
+        # 记录期望字段
+        if expected_fields:
+            for field in expected_fields:
+                self.expected_fields.add(field)
+
+        # 判断测试是否通过
+        is_success = (200 <= status_code < 300) and error is None
+
+        if is_success:
+            self.passed_tests += 1
+        else:
+            self.failed_tests += 1
+
+            # 记录错误
+            if error:
+                if 400 <= status_code < 500:
+                    error_type = "http_error"
+                elif 500 <= status_code < 600:
+                    error_type = "server_error"
+                else:
+                    error_type = "validation_error"
+
+                self.errors.append(
+                    {
+                        "test_name": test_name,
+                        "type": error_type,
+                        "message": f"HTTP {status_code}: {error}",
+                    }
+                )
+
+        # 记录缺失的响应字段
+        if missing_fields:
+            for field in missing_fields:
+                self.unsupported_fields.append(
+                    {
+                        "field": field,
+                        "test_name": test_name,
+                        "reason": "Field missing in response",
+                    }
+                )
+
+    def add_unsupported_param(
+        self, param_name: str, param_value: Any, test_name: str, reason: str
+    ) -> None:
+        """添加不支持的参数
+
+        Args:
+            param_name: 参数名
+            param_value: 参数值
+            test_name: 测试名称
+            reason: 不支持的原因
+        """
+        self.unsupported_params.append(
+            {
+                "parameter": param_name,
+                "value": param_value,
+                "test_name": test_name,
+                "reason": reason,
+            }
+        )
+
+    def finalize(self, output_dir: str = "./reports") -> str:
+        """生成最终报告
+
+        Args:
+            output_dir: 输出目录
+
+        Returns:
+            报告文件路径
+        """
+        # 生成文件名
+        endpoint_name = self.endpoint.replace("/", "_").strip("_")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{self.provider}_{endpoint_name}_{timestamp}.json"
+
+        # 创建输出目录
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        # 构建报告
+        report = {
+            "test_time": self.test_time,
+            "provider": self.provider,
+            "endpoint": self.endpoint,
+            "base_url": self.base_url,
+            "test_summary": {
+                "total_tests": self.total_tests,
+                "passed": self.passed_tests,
+                "failed": self.failed_tests,
+            },
+            "parameters": {
+                "tested": sorted(list(self.tested_params)),
+                "untested": [],  # TODO: 需要从spec定义中计算
+                "unsupported": self.unsupported_params,
+            },
+            "response_fields": {
+                "expected": sorted(list(self.expected_fields)),
+                "unsupported": self.unsupported_fields,
+            },
+            "errors": self.errors,
+        }
+
+        # 写入文件
+        report_path = output_path / filename
+        with open(report_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
+
+        return str(report_path)

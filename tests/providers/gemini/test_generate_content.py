@@ -1,0 +1,140 @@
+"""Google Gemini Generate Content API 测试"""
+
+import pytest
+
+from llm_spec.reporting.collector import ReportCollector
+from llm_spec.validation.schemas.gemini import GenerateContentResponse
+from llm_spec.validation.validator import ResponseValidator
+
+
+class TestGenerateContent:
+    """Generate Content API 测试类"""
+
+    ENDPOINT = "/v1beta/models/gemini-pro:generateContent"
+
+    # 基线参数：仅包含必需参数
+    BASE_PARAMS = {
+        "contents": [{"parts": [{"text": "Hello"}]}],
+    }
+
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_collector(self, gemini_client):
+        """为整个测试类设置报告收集器"""
+        # 创建类级别的 collector
+        collector = ReportCollector(
+            provider="gemini",
+            endpoint=self.ENDPOINT,
+            base_url=gemini_client.get_base_url(),
+        )
+
+        # 设置为类属性，所有测试方法共享
+        self.__class__.client = gemini_client
+        self.__class__.collector = collector
+
+        yield
+
+        # 类的所有测试完成后，生成一次报告
+        report_path = collector.finalize()
+        print(f"\n报告已生成: {report_path}")
+
+    def test_baseline(self):
+        """测试基线：仅必需参数"""
+        test_name = "test_baseline"
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=self.BASE_PARAMS,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=self.BASE_PARAMS,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
+        assert is_valid, f"响应验证失败: {error_msg}"
+
+    def test_param_temperature(self):
+        """测试 temperature 参数"""
+        test_name = "test_param_temperature"
+        params = {
+            **self.BASE_PARAMS,
+            "generationConfig": {"temperature": 0.7},
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="generationConfig.temperature",
+                param_value=0.7,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    def test_param_max_output_tokens(self):
+        """测试 maxOutputTokens 参数"""
+        test_name = "test_param_max_output_tokens"
+        params = {
+            **self.BASE_PARAMS,
+            "generationConfig": {"maxOutputTokens": 100},
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="generationConfig.maxOutputTokens",
+                param_value=100,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid

@@ -92,4 +92,4 @@ config.local.yaml
 
 
 reports/
-llm-spec.toml
+.llm-spec.toml
