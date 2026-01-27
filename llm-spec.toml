@@ -27,8 +27,9 @@ api_key = "sk-ant-..."
 base_url = "https://api.anthropic.com/v1"
 
 [gemini]
-api_key = "..."
-base_url = "https://generativelanguage.googleapis.com/v1beta"
+api_key = "sk-PTGBWXMWPEfcvivlEd5b4189041c4fE89e455b274e9d86Ab"
+base_url = "https://api.huamedia.tv/v1"
+timeout = 300.0
 
 [xai]
 api_key = "..."
