@@ -47,6 +47,7 @@ class ProviderAdapter(ABC):
         params: dict[str, Any],
         additional_headers: dict[str, str] | None = None,
         method: str = "POST",
+        files: dict[str, Any] | None = None,
     ) -> tuple[int, dict[str, str], Any]:
         """发起同步请求
 
@@ -55,6 +56,7 @@ class ProviderAdapter(ABC):
             params: 请求参数
             additional_headers: 额外的请求头
             method: HTTP 方法
+            files: multipart/form-data 文件字段
 
         Returns:
             (status_code, response_headers, response_body)
@@ -62,11 +64,25 @@ class ProviderAdapter(ABC):
         url = self.get_base_url().rstrip("/") + endpoint
         headers = self.prepare_headers(additional_headers)
 
+        # 如果包含文件，则使用 multipart/form-data（data + files）
+        if files:
+            # 让 httpx 自动设置 multipart 边界，移除手动的 Content-Type
+            headers = {k: v for k, v in headers.items() if k.lower() != "content-type"}
+            return self.http_client.request(
+                method=method,
+                url=url,
+                headers=headers,
+                data=params,
+                files=files,
+                timeout=self.config.timeout,
+            )
+
+        # 默认使用 JSON 提交
         return self.http_client.request(
             method=method,
             url=url,
             headers=headers,
-            json=params,
+            json_data=params,
             timeout=self.config.timeout,
         )
 
@@ -76,6 +92,7 @@ class ProviderAdapter(ABC):
         params: dict[str, Any],
         additional_headers: dict[str, str] | None = None,
         method: str = "POST",
+        files: dict[str, Any] | None = None,
     ) -> tuple[int, dict[str, str], Any]:
         """发起异步请求
 
@@ -84,6 +101,7 @@ class ProviderAdapter(ABC):
             params: 请求参数
             additional_headers: 额外的请求头
             method: HTTP 方法
+            files: multipart/form-data 文件字段
 
         Returns:
             (status_code, response_headers, response_body)
@@ -91,11 +109,22 @@ class ProviderAdapter(ABC):
         url = self.get_base_url().rstrip("/") + endpoint
         headers = self.prepare_headers(additional_headers)
 
+        if files:
+            headers = {k: v for k, v in headers.items() if k.lower() != "content-type"}
+            return await self.http_client.request_async(
+                method=method,
+                url=url,
+                headers=headers,
+                data=params,
+                files=files,
+                timeout=self.config.timeout,
+            )
+
         return await self.http_client.request_async(
             method=method,
             url=url,
             headers=headers,
-            json=params,
+            json_data=params,
             timeout=self.config.timeout,
         )
 
@@ -124,7 +153,7 @@ class ProviderAdapter(ABC):
             method=method,
             url=url,
             headers=headers,
-            json=params,
+            json_data=params,
             timeout=self.config.timeout,
         )
 
@@ -153,6 +182,6 @@ class ProviderAdapter(ABC):
             method=method,
             url=url,
             headers=headers,
-            json=params,
+            json_data=params,
             timeout=self.config.timeout,
         )

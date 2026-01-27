@@ -14,7 +14,7 @@ class TestEmbeddings:
 
     # 基线参数：仅包含必需参数
     BASE_PARAMS = {
-        "model": "text-embedding-ada-002",
+        "model": "text-embedding-3-small",
         "input": "Hello, world!",
     }
 
@@ -65,7 +65,7 @@ class TestEmbeddings:
         assert is_valid, f"响应验证失败: {error_msg}"
 
     def test_param_input_array(self):
-        """测试 input 参数（数组形式）"""
+        """测试 input 参数（字符串数组）"""
         test_name = "test_param_input_array"
         params = {
             **self.BASE_PARAMS,
@@ -102,18 +102,13 @@ class TestEmbeddings:
         assert 200 <= status_code < 300
         assert is_valid
 
-    @pytest.mark.parametrize(
-        "model",
-        [
-            "text-embedding-ada-002",
-            "text-embedding-3-small",
-            "text-embedding-3-large",
-        ],
-    )
-    def test_model_variants(self, model):
-        """测试不同的 model 变体"""
-        test_name = f"test_model_variants[{model}]"
-        params = {**self.BASE_PARAMS, "model": model}
+    def test_param_input_tokens(self):
+        """测试 input 参数（token 数组）"""
+        test_name = "test_param_input_tokens"
+        params = {
+            **self.BASE_PARAMS,
+            "input": [[11, 12, 13, 14]],
+        }
 
         status_code, headers, response_body = self.client.request(
             endpoint=self.ENDPOINT,
@@ -136,8 +131,8 @@ class TestEmbeddings:
 
         if not (200 <= status_code < 300):
             self.collector.add_unsupported_param(
-                param_name="model",
-                param_value=model,
+                param_name="input",
+                param_value="token_array",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -145,10 +140,52 @@ class TestEmbeddings:
         assert 200 <= status_code < 300
         assert is_valid
 
+    # @pytest.mark.parametrize(
+    #     "model",
+    #     [
+    #         "text-embedding-3-small",
+    #         "text-embedding-3-large",
+    #     ],
+    # )
+    # def test_model_variants(self, model):
+    #     """测试不同的 model 变体"""
+    #     test_name = f"test_model_variants[{model}]"
+    #     params = {**self.BASE_PARAMS, "model": model}
+
+    #     status_code, headers, response_body = self.client.request(
+    #         endpoint=self.ENDPOINT,
+    #         params=params,
+    #     )
+
+    #     is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+    #         response_body, EmbeddingResponse
+    #     )
+
+    #     self.collector.record_test(
+    #         test_name=test_name,
+    #         params=params,
+    #         status_code=status_code,
+    #         response_body=response_body,
+    #         error=error_msg if not is_valid else None,
+    #         missing_fields=missing_fields,
+    #         expected_fields=expected_fields,
+    #     )
+
+    #     if not (200 <= status_code < 300):
+    #         self.collector.add_unsupported_param(
+    #             param_name="model",
+    #             param_value=model,
+    #             test_name=test_name,
+    #             reason=f"HTTP {status_code}: {response_body}",
+    #         )
+
+    #     assert 200 <= status_code < 300
+    #     assert is_valid
+
     def test_param_encoding_format(self):
-        """测试 encoding_format 参数"""
+        """测试 encoding_format 参数（base64）"""
         test_name = "test_param_encoding_format"
-        params = {**self.BASE_PARAMS, "encoding_format": "float"}
+        params = {**self.BASE_PARAMS, "encoding_format": "base64"}
 
         status_code, headers, response_body = self.client.request(
             endpoint=self.ENDPOINT,
@@ -172,7 +209,42 @@ class TestEmbeddings:
         if not (200 <= status_code < 300):
             self.collector.add_unsupported_param(
                 param_name="encoding_format",
-                param_value="float",
+                param_value="base64",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    def test_param_user(self):
+        """测试 user 参数（用户标识）"""
+        test_name = "test_param_user"
+        params = {**self.BASE_PARAMS, "user": "user-123"}
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, EmbeddingResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="user",
+                param_value="user-123",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )

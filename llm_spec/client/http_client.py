@@ -1,6 +1,6 @@
 """HTTP 客户端 httpx 实现"""
 
-import json
+import json as json_module
 import time
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
@@ -60,7 +60,7 @@ class HTTPClient(BaseHTTPClient):
         method: str,
         url: str,
         headers: dict[str, str] | None = None,
-        json: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
         data: dict[str, Any] | None = None,
         files: dict[str, Any] | None = None,
         timeout: float | None = None,
@@ -79,7 +79,7 @@ class HTTPClient(BaseHTTPClient):
             method=method,
             url=url,
             headers=headers,
-            body=json or data,
+            body=json_data or data,
         )
 
         start_time = time.time()
@@ -90,7 +90,7 @@ class HTTPClient(BaseHTTPClient):
                     method=method,
                     url=url,
                     headers=headers,
-                    json=json,
+                    json=json_data,
                     data=data,
                     files=files,
                 )
@@ -100,7 +100,7 @@ class HTTPClient(BaseHTTPClient):
                 # 尝试解析 JSON 响应
                 try:
                     response_body = response.json()
-                except json.JSONDecodeError:
+                except (json_module.JSONDecodeError, ValueError):
                     response_body = response.text
 
                 # 记录响应
@@ -123,7 +123,7 @@ class HTTPClient(BaseHTTPClient):
         method: str,
         url: str,
         headers: dict[str, str] | None = None,
-        json: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
         data: dict[str, Any] | None = None,
         files: dict[str, Any] | None = None,
         timeout: float | None = None,
@@ -142,7 +142,7 @@ class HTTPClient(BaseHTTPClient):
             method=method,
             url=url,
             headers=headers,
-            body=json or data,
+            body=json_data or data,
         )
 
         start_time = time.time()
@@ -153,7 +153,7 @@ class HTTPClient(BaseHTTPClient):
                     method=method,
                     url=url,
                     headers=headers,
-                    json=json,
+                    json=json_data,
                     data=data,
                     files=files,
                 )
@@ -163,7 +163,7 @@ class HTTPClient(BaseHTTPClient):
                 # 尝试解析 JSON 响应
                 try:
                     response_body = response.json()
-                except json.JSONDecodeError:
+                except (json_module.JSONDecodeError, ValueError):
                     response_body = response.text
 
                 # 记录响应
@@ -185,7 +185,7 @@ class HTTPClient(BaseHTTPClient):
         method: str,
         url: str,
         headers: dict[str, str] | None = None,
-        json: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
         timeout: float | None = None,
     ) -> Iterator[bytes]:
         """发起同步流式请求（Server-Sent Events）
@@ -202,7 +202,7 @@ class HTTPClient(BaseHTTPClient):
             method=method,
             url=url,
             headers=headers,
-            body=json,
+            body=json_data,
         )
 
         try:
@@ -211,7 +211,7 @@ class HTTPClient(BaseHTTPClient):
                     method=method,
                     url=url,
                     headers=headers,
-                    json=json,
+                    json=json_data,
                 ) as response:
                     # 记录响应开始
                     self.logger.log_response(
@@ -233,7 +233,7 @@ class HTTPClient(BaseHTTPClient):
         method: str,
         url: str,
         headers: dict[str, str] | None = None,
-        json: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
         timeout: float | None = None,
     ) -> AsyncIterator[bytes]:
         """发起异步流式请求（Server-Sent Events）
@@ -250,7 +250,7 @@ class HTTPClient(BaseHTTPClient):
             method=method,
             url=url,
             headers=headers,
-            body=json,
+            body=json_data,
         )
 
         try:
@@ -259,7 +259,7 @@ class HTTPClient(BaseHTTPClient):
                     method=method,
                     url=url,
                     headers=headers,
-                    json=json,
+                    json=json_data,
                 ) as response:
                     # 记录响应开始
                     self.logger.log_response(
