@@ -311,8 +311,14 @@ class BaseClient(ABC):
         endpoint: str,
         *,
         json: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        files: dict[str, Any] | None = None,
     ) -> Iterator[str]:
-        """Make a synchronous streaming request (SSE)."""
+        """Make a synchronous streaming request (SSE).
+
+        Supports both JSON (application/json) and multipart/form-data streams
+        by allowing ``data``/``files`` to be passed through to httpx.
+        """
         client = self._get_sync_client()
         url = f"{self.base_url}{endpoint}"
 
@@ -322,14 +328,14 @@ class BaseClient(ABC):
                 self._logger,
                 method,
                 url,
-                body=json,
+                body=json if json is not None else data,
                 log_body=self._log_config.log_request_body,
                 max_length=self._log_config.max_body_length,
             )
 
         start_time = time.perf_counter()
         try:
-            with client.stream(method, endpoint, json=json) as response:
+            with client.stream(method, endpoint, json=json, data=data, files=files) as response:
                 response.raise_for_status()
 
                 # Log response start

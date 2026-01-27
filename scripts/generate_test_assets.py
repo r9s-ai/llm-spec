@@ -34,14 +34,21 @@ def main():
     if test_image_path.exists():
         print(f"   已存在，跳过")
     else:
+        from PIL import Image
+        import io
+
         image_bytes, _ = client.generate_image(
             prompt="A simple white square on black background",
             model="dall-e-2",
             n=1,
             size="256x256",
         )
-        test_image_path.write_bytes(image_bytes)
-        print(f"   已生成: {test_image_path}")
+
+        # 转换为 RGBA 格式 (image edit API 要求)
+        img = Image.open(io.BytesIO(image_bytes))
+        img = img.convert("RGBA")
+        img.save(test_image_path, "PNG")
+        print(f"   已生成: {test_image_path} (RGBA format)")
 
     # 2. 生成英文音频
     print("\n2. 生成英文音频 (hello_en.mp3)...")

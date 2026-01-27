@@ -926,9 +926,9 @@ class OpenAIClient(BaseClient):
         prompt: str,
         mask_path: str | Path | None = None,
         model: Literal["dall-e-2"] = "dall-e-2",
-        n: int = 1,
-        size: str = "256x256",
-        response_format: Literal["url", "b64_json"] = "url",
+        n: int | None = None,
+        size: str | None = None,
+        response_format: Literal["url", "b64_json"] | None = None,
         **kwargs: Any,
     ) -> ValidationReport:
         """Validate image edit endpoint response against schema.
@@ -946,6 +946,10 @@ class OpenAIClient(BaseClient):
         Returns:
             ValidationReport with field-level results
         """
+        # Extract test metadata before building request
+        test_param = kwargs.pop("_test_param", None)
+        test_variant = kwargs.pop("_test_variant", None)
+
         image_path = Path(image_path)
 
         files: dict[str, Any] = {}
@@ -957,19 +961,175 @@ class OpenAIClient(BaseClient):
             with open(mask_path, "rb") as mask_file:
                 files["mask"] = (mask_path.name, mask_file.read(), "image/png")
 
-        data = {
+        # Build data dict - only include parameters if explicitly set
+        data: dict[str, Any] = {
             "prompt": prompt,
             "model": model,
-            "n": str(n),
-            "size": size,
-            "response_format": response_format,
+        }
+        if n is not None:
+            data["n"] = str(n)
+        if size is not None:
+            data["size"] = size
+        if response_format is not None:
+            data["response_format"] = response_format
+        # Add any additional kwargs
+        data.update(kwargs)
+
+        # Build request_params for tracking (using schema field names)
+        request_params: dict[str, Any] = {
+            "image": str(image_path),  # Schema expects 'image', not 'image_path'
+            "prompt": prompt,
+            "model": model,
+        }
+        if mask_path:
+            request_params["mask"] = str(mask_path)  # Schema expects 'mask', not 'mask_path'
+        if n is not None:
+            request_params["n"] = n
+        if size is not None:
+            request_params["size"] = size
+        if response_format is not None:
+            request_params["response_format"] = response_format
+        # Add any additional kwargs
+        request_params.update(kwargs)
+
+        try:
+            response = self.request("POST", "/images/edits", data=data, files=files)
+
+            validator = SchemaValidator(provider=self.provider_name, endpoint="images/edits")
+            report = validator.validate(response, ImageResponse, request_params=request_params)
+            report.test_param = test_param
+            report.test_variant = test_variant
+            return report
+        except Exception as e:
+            from llm_spec.core.report import get_collector, get_current_test_name
+
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="images/edits",
+                success=False,
+                total_fields=0,
+                valid_count=0,
+                invalid_count=0,
+                fields=[],
+                request_params=request_params,
+                raw_response=None,
+                metadata={"test_name": get_current_test_name(), "error": str(e)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+            collector = get_collector()
+            collector.add(report, test_name=get_current_test_name(), save_to_output=False)
+            raise
+
+    def validate_image_edit_stream(
+        self,
+        *,
+        image_path: str | Path,
+        prompt: str,
+        mask_path: str | Path | None = None,
+        model: Literal["gpt-image-1", "gpt-image-1-mini", "gpt-image-1.5"] = "gpt-image-1.5",
+        **kwargs: Any,
+    ) -> tuple[list[dict[str, Any]], ValidationReport]:
+        """Validate streaming image edit endpoint (GPT image models only)."""
+        import json
+
+        # Extract test metadata
+        test_param = kwargs.pop("_test_param", None)
+        test_variant = kwargs.pop("_test_variant", None)
+
+        image_path = Path(image_path)
+
+        files: dict[str, Any] = {}
+        with open(image_path, "rb") as img_file:
+            files["image"] = (image_path.name, img_file.read(), "image/png")
+
+        if mask_path:
+            mask_path = Path(mask_path)
+            with open(mask_path, "rb") as mask_file:
+                files["mask"] = (mask_path.name, mask_file.read(), "image/png")
+
+        # Build form data for streaming request
+        data: dict[str, Any] = {
+            "prompt": prompt,
+            "model": model,
+            "stream": True,
+        }
+        # Pass through additional kwargs (e.g., partial_images, background, etc.)
+        for k, v in kwargs.items():
+            if v is not None:
+                data[k] = v
+
+        request_params: dict[str, Any] = {
+            "image": str(image_path),
+            "prompt": prompt,
+            "model": model,
+            "stream": True,
             **kwargs,
         }
+        if mask_path:
+            request_params["mask"] = str(mask_path)
 
-        response = self.request("POST", "/images/edits", data=data, files=files)
+        events: list[dict[str, Any]] = []
+        all_fields: list[FieldResult] = []
+        has_errors = False
 
-        validator = SchemaValidator(provider=self.provider_name, endpoint="images/edits")
-        return validator.validate(response, ImageResponse)
+        try:
+            for line in self.stream("POST", "/images/edits", data=data, files=files):
+                if line.strip() == "[DONE]":
+                    break
+                try:
+                    event = json.loads(line)
+                    events.append(event)
+
+                    validator = SchemaValidator(
+                        provider=self.provider_name, endpoint="images/edits/stream"
+                    )
+                    event_report = validator.validate(event, ImageStreamEvent)
+                    if not event_report.success:
+                        has_errors = True
+                        for f in event_report.fields:
+                            if f.status != FieldStatus.VALID:
+                                all_fields.append(f)
+                except json.JSONDecodeError:
+                    continue
+
+            has_completed = any(e.get("type") == "image_edit.completed" for e in events)
+            success = not has_errors and len(events) > 0 and has_completed
+
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="images/edits",
+                success=success,
+                total_fields=len(events),
+                valid_count=len(events) - len(all_fields),
+                invalid_count=len(all_fields),
+                fields=all_fields,
+                request_params=request_params,
+                raw_response={"events": events, "event_count": len(events)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+            return events, report
+        except Exception as e:
+            from llm_spec.core.report import get_collector, get_current_test_name
+
+            report = ValidationReport(
+                provider=self.provider_name,
+                endpoint="images/edits",
+                success=False,
+                total_fields=0,
+                valid_count=0,
+                invalid_count=0,
+                fields=[],
+                request_params=request_params,
+                raw_response=None,
+                metadata={"test_name": get_current_test_name(), "error": str(e)},
+                test_param=test_param,
+                test_variant=test_variant,
+            )
+            collector = get_collector()
+            collector.add(report, test_name=get_current_test_name(), save_to_output=False)
+            raise
 
     def validate_image_variation(
         self,
@@ -996,6 +1156,10 @@ class OpenAIClient(BaseClient):
         Returns:
             ValidationReport with field-level results
         """
+        # Extract test metadata before building request
+        test_param = kwargs.pop("_test_param", None)
+        test_variant = kwargs.pop("_test_variant", None)
+
         image_path = Path(image_path)
 
         with open(image_path, "rb") as img_file:
@@ -1012,7 +1176,10 @@ class OpenAIClient(BaseClient):
         response = self.request("POST", "/images/variations", data=data, files=files)
 
         validator = SchemaValidator(provider=self.provider_name, endpoint="images/variations")
-        return validator.validate(response, ImageResponse)
+        report = validator.validate(response, ImageResponse)
+        report.test_param = test_param
+        report.test_variant = test_variant
+        return report
 
     # =========================================================================
     # Raw Data Methods (for pipeline tests)

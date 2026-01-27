@@ -22,7 +22,7 @@ class SchemaValidator:
     def validate(
         self,
         response: dict[str, Any],
-        schema: type[BaseModel],
+        schema: type[BaseModel] | Any,
         request_params: dict[str, Any] | None = None,
     ) -> ValidationReport:
         """Validate a response dict against a Pydantic model schema.
@@ -35,6 +35,31 @@ class SchemaValidator:
         Returns:
             ValidationReport with field-level results
         """
+        # Support Union schemas (e.g., streaming events defined as unions of BaseModels)
+        origin = get_origin(schema)
+        if origin in (types.UnionType, Union):
+            # Try to select a variant based on the event "type" literal if present
+            for variant in get_args(schema):
+                if not isinstance(variant, type) or not issubclass(variant, BaseModel):
+                    continue
+
+                type_field = variant.model_fields.get("type")
+                type_value = response.get("type") if isinstance(response, dict) else None
+                if type_field and get_origin(type_field.annotation) is Literal:
+                    allowed = get_args(type_field.annotation)
+                    if type_value not in allowed:
+                        continue  # not this variant
+
+                # Use a fresh validator to avoid mixing results between variants
+                sub_validator = SchemaValidator(provider=self.provider, endpoint=self.endpoint)
+                return sub_validator.validate(response, variant, request_params=request_params)
+
+            # Fallback: try the first BaseModel variant even if type didn't match
+            for variant in get_args(schema):
+                if isinstance(variant, type) and issubclass(variant, BaseModel):
+                    sub_validator = SchemaValidator(provider=self.provider, endpoint=self.endpoint)
+                    return sub_validator.validate(response, variant, request_params=request_params)
+
         self._results = []
         self._validate_object(response, schema, path="")
 

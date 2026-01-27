@@ -83,14 +83,16 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     collector = get_collector()
 
     # Collect pytest test outcomes by endpoint
-    # Map test class names to endpoint slugs
+    # Map test class names to endpoint paths (using slash notation to match ValidationReport.endpoint)
     endpoint_mapping = {
-        "TestChatCompletions": ("openai", "chat_completions"),
+        "TestChatCompletions": ("openai", "chat/completions"),
         "TestResponses": ("openai", "responses"),
         "TestEmbeddings": ("openai", "embeddings"),
-        "TestAudioSpeech": ("openai", "audio_speech"),
-        "TestAudioTranscriptions": ("openai", "audio_transcriptions"),
-        "TestAudioTranslations": ("openai", "audio_translations"),
+        "TestAudioSpeech": ("openai", "audio/speech"),
+        "TestAudioTranscriptions": ("openai", "audio/transcriptions"),
+        "TestAudioTranslations": ("openai", "audio/translations"),
+        "TestImageGeneration": ("openai", "images/generations"),
+        "TestImageEdit": ("openai", "images/edits"),
         # Add more mappings as needed
     }
 

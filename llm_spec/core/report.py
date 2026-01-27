@@ -406,6 +406,15 @@ class ReportCollector:
             elif endpoint == "audio/translations":
                 from llm_spec.providers.openai.schemas.audio import TranslationRequest
                 return set(TranslationRequest.model_fields.keys())
+            elif endpoint == "images/generations":
+                from llm_spec.providers.openai.schemas.images import ImageGenerationRequest
+                return set(ImageGenerationRequest.model_fields.keys())
+            elif endpoint == "images/edits":
+                from llm_spec.providers.openai.schemas.images import ImageEditRequest
+                return set(ImageEditRequest.model_fields.keys())
+            elif endpoint == "images/variations":
+                from llm_spec.providers.openai.schemas.images import ImageVariationRequest
+                return set(ImageVariationRequest.model_fields.keys())
         # Return empty set for unknown endpoints
         return set()
 
@@ -441,6 +450,10 @@ class ReportCollector:
         all_params = self._all_test_params.get(key, [])
 
         for test in all_params:
+            # Skip tests with None params
+            if test["params"] is None:
+                continue
+
             params_used = test["params"].keys()
             success = test["success"]
             # Check if this is a targeted test

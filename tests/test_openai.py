@@ -1416,8 +1416,11 @@ class TestImageGeneration:
         self, openai_client: OpenAIClient, baseline_image_params: dict
     ) -> None:
         """Test n parameter (number of images, 1-10)."""
+        # Remove 'n' from baseline to avoid parameter conflict
+        params = {k: v for k, v in baseline_image_params.items() if k != "n"}
+
         report = openai_client.validate_image_generation(
-            **baseline_image_params,
+            **params,
             n=2,
             _test_param="n",
             _test_variant="multiple images",
@@ -1619,16 +1622,20 @@ class TestImageGeneration:
         assert report.success
 
 
+
+# =============================================================================
+# Image Edit API Tests
+# =============================================================================
+
+
 @pytest.mark.integration
 class TestImageEdit:
     """Tests for /v1/images/edits endpoint.
 
     Test Strategy: Single-parameter testing
     - Each test validates exactly one parameter on top of a baseline
-    - Baseline: model, image, prompt (minimum required)
-    - Model-specific tests use appropriate models
-
-    Supported models: dall-e-2, gpt-image-1, gpt-image-1-mini, gpt-image-1.5
+    - Baseline: image_path, prompt, model, size (minimum required)
+    - Tests both dall-e-2 and gpt-image-1.5 models
     """
 
     # =========================================================================
@@ -1640,46 +1647,50 @@ class TestImageEdit:
     ) -> None:
         """Baseline test with only required parameters.
 
-        Tests: model, image, prompt (DALL-E-2 for speed/cost)
+        Tests: image_path, prompt, model=dall-e-2, size=256x256
+        This is the foundation for all single-parameter tests.
         """
         report = openai_client.validate_image_edit(**baseline_image_edit_params)
         report.output()
         assert_report_valid(report)
 
     # =========================================================================
-    # Tier 1: Core Parameters
+    # Tier 1: Core Parameters (dall-e-2)
     # =========================================================================
 
     def test_param_n(
         self, openai_client: OpenAIClient, baseline_image_edit_params: dict
     ) -> None:
-        """Test n parameter (number of images to generate, 1-10)."""
+        """Test n parameter (number of edited images, 1-10).
+
+        Validates that the API returns exactly n edited images.
+        """
         n_value = 2
+        # Remove 'n' from baseline to avoid conflicts
+        params = {k: v for k, v in baseline_image_edit_params.items() if k != "n"}
+
         report = openai_client.validate_image_edit(
-            **baseline_image_edit_params,
+            **params,
             n=n_value,
             _test_param="n",
-            _test_variant="multiple images",
+            _test_variant="multiple edits",
         )
         report.output()
         assert_report_valid(report)
 
-        # Verify n images returned
+        # Additional validation: verify n images returned
         if report.raw_response:
             data = report.raw_response.get("data", [])
             assert len(data) == n_value, f"Expected {n_value} images, got {len(data)}"
 
-    @pytest.mark.parametrize(
-        "size",
-        ["256x256", "512x512", "1024x1024"],
-    )
+    @pytest.mark.parametrize("size", ["256x256", "512x512", "1024x1024"])
     def test_param_size_dalle2(
         self, openai_client: OpenAIClient, test_image_png: Path, size: str
     ) -> None:
-        """Test size parameter for DALL-E-2 (256x256, 512x512, 1024x1024)."""
+        """Test size parameter for dall-e-2 (supports 256x256, 512x512, 1024x1024)."""
         report = openai_client.validate_image_edit(
             image_path=test_image_png,
-            prompt="Add a blue border",
+            prompt="Add colorful borders around the edges",
             model="dall-e-2",
             size=size,
             _test_param="size",
@@ -1688,52 +1699,11 @@ class TestImageEdit:
         report.output()
         assert_report_valid(report)
 
-    @pytest.mark.parametrize(
-        "size",
-        ["1024x1024", "1536x1024", "1024x1536", "auto"],
-    )
-    def test_param_size_gpt(
-        self, openai_client: OpenAIClient, test_image_png: Path, size: str
-    ) -> None:
-        """Test size parameter for GPT models (1024x1024, 1536x1024, 1024x1536, auto)."""
-        report = openai_client.validate_image_edit(
-            image_path=test_image_png,
-            prompt="Add a blue border",
-            model="gpt-image-1.5",
-            size=size,
-            _test_param="size",
-            _test_variant=f"gpt {size}",
-        )
-        report.output()
-        assert_report_valid(report)
-
-    def test_param_user(
-        self, openai_client: OpenAIClient, baseline_image_edit_params: dict
-    ) -> None:
-        """Test user parameter (tracking)."""
-        report = openai_client.validate_image_edit(
-            **baseline_image_edit_params,
-            user="test-user-123",
-            _test_param="user",
-        )
-        report.output()
-        assert_report_valid(report)
-
-    # =========================================================================
-    # Tier 2: DALL-E-2 Specific
-    # =========================================================================
-
-    @pytest.mark.parametrize(
-        "response_format",
-        ["url", "b64_json"],
-    )
+    @pytest.mark.parametrize("response_format", ["url", "b64_json"])
     def test_param_response_format(
         self, openai_client: OpenAIClient, baseline_image_edit_params: dict, response_format: str
     ) -> None:
-        """Test response_format parameter for DALL-E-2 (url, b64_json).
-
-        Note: GPT image models always return b64_json, so this test is DALL-E-2 only.
-        """
+        """Test response_format parameter for dall-e-2 (url, b64_json)."""
         report = openai_client.validate_image_edit(
             **baseline_image_edit_params,
             response_format=response_format,
@@ -1748,44 +1718,75 @@ class TestImageEdit:
             data = report.raw_response.get("data", [{}])
             assert response_format in data[0], f"Expected {response_format} in response"
 
-    # =========================================================================
-    # Tier 3: GPT Image Models Specific
-    # =========================================================================
-
-    @pytest.mark.parametrize(
-        "background",
-        ["transparent", "opaque", "auto"],
-    )
-    def test_param_background(
-        self, openai_client: OpenAIClient, test_image_png: Path, background: str
+    def test_param_user(
+        self, openai_client: OpenAIClient, baseline_image_edit_params: dict
     ) -> None:
-        """Test background parameter for GPT models (transparent, opaque, auto).
-
-        When transparent, output_format should be png or webp.
-        """
+        """Test user parameter (tracking identifier)."""
         report = openai_client.validate_image_edit(
-            image_path=test_image_png,
-            prompt="Add a blue border",
-            model="gpt-image-1.5",
-            background=background,
-            output_format="png",  # png supports transparency
-            _test_param="background",
-            _test_variant=background,
+            **baseline_image_edit_params,
+            user="test-user-image-edit-123",
+            _test_param="user",
         )
         report.output()
         assert_report_valid(report)
 
-    @pytest.mark.parametrize(
-        "quality",
-        ["high", "medium", "low", "auto"],
-    )
+    def test_param_mask(
+        self, openai_client: OpenAIClient, test_image_png: Path, temp_dir: Path
+    ) -> None:
+        """Test mask parameter (selective editing with transparency mask).
+
+        Creates a simple mask with transparent center for selective editing.
+        """
+        from PIL import Image
+
+        # Create a simple mask: opaque edges, transparent center
+        mask_path = temp_dir / "test_mask.png"
+        mask = Image.new("RGBA", (256, 256), (0, 0, 0, 255))  # Black opaque
+        # Make center transparent (will be edited)
+        for x in range(64, 192):
+            for y in range(64, 192):
+                mask.putpixel((x, y), (0, 0, 0, 0))  # Transparent
+        mask.save(mask_path)
+
+        report = openai_client.validate_image_edit(
+            image_path=test_image_png,
+            prompt="Add a red circle in the center",
+            model="dall-e-2",
+            size="256x256",
+            mask_path=mask_path,
+            _test_param="mask",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    # =========================================================================
+    # Tier 2: GPT Model Specific Parameters
+    # =========================================================================
+
+    @pytest.mark.parametrize("size", ["1024x1024", "1536x1024", "1024x1536", "auto"])
+    def test_param_size_gpt(
+        self, openai_client: OpenAIClient, test_image_png: Path, size: str
+    ) -> None:
+        """Test size parameter for GPT models (supports 1024x1024, 1536x1024, 1024x1536, auto)."""
+        report = openai_client.validate_image_edit(
+            image_path=test_image_png,
+            prompt="Add colorful borders around the edges",
+            model="gpt-image-1.5",
+            size=size,
+            _test_param="size",
+            _test_variant=f"gpt {size}",
+        )
+        report.output()
+        assert_report_valid(report)
+
+    @pytest.mark.parametrize("quality", ["high", "medium", "low", "auto"])
     def test_param_quality(
         self, openai_client: OpenAIClient, test_image_png: Path, quality: str
     ) -> None:
         """Test quality parameter for GPT models (high, medium, low, auto)."""
         report = openai_client.validate_image_edit(
             image_path=test_image_png,
-            prompt="Add a blue border",
+            prompt="Add colorful borders around the edges",
             model="gpt-image-1.5",
             quality=quality,
             _test_param="quality",
@@ -1794,17 +1795,14 @@ class TestImageEdit:
         report.output()
         assert_report_valid(report)
 
-    @pytest.mark.parametrize(
-        "output_format",
-        ["png", "jpeg", "webp"],
-    )
+    @pytest.mark.parametrize("output_format", ["png", "jpeg", "webp"])
     def test_param_output_format(
         self, openai_client: OpenAIClient, test_image_png: Path, output_format: str
     ) -> None:
         """Test output_format parameter for GPT models (png, jpeg, webp)."""
         report = openai_client.validate_image_edit(
             image_path=test_image_png,
-            prompt="Add a blue border",
+            prompt="Add colorful borders around the edges",
             model="gpt-image-1.5",
             output_format=output_format,
             _test_param="output_format",
@@ -1813,13 +1811,33 @@ class TestImageEdit:
         report.output()
         assert_report_valid(report)
 
+    @pytest.mark.parametrize("background", ["transparent", "opaque", "auto"])
+    def test_param_background(
+        self, openai_client: OpenAIClient, test_image_png: Path, background: str
+    ) -> None:
+        """Test background parameter for GPT models (transparent, opaque, auto)."""
+        report = openai_client.validate_image_edit(
+            image_path=test_image_png,
+            prompt="Add colorful borders around the edges",
+            model="gpt-image-1.5",
+            background=background,
+            output_format="png",  # png/webp support transparency
+            _test_param="background",
+            _test_variant=background,
+        )
+        report.output()
+        assert_report_valid(report)
+
     def test_param_output_compression(
         self, openai_client: OpenAIClient, test_image_png: Path
     ) -> None:
-        """Test output_compression parameter. GPT models only."""
+        """Test output_compression parameter for GPT models (0-100%).
+
+        Compression is supported for jpeg and webp formats.
+        """
         report = openai_client.validate_image_edit(
             image_path=test_image_png,
-            prompt="Add a blue border",
+            prompt="Add colorful borders around the edges",
             model="gpt-image-1.5",
             output_format="jpeg",  # compression supported for jpeg/webp
             output_compression=50,
@@ -1829,70 +1847,72 @@ class TestImageEdit:
         report.output()
         assert_report_valid(report)
 
-    def test_param_input_fidelity_low(
-        self, openai_client: OpenAIClient, test_image_png: Path
+    @pytest.mark.parametrize("input_fidelity", ["high", "low"])
+    def test_param_input_fidelity(
+        self, openai_client: OpenAIClient, test_image_png: Path, input_fidelity: str
     ) -> None:
-        """Test input_fidelity parameter with 'low' value.
+        """Test input_fidelity parameter (high, low).
 
-        Supported by: gpt-image-1, gpt-image-1.5 (default)
+        Controls how closely the edit matches the input image style/features.
+        Note: Only supported by gpt-image-1, may not work with gpt-image-1.5.
         """
         report = openai_client.validate_image_edit(
             image_path=test_image_png,
-            prompt="Add a blue border",
+            prompt="Add colorful borders around the edges",
             model="gpt-image-1.5",
-            input_fidelity="low",
+            input_fidelity=input_fidelity,
             _test_param="input_fidelity",
-            _test_variant="low",
+            _test_variant=input_fidelity,
         )
         report.output()
         assert_report_valid(report)
 
-    def test_param_input_fidelity_high(
+    # =========================================================================
+    # Tier 3: Streaming Parameters (Requires validate_image_edit_stream)
+    # =========================================================================
+
+    def test_param_stream(
         self, openai_client: OpenAIClient, test_image_png: Path
     ) -> None:
-        """Test input_fidelity parameter with 'high' value.
+        """Test stream parameter (enable streaming mode).
 
-        Supported by: gpt-image-1 ONLY (NOT gpt-image-1-mini)
+        Validates streaming edit for GPT image models.
         """
-        report = openai_client.validate_image_edit(
+        events, report = openai_client.validate_image_edit_stream(
             image_path=test_image_png,
-            prompt="Add a blue border",
-            model="gpt-image-1",
-            input_fidelity="high",
-            _test_param="input_fidelity",
-            _test_variant="high",
+            prompt="Add colorful borders around the edges",
+            model="gpt-image-1.5",
+            stream=True,
+            _test_param="stream",
+            _test_variant="true",
         )
         report.output()
-        assert_report_valid(report)
+        assert len(events) > 0
+        assert any(e.get("type") == "image_edit.completed" for e in events)
+        assert report.success
 
-    # =========================================================================
-    # Tier 4: Streaming (GPT Models)
-    # =========================================================================
+    def test_param_partial_images(
+        self, openai_client: OpenAIClient, test_image_png: Path
+    ) -> None:
+        """Test partial_images parameter (0-3 partial images during streaming).
 
-    # NOTE: Streaming tests for image edit require validate_image_edit_stream()
-    # method in OpenAIClient, which is not yet implemented.
-    #
-    # The schema already supports streaming events:
-    # - ImageEditPartialImageEvent (image_edit.partial_image)
-    # - ImageEditCompletedEvent (image_edit.completed)
-    #
-    # To implement streaming tests:
-    # 1. Add validate_image_edit_stream() method to OpenAIClient (similar to
-    #    validate_image_generation_stream)
-    # 2. Add test_param_stream() and test_param_partial_images() tests here
-    #
-    # Example test structure:
-    # def test_param_stream(self, openai_client, test_image_png):
-    #     events, report = openai_client.validate_image_edit_stream(
-    #         image_path=test_image_png,
-    #         prompt="Add a blue border",
-    #         model="gpt-image-1.5",
-    #         _test_param="stream",
-    #         _test_variant="true",
-    #     )
-    #     report.output()
-    #     assert len(events) > 0
-    #     assert report.success
+        Validates partial images during streaming edits.
+        """
+        events, report = openai_client.validate_image_edit_stream(
+            image_path=test_image_png,
+            prompt="Add colorful borders around the edges",
+            model="gpt-image-1.5",
+                stream=True,
+            partial_images=2,
+            _test_param="partial_images",
+            _test_variant="2 partial images",
+        )
+        report.output()
+        assert len(events) > 0
+        assert any(e.get("type") == "image_edit.partial_image" for e in events)
+        assert any(e.get("type") == "image_edit.completed" for e in events)
+        assert report.success
+
 
 
 # =============================================================================
