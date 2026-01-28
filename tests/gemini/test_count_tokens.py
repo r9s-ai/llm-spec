@@ -10,7 +10,7 @@ from llm_spec.validation.validator import ResponseValidator
 class TestCountTokens:
     """CountTokens API 测试类"""
 
-    ENDPOINT = "/v1beta/models/gemini-pro:countTokens"
+    ENDPOINT = "/v1beta/models/gemini-2.5-flash:countTokens"
 
     # 基线参数：仅包含必需参数
     BASE_PARAMS = {

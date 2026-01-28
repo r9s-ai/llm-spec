@@ -10,7 +10,7 @@ from llm_spec.validation.validator import ResponseValidator
 class TestEmbedContent:
     """EmbedContent API 测试类"""
 
-    ENDPOINT = "/v1beta/models/text-embedding-004:embedContent"
+    ENDPOINT = "/v1beta/models/text-embedding-005:embedContent"
 
     # 基线参数：仅包含必需参数
     BASE_PARAMS = {

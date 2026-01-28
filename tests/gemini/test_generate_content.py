@@ -10,7 +10,32 @@ from llm_spec.validation.validator import ResponseValidator
 class TestGenerateContent:
     """Generate Content API 测试类"""
 
-    ENDPOINT = "/v1beta/models/gemini-pro:generateContent"
+    # ========================================================================
+    # 模型 Endpoint 配置
+    # ========================================================================
+
+    # Gemini 3 Flash Preview- 主要测试模型
+    # 支持: 基础参数, thinkingConfig (4级别), responseModalities (TEXT, IMAGE)
+    ENDPOINT_FLASH = "/v1beta/models/gemini-3-flash-preview:generateContent"
+
+    # Gemini 3 Pro - Pro 级别模型
+    # 支持: 基础参数, thinkingConfig (2级别: low, high)
+    ENDPOINT_PRO = "/v1beta/models/gemini-3-pro:generateContent"
+
+    # Gemini 3 Pro Image (Nano Banana Pro) - 图像生成模型
+    # 支持: imageConfig, responseModalities[IMAGE], 1K/2K/4K 图像生成
+    ENDPOINT_IMAGE = "/v1beta/models/gemini-3-pro-image-preview:generateContent"
+
+    # Gemini 2.5 Flash TTS - 语音生成模型
+    # 支持: speechConfig, voiceConfig, 文本转语音
+    ENDPOINT_TTS_FLASH = "/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
+
+    # Gemini 2.5 Pro TTS - Pro 级语音生成模型
+    # 支持: speechConfig, voiceConfig, 文本转语音
+    ENDPOINT_TTS_PRO = "/v1beta/models/gemini-2.5-pro-preview-tts:generateContent"
+
+    # 默认使用 Gemini 3 Flash
+    ENDPOINT = ENDPOINT_FLASH
 
     # 基线参数：仅包含必需参数
     BASE_PARAMS = {
@@ -634,104 +659,649 @@ class TestGenerateContent:
         assert is_valid
 
     # ========================================================================
-    # 阶段 7: 流式响应测试
+    # 阶段 7: 生成控制进阶参数（惩罚和种子）
     # ========================================================================
 
-    def test_streaming_basic(self):
-        """测试基本流式响应"""
-        import json
+    def test_param_presence_penalty(self):
+        """测试 presencePenalty 参数（对已出现token的惩罚）"""
+        test_name = "test_param_presence_penalty"
+        params = {
+            **self.BASE_PARAMS,
+            "generationConfig": {"presencePenalty": 0.5},
+        }
 
-        test_name = "test_streaming_basic"
-        # Gemini 流式 API: streamGenerateContent + ?alt=sse
-        stream_endpoint = self.ENDPOINT.replace(
-            ":generateContent", ":streamGenerateContent"
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
         )
-        params = self.BASE_PARAMS
 
-        chunks = []
-        complete_content = ""
-        raw_lines = []
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
 
-        try:
-            for chunk_bytes in self.client.stream(
-                endpoint=stream_endpoint,
-                params=params,
-            ):
-                # 解析 SSE 格式
-                chunk_str = chunk_bytes.decode("utf-8")
-                raw_lines.append(repr(chunk_str))
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
 
-                # SSE 格式：每行可能是 "data: ..." 或空行
-                for line in chunk_str.split("\n"):
-                    line = line.strip()
-                    if not line:
-                        continue
-
-                    if line.startswith("data: "):
-                        data_str = line[6:]  # 移除 "data: " 前缀
-                        if data_str == "[DONE]":
-                            break
-                        try:
-                            chunk_data = json.loads(data_str)
-                            chunks.append(chunk_data)
-
-                            # 验证每个 chunk（Gemini 使用相同的 GenerateContentResponse）
-                            is_valid, error_msg, missing_fields, expected_fields = (
-                                ResponseValidator.validate(
-                                    chunk_data, GenerateContentResponse
-                                )
-                            )
-
-                            # 累积内容
-                            if chunk_data.get("candidates"):
-                                for candidate in chunk_data["candidates"]:
-                                    if candidate.get("content"):
-                                        parts = candidate["content"].get("parts", [])
-                                        for part in parts:
-                                            if part.get("text"):
-                                                complete_content += part["text"]
-                        except json.JSONDecodeError as je:
-                            print(f"JSON解析失败: {data_str[:100]}, 错误: {je}")
-
-            # 调试输出
-            print(f"\n收到 {len(raw_lines)} 个原始chunk")
-            print(f"解析出 {len(chunks)} 个数据chunk")
-            print(f"内容长度: {len(complete_content)}")
-            if len(raw_lines) > 0:
-                print(f"第一个chunk示例: {raw_lines[0][:200]}")
-
-            # 记录测试结果
-            self.collector.record_test(
-                test_name=test_name,
-                params=params,
-                status_code=200,  # 流式响应成功连接
-                response_body={"chunks_count": len(chunks), "content": complete_content},
-                error=None,
-                missing_fields=[],
-                expected_fields=["candidates", "usageMetadata"],
-            )
-
-            assert len(chunks) > 0, f"应该接收到至少一个chunk，实际收到 {len(raw_lines)} 个原始chunk"
-            assert len(complete_content) > 0, "应该有生成的内容"
-
-        except Exception as e:
-            print(f"\n异常信息: {type(e).__name__}: {str(e)}")
-            print(f"收到的原始chunks数量: {len(raw_lines)}")
-            if raw_lines:
-                print(f"前3个chunks: {raw_lines[:3]}")
-
-            self.collector.record_test(
-                test_name=test_name,
-                params=params,
-                status_code=500,
-                response_body=None,
-                error=str(e),
-            )
+        if not (200 <= status_code < 300):
             self.collector.add_unsupported_param(
-                param_name="stream",
+                param_name="generationConfig.presencePenalty",
+                param_value=0.5,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    def test_param_frequency_penalty(self):
+        """测试 frequencyPenalty 参数（基于频率的token惩罚）"""
+        test_name = "test_param_frequency_penalty"
+        params = {
+            **self.BASE_PARAMS,
+            "generationConfig": {"frequencyPenalty": 0.5},
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="generationConfig.frequencyPenalty",
+                param_value=0.5,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    def test_param_seed(self):
+        """测试 seed 参数（确保生成结果可重复）"""
+        test_name = "test_param_seed"
+        params = {
+            **self.BASE_PARAMS,
+            "generationConfig": {"seed": 42},
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="generationConfig.seed",
+                param_value=42,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    # ========================================================================
+    # 阶段 8: 概率信息参数
+    # ========================================================================
+
+    def test_param_response_logprobs(self):
+        """测试 responseLogprobs 参数（返回token的对数概率）"""
+        test_name = "test_param_response_logprobs"
+        params = {
+            **self.BASE_PARAMS,
+            "generationConfig": {"responseLogprobs": True},
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="generationConfig.responseLogprobs",
                 param_value=True,
                 test_name=test_name,
-                reason=f"流式请求失败: {str(e)}",
+                reason=f"HTTP {status_code}: {response_body}",
             )
-            pytest.fail(f"流式测试失败: {str(e)}")
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    def test_param_logprobs(self):
+        """测试 logprobs 参数（与 responseLogprobs 配合使用）"""
+        test_name = "test_param_logprobs"
+        params = {
+            **self.BASE_PARAMS,
+            "generationConfig": {
+                "responseLogprobs": True,  # 依赖参数
+                "logprobs": 3,
+            },
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="generationConfig.logprobs",
+                param_value=3,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    # ========================================================================
+    # 阶段 9: 特定场景参数
+    # ========================================================================
+
+    def test_param_audio_timestamp(self):
+        """测试 audioTimestamp 参数（音频内容时间戳）"""
+        test_name = "test_param_audio_timestamp"
+        params = {
+            **self.BASE_PARAMS,
+            "generationConfig": {"audioTimestamp": True},
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="generationConfig.audioTimestamp",
+                param_value=True,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    @pytest.mark.parametrize(
+        "resolution",
+        [
+            "media_resolution_low",
+            "media_resolution_medium",
+            "media_resolution_high",
+            "media_resolution_ultra_high",
+        ],
+    )
+    def test_param_media_resolution(self, resolution):
+        """测试 mediaResolution 参数（控制图片/视频处理质量）"""
+        test_name = f"test_param_media_resolution[{resolution}]"
+
+        # 1x1 透明 PNG (base64)
+        sample_image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+        params = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": "Describe this image"},
+                        {
+                            "inlineData": {
+                                "mimeType": "image/png",
+                                "data": sample_image,
+                            }
+                        },
+                    ]
+                }
+            ],
+            "generationConfig": {"mediaResolution": resolution},
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="generationConfig.mediaResolution",
+                param_value=resolution,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    # ========================================================================
+    # 阶段 10: 响应模态控制
+    # ========================================================================
+
+    @pytest.mark.parametrize(
+        "modalities",
+        [
+            ["TEXT"],
+            ["IMAGE"],
+            ["AUDIO"],
+        ],
+    )
+    def test_param_response_modalities(self, modalities):
+        """测试 responseModalities 参数（控制响应模态类型）"""
+        test_name = f"test_param_response_modalities[{','.join(modalities)}]"
+
+        # 根据模态选择合适的模型
+        if "IMAGE" in modalities:
+            endpoint = self.ENDPOINT_IMAGE  # 使用图像生成模型
+        else:
+            endpoint = self.ENDPOINT_FLASH  # 文本使用 Flash
+
+        params = {
+            **self.BASE_PARAMS,
+            "generationConfig": {"responseModalities": modalities},
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=endpoint,  # 使用选择的 endpoint
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="generationConfig.responseModalities",
+                param_value=modalities,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    # ========================================================================
+    # 阶段 11: 语音配置（speechConfig + voiceConfig）
+    # ========================================================================
+
+    @pytest.mark.parametrize(
+        "voice_name",
+        [
+            "Kore",
+            "Puck",
+            "Charon",
+            "Fenrir",
+        ],
+    )
+    def test_param_speech_config(self, voice_name):
+        """测试 speechConfig.voiceConfig 参数（语音输出配置）"""
+        test_name = f"test_param_speech_config[{voice_name}]"
+
+        # 使用 Gemini 2.5 Flash TTS 模型
+        endpoint = self.ENDPOINT_TTS_FLASH
+
+        params = {
+            **self.BASE_PARAMS,
+            "generationConfig": {
+                "speechConfig": {
+                    "voiceConfig": {
+                        "prebuiltVoiceConfig": {
+                            "voiceName": voice_name
+                        }
+                    }
+                }
+            },
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=endpoint,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="generationConfig.speechConfig.voiceConfig",
+                param_value=voice_name,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    # ========================================================================
+    # 阶段 12: 思考配置（thinkingConfig - Gemini 3）
+    # ========================================================================
+
+    @pytest.mark.parametrize(
+        "thinking_level",
+        [
+            "minimal",
+            "low",
+            "medium",
+            "high",
+        ],
+    )
+    def test_param_thinking_config(self, thinking_level):
+        """测试 thinkingConfig.thinkingLevel 参数（Gemini 3思考深度）"""
+        test_name = f"test_param_thinking_config[{thinking_level}]"
+
+        # Gemini 3 Flash 支持所有 4 个级别
+        # Gemini 3 Pro 仅支持 low 和 high
+        endpoint = self.ENDPOINT_FLASH
+
+        params = {
+            **self.BASE_PARAMS,
+            "generationConfig": {
+                "thinkingConfig": {
+                    "thinkingLevel": thinking_level
+                }
+            },
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=endpoint,  # 使用 Flash 支持所有级别
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="generationConfig.thinkingConfig.thinkingLevel",
+                param_value=thinking_level,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    # ========================================================================
+    # 阶段 13: 图像配置（imageConfig）
+    # ========================================================================
+
+    @pytest.mark.parametrize(
+        "aspect_ratio",
+        [
+            "1:1",
+            "2:3",
+            "3:2",
+            "3:4",
+            "4:3",
+            "4:5",
+            "5:4",
+            "9:16",
+            "16:9",
+            "21:9",
+        ],
+    )
+    def test_param_image_config_aspect_ratio(self, aspect_ratio):
+        """测试 imageConfig.aspectRatio 参数（图像生成宽高比）"""
+        test_name = f"test_param_image_config_aspect_ratio[{aspect_ratio}]"
+
+        # 使用 Gemini 3 Pro Image (Nano Banana Pro) 模型
+        endpoint = self.ENDPOINT_IMAGE
+
+        params = {
+            "contents": [{"parts": [{"text": "Generate an image of a sunset"}]}],
+            "generationConfig": {
+                "imageConfig": {
+                    "aspectRatio": aspect_ratio
+                }
+            },
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=endpoint,  # 使用图像生成模型
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="generationConfig.imageConfig.aspectRatio",
+                param_value=aspect_ratio,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    @pytest.mark.parametrize(
+        "image_size",
+        [
+            "1K",
+            "2K",
+            "4K",
+        ],
+    )
+    def test_param_image_config_size(self, image_size):
+        """测试 imageConfig.imageSize 参数（图像生成尺寸）"""
+        test_name = f"test_param_image_config_size[{image_size}]"
+
+        # 使用 Gemini 3 Pro Image (Nano Banana Pro) 模型
+        endpoint = self.ENDPOINT_IMAGE
+
+        params = {
+            "contents": [{"parts": [{"text": "Generate an image of mountains"}]}],
+            "generationConfig": {
+                "imageConfig": {
+                    "imageSize": image_size
+                }
+            },
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=endpoint,  # 使用图像生成模型
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="generationConfig.imageConfig.imageSize",
+                param_value=image_size,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    # ========================================================================
+    # 阶段 14: 增强功能参数
+    # ========================================================================
+
+    def test_param_enable_enhanced_civic_answers(self):
+        """测试 enableEnhancedCivicAnswers 参数（增强公民问答）"""
+        test_name = "test_param_enable_enhanced_civic_answers"
+        params = {
+            "contents": [{"parts": [{"text": "Who is the current president of the United States?"}]}],
+            "generationConfig": {"enableEnhancedCivicAnswers": True},
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, GenerateContentResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="generationConfig.enableEnhancedCivicAnswers",
+                param_value=True,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
 

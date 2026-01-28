@@ -19,6 +19,7 @@ class GeminiAdapter(ProviderAdapter):
         """
         headers = {
             "Content-Type": "application/json",
+            "x-goog-api-key": self.config.api_key,
         }
 
         if additional_headers:
@@ -33,7 +34,7 @@ class GeminiAdapter(ProviderAdapter):
         headers: dict[str, str] | None = None,
         method: str = "POST",
     ) -> tuple[int, dict[str, str], dict | None]:
-        """发起请求（Gemini 使用 URL 参数传递 API key）
+        """发起请求（Gemini 使用 x-goog-api-key Header 认证）
 
         Args:
             endpoint: API 端点
@@ -44,14 +45,14 @@ class GeminiAdapter(ProviderAdapter):
         Returns:
             (status_code, headers, response_body)
         """
-        # Gemini API key 通过 URL 参数传递
-        url = f"{self.config.base_url}{endpoint}?key={self.config.api_key}"
+        # Gemini API key 通过 x-goog-api-key header 传递
+        url = f"{self.config.base_url}{endpoint}"
         headers = self.prepare_headers(headers)
 
         return self.http_client.request(
             method=method,
             url=url,
             headers=headers,
-            json=params,
+            json_data=params,
             timeout=self.config.timeout,
         )

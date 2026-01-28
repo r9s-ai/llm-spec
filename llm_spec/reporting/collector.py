@@ -1,7 +1,6 @@
 """报告收集器，用于累积测试结果"""
 
 import json
-from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -39,6 +38,60 @@ class ReportCollector:
         # 错误跟踪
         self.errors: list[dict[str, Any]] = []
 
+    @staticmethod
+    def _extract_param_paths(params: dict[str, Any], prefix: str = "", max_depth: int = 10) -> set[str]:
+        """递归提取参数路径（支持嵌套结构）
+
+        Args:
+            params: 参数字典
+            prefix: 路径前缀
+            max_depth: 最大递归深度（防止无限递归）
+
+        Returns:
+            参数路径集合
+
+        Examples:
+            >>> ReportCollector._extract_param_paths({"temperature": 0.7})
+            {'temperature'}
+
+            >>> ReportCollector._extract_param_paths({
+            ...     "generationConfig": {"temperature": 0.7, "topP": 0.9}
+            ... })
+            {'generationConfig', 'generationConfig.temperature', 'generationConfig.topP'}
+
+            >>> ReportCollector._extract_param_paths({
+            ...     "messages": [{"role": "user", "content": "Hello"}]
+            ... })
+            {'messages', 'messages[0].role', 'messages[0].content'}
+        """
+        if max_depth <= 0:
+            return set()
+
+        paths = set()
+
+        for key, value in params.items():
+            # 构建当前路径
+            current_path = f"{prefix}.{key}" if prefix else key
+            paths.add(current_path)
+
+            # 如果值是字典，递归提取
+            if isinstance(value, dict) and value:  # 跳过空字典
+                nested_paths = ReportCollector._extract_param_paths(
+                    value, current_path, max_depth - 1
+                )
+                paths.update(nested_paths)
+
+            # 如果值是列表，检查列表中的字典
+            elif isinstance(value, list) and value:  # 跳过空列表
+                for i, item in enumerate(value):
+                    if isinstance(item, dict):
+                        nested_paths = ReportCollector._extract_param_paths(
+                            item, f"{current_path}[{i}]", max_depth - 1
+                        )
+                        paths.update(nested_paths)
+
+        return paths
+
     def record_test(
         self,
         test_name: str,
@@ -62,9 +115,9 @@ class ReportCollector:
         """
         self.total_tests += 1
 
-        # 记录测试的参数
-        for key in params.keys():
-            self.tested_params.add(key)
+        # 记录测试的参数（支持嵌套结构）
+        param_paths = self._extract_param_paths(params)
+        self.tested_params.update(param_paths)
 
         # 记录期望字段
         if expected_fields:

@@ -65,7 +65,8 @@ llm-spec/
 │   │   └── test_responses.py
 │   ├── gemini/                    # Gemini 测试 ✅
 │   │   ├── __init__.py
-│   │   ├── test_generate_content.py
+│   │   ├── test_generate_content.py        # 非流式生成测试
+│   │   ├── test_stream_generate_content.py # 流式生成测试 (15个测试)
 │   │   ├── test_embed_content.py
 │   │   └── test_count_tokens.py
 │   ├── anthropic/                 # Anthropic 测试 ✅
@@ -119,8 +120,26 @@ llm-spec/
 ### 第五层：报告系统 (reporting)
 **职责**：测试结果汇总和报告生成
 - 收集测试参数、状态码、错误信息
+- **递归嵌套参数提取**：自动提取嵌套字典和数组中的参数路径（如 `generationConfig.temperature`、`messages[0].role`）
 - 跟踪不支持的参数和缺失的响应字段
 - 生成JSON格式报告
+
+**ReportCollector 核心功能**：
+```python
+@staticmethod
+def _extract_param_paths(params: dict[str, Any], prefix: str = "", max_depth: int = 10) -> set[str]:
+    """递归提取参数路径（支持嵌套结构）
+
+    示例：
+    - 扁平结构 (OpenAI): {"temperature": 0.7} → ["temperature"]
+    - 嵌套字典 (Gemini): {"generationConfig": {"temperature": 0.7}}
+      → ["generationConfig", "generationConfig.temperature"]
+    - 数组字典 (Anthropic): {"messages": [{"role": "user"}]}
+      → ["messages", "messages[0].role"]
+    """
+```
+
+这确保了报告中的 `parameters.tested` 字段包含所有实际使用的参数路径，而不仅仅是顶级键。
 
 ### 第六层：测试层 (tests)
 **职责**：执行具体的API测试
@@ -512,7 +531,46 @@ def test_voice_variants(self, voice):
 ### 模式 5: 流式测试
 **目的**：测试SSE流式响应
 ```python
-async def test_streaming(self):
+# 示例 1: 简单流式测试（同步）
+def test_streaming_baseline(self):
+    params = {**self.BASE_PARAMS}
+
+    chunks = []
+    complete_content = ""
+
+    for chunk_bytes in self.client.stream(endpoint=self.ENDPOINT, params=params):
+        chunk_str = chunk_bytes.decode("utf-8")
+
+        for line in chunk_str.split("\n"):
+            line = line.strip()
+            if not line or not line.startswith("data: "):
+                continue
+
+            data_str = line[6:]  # 移除 "data: " 前缀
+            if data_str == "[DONE]":
+                break
+
+            chunk_data = json.loads(data_str)
+            chunks.append(chunk_data)
+
+            # 验证每个chunk符合schema
+            is_valid, error_msg, _, _ = ResponseValidator.validate(
+                chunk_data, GenerateContentResponse
+            )
+
+            # 累积文本内容
+            if chunk_data.get("candidates"):
+                for candidate in chunk_data["candidates"]:
+                    if candidate.get("content"):
+                        for part in candidate["content"].get("parts", []):
+                            if part.get("text"):
+                                complete_content += part["text"]
+
+    assert len(chunks) > 0
+    assert len(complete_content) > 0
+
+# 示例 2: 异步流式测试
+async def test_streaming_async(self):
     params = {**self.BASE_PARAMS, "stream": True}
 
     chunks = []
@@ -522,6 +580,13 @@ async def test_streaming(self):
 
     # 验证完整响应
 ```
+
+**Gemini StreamGenerateContent 测试结构**（15个测试分5个阶段）：
+1. **基础流式测试** (3个): baseline、chunk验证、内容累积
+2. **生成配置参数** (4个): temperature、maxOutputTokens、topP/topK、stopSequences
+3. **多模态流式** (3个): 图片分析、多轮对话、系统指令
+4. **高级功能** (3个): 函数调用、JSON模式、安全设置
+5. **流式特性验证** (2个): usage metadata、finish reason
 
 ---
 
@@ -541,11 +606,17 @@ async def test_streaming(self):
     "failed": "失败数"
   },
   "parameters": {
-    "tested": ["实际测试过的参数列表"],
+    "tested": [
+      "实际测试过的参数路径（包含嵌套结构）",
+      "扁平结构示例: temperature, max_tokens, model",
+      "嵌套结构示例: generationConfig, generationConfig.temperature,",
+      "generationConfig.topP, contents, contents[0].parts,",
+      "contents[0].parts[0].text, messages[0].role, messages[0].content"
+    ],
     "untested": ["规范中有但未测试的参数"],
     "unsupported": [
       {
-        "parameter": "参数名",
+        "parameter": "参数名（可以是嵌套路径）",
         "value": "参数值",
         "test_name": "测试名称",
         "reason": "不支持的原因（HTTP状态码+错误信息）"
