@@ -50,6 +50,12 @@ pytest tests/providers/openai/test_chat_completions.py -v
 # 运行所有OpenAI测试
 pytest tests/providers/openai/ -v
 
+# 运行所有Anthropic测试
+pytest tests/providers/anthropic/ -v
+
+# 运行所有Gemini测试
+pytest tests/providers/gemini/ -v
+
 # 运行所有测试
 pytest tests/ -v
 ```
@@ -57,7 +63,14 @@ pytest tests/ -v
 ### 4. 查看报告
 
 ```bash
+# OpenAI报告
 cat reports/openai_v1_chat_completions_*.json
+
+# Anthropic报告
+cat reports/anthropic_v1_messages_*.json
+
+# Gemini报告
+cat reports/gemini_v1beta_models_*.json
 ```
 
 ## 📋 项目结构
@@ -72,7 +85,10 @@ llm-spec/
 │   └── reporting/         # 报告生成
 ├── tests/                 # 测试代码
 │   └── providers/
-│       └── openai/
+│       ├── openai/        # OpenAI 测试（7个文件）
+│       ├── anthropic/     # Anthropic 测试（4个文件）
+│       ├── gemini/        # Gemini 测试（3个文件）
+│       └── xai/           # xAI 测试
 ├── test_assets/           # 测试资源
 ├── reports/               # 生成的报告
 └── logs/                  # 日志文件

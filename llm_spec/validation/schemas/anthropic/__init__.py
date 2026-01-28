@@ -1,32 +1,79 @@
-"""Anthropic Messages 响应 Pydantic schemas"""
+"""Anthropic API Pydantic schemas
 
-from typing import Literal
+此模块导出所有 Anthropic API 相关的 Pydantic schema。
+"""
 
-from pydantic import BaseModel
+# Messages API schemas
+from llm_spec.validation.schemas.anthropic.messages import (
+    ContentBlock,
+    ContentBlockDelta,
+    ContentBlockDeltaEvent,
+    ContentBlockStartEvent,
+    ContentBlockStopEvent,
+    ErrorEvent,
+    ImageBlock,
+    ImageSource,
+    Message,
+    MessageDelta,
+    MessageDeltaEvent,
+    MessageStartEvent,
+    MessageStopEvent,
+    MessagesResponse,
+    Metadata,
+    PingEvent,
+    Role,
+    StopReason,
+    StreamEvent,
+    TextBlock,
+    ThinkingConfig,
+    Tool,
+    ToolChoice,
+    ToolChoiceAny,
+    ToolChoiceAuto,
+    ToolChoiceTool,
+    ToolChoiceType,
+    ToolInputSchema,
+    ToolResultBlock,
+    ToolUseBlock,
+    Usage,
+)
 
-
-class ContentBlock(BaseModel):
-    """内容块"""
-
-    type: Literal["text"]
-    text: str
-
-
-class Usage(BaseModel):
-    """使用量"""
-
-    input_tokens: int
-    output_tokens: int
-
-
-class MessagesResponse(BaseModel):
-    """Messages 响应模型"""
-
-    id: str
-    type: Literal["message"]
-    role: Literal["assistant"]
-    content: list[ContentBlock]
-    model: str
-    stop_reason: str | None = None
-    stop_sequence: str | None = None
-    usage: Usage
+__all__ = [
+    # Request - Content Blocks
+    "TextBlock",
+    "ImageBlock",
+    "ImageSource",
+    "ToolUseBlock",
+    "ToolResultBlock",
+    "ContentBlock",
+    # Request - Messages
+    "Message",
+    "Role",
+    # Request - Tools
+    "Tool",
+    "ToolInputSchema",
+    "ToolChoice",
+    "ToolChoiceAuto",
+    "ToolChoiceAny",
+    "ToolChoiceTool",
+    "ToolChoiceType",
+    # Request - Config
+    "Metadata",
+    "ThinkingConfig",
+    # Response - Main
+    "MessagesResponse",
+    "Usage",
+    "StopReason",
+    # Streaming - Events
+    "StreamEvent",
+    "MessageStartEvent",
+    "ContentBlockStartEvent",
+    "ContentBlockDelta",
+    "ContentBlockDeltaEvent",
+    "ContentBlockStopEvent",
+    "MessageDelta",
+    "MessageDeltaEvent",
+    "MessageStopEvent",
+    "PingEvent",
+    "ErrorEvent",
+]
