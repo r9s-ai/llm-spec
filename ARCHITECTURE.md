@@ -54,31 +54,29 @@ llm-spec/
 ├── tests/                         # 测试代码
 │   ├── __init__.py
 │   ├── conftest.py                # Pytest全局fixtures
-│   └── providers/
+│   ├── openai/                    # OpenAI 测试 ✅
+│   │   ├── __init__.py
+│   │   ├── test_chat_completions.py
+│   │   ├── test_audio_speech.py
+│   │   ├── test_audio_transcriptions.py
+│   │   ├── test_audio_translations.py
+│   │   ├── test_embeddings.py
+│   │   ├── test_images_generations.py
+│   │   └── test_responses.py
+│   ├── gemini/                    # Gemini 测试 ✅
+│   │   ├── __init__.py
+│   │   ├── test_generate_content.py
+│   │   ├── test_embed_content.py
+│   │   └── test_count_tokens.py
+│   ├── anthropic/                 # Anthropic 测试 ✅
+│   │   ├── __init__.py
+│   │   ├── test_messages_basic.py
+│   │   ├── test_messages_advanced.py
+│   │   ├── test_messages_tools.py
+│   │   └── test_messages_streaming.py
+│   └── xai/                       # xAI 测试
 │       ├── __init__.py
-│       ├── openai/                # OpenAI 测试 ✅
-│       │   ├── __init__.py
-│       │   ├── test_chat_completions.py
-│       │   ├── test_audio_speech.py
-│       │   ├── test_audio_transcriptions.py
-│       │   ├── test_audio_translations.py
-│       │   ├── test_embeddings.py
-│       │   ├── test_images_generations.py
-│       │   └── test_responses.py
-│       ├── gemini/                # Gemini 测试 ✅
-│       │   ├── __init__.py
-│       │   ├── test_generate_content.py
-│       │   ├── test_embed_content.py
-│       │   └── test_count_tokens.py
-│       ├── anthropic/             # Anthropic 测试 ✅
-│       │   ├── __init__.py
-│       │   ├── test_messages_basic.py
-│       │   ├── test_messages_advanced.py
-│       │   ├── test_messages_tools.py
-│       │   └── test_messages_streaming.py
-│       └── xai/                   # xAI 测试
-│           ├── __init__.py
-│           └── test_chat_completions.py
+│       └── test_chat_completions.py
 ├── test_assets/                   # 测试资源文件
 │   ├── audio/                     # 音频文件
 │   └── images/                    # 图片文件
@@ -206,7 +204,7 @@ class AudioSpeechResponse(BaseModel):
 #### Step 2: 创建测试文件
 
 ```python
-# tests/providers/openai/test_audio_speech.py
+# tests/openai/test_audio_speech.py
 import pytest
 from llm_spec.reporting.collector import ReportCollector
 from llm_spec.validation.schemas.openai.audio import AudioSpeechResponse
@@ -323,7 +321,7 @@ class TestAudioSpeech:
 #### Step 3: 运行测试
 
 ```bash
-pytest tests/providers/openai/test_audio_speech.py -v
+pytest tests/openai/test_audio_speech.py -v
 ```
 
 #### Step 4: 检查报告
@@ -413,7 +411,7 @@ class AnthropicResponse(BaseModel):
 #### Step 5: 创建测试文件
 
 ```python
-# tests/providers/anthropic/test_messages.py
+# tests/anthropic/test_messages.py
 import pytest
 from llm_spec.reporting.collector import ReportCollector
 from llm_spec.validation.schemas.anthropic.messages import AnthropicResponse
@@ -668,251 +666,4 @@ async def test_streaming(self):
 
 ---
 
-## Anthropic Provider 实现详情
 
-### Schema 结构
-
-Anthropic 的 schema 提供完整的 Messages API 支持：
-
-**llm_spec/validation/schemas/anthropic/messages.py**
-- **请求相关类**：
-  - `Role`, `TextBlock`, `ImageBlock`, `ToolUseBlock`, `ToolResultBlock`
-  - `Message`, `Tool`, `ToolChoice`, `Metadata`, `ThinkingConfig`
-  - `ImageSource` - 支持 base64 和 URL 两种图片输入方式
-
-- **响应相关类**：
-  - `MessagesResponse` - 标准响应格式
-  - `Usage` - Token 使用统计（支持 prompt caching）
-  - `StopReason` - 停止原因枚举
-
-- **流式响应事件**：
-  - `MessageStartEvent` - 消息开始
-  - `ContentBlockStartEvent` - 内容块开始
-  - `ContentBlockDeltaEvent` - 内容增量（text_delta / input_json_delta）
-  - `ContentBlockStopEvent` - 内容块结束
-  - `MessageDeltaEvent` - 消息增量
-  - `MessageStopEvent` - 消息结束
-  - `PingEvent`, `ErrorEvent` - 辅助事件
-
-### 测试覆盖
-
-**tests/providers/anthropic/** (48个测试，2479行代码)
-
-#### test_messages_basic.py (13个测试，539行)
-- **阶段 1**: 基线与模型测试
-  - `test_baseline` - 仅必需参数
-  - `test_model_variants[5个模型]` - claude-3-5-sonnet, opus, haiku, 3-5-haiku, sonnet-4-5
-
-- **阶段 2**: 采样参数测试
-  - `test_param_temperature` - temperature 参数
-  - `test_param_top_p` - top_p 参数
-  - `test_param_top_k` - top_k 参数
-  - `test_param_combined_sampling` - 组合采样参数
-
-- **阶段 3**: 停止控制测试
-  - `test_param_stop_sequences` - 自定义停止序列
-  - `test_param_max_tokens_minimum` - max_tokens 边界测试（最小值）
-  - `test_param_max_tokens_maximum` - max_tokens 边界测试（8192）
-
-- **阶段 4**: 系统提示测试
-  - `test_param_system` - system prompt 参数
-  - `test_system_with_multiline` - 多行系统提示
-  - `test_system_with_complex_instructions` - 复杂系统指令
-
-- **阶段 5**: 元数据与追踪
-  - `test_param_metadata` - metadata.user_id 追踪
-
-#### test_messages_advanced.py (13个测试，572行)
-- **阶段 1**: 多轮对话测试
-  - `test_multi_turn_conversation` - 多轮对话历史
-  - `test_alternating_roles` - 角色交替验证
-  - `test_long_conversation_history` - 长对话（10轮）
-
-- **阶段 2**: 多模态内容测试
-  - `test_param_image_base64` - base64 图片输入
-  - `test_image_media_type_variants[4种格式]` - jpeg/png/gif/webp
-  - `test_text_and_image_combined` - 文本+图片混合
-
-- **阶段 3**: 内容块格式测试
-  - `test_content_as_string` - 字符串格式 content
-  - `test_content_as_blocks` - 块数组格式 content
-  - `test_multiple_text_blocks` - 多个文本块
-
-- **阶段 4**: 思考模式测试（Claude 3.7+）
-  - `test_param_thinking_enabled` - 启用思考模式
-  - `test_param_thinking_budget_tokens` - 思考 token 预算
-
-#### test_messages_tools.py (12个测试，734行)
-- **阶段 1**: 基础工具调用
-  - `test_param_tools_basic` - 基础工具定义
-  - `test_tool_use_response` - 工具调用响应验证
-  - `test_tool_result_submission` - 提交工具结果
-
-- **阶段 2**: 工具选择策略
-  - `test_tool_choice_auto` - 自动选择
-  - `test_tool_choice_any` - 强制使用任意工具
-  - `test_tool_choice_specific_tool` - 指定特定工具
-
-- **阶段 3**: 复杂工具场景
-  - `test_multiple_tools` - 多个工具定义
-  - `test_tool_with_complex_schema` - 复杂嵌套 schema
-  - `test_parallel_tool_use` - 并行工具调用
-  - `test_multi_turn_tool_conversation` - 多轮工具对话
-
-- **阶段 4**: 工具错误处理
-  - `test_tool_result_with_error` - is_error 标志
-  - `test_tool_without_tool_choice` - 无 tool_choice 参数
-
-#### test_messages_streaming.py (10个测试，634行)
-- **阶段 1**: 基础流式测试
-  - `test_streaming_basic` - 基础流式响应
-  - `test_streaming_event_types` - 所有事件类型验证
-
-- **阶段 2**: 流式内容验证
-  - `test_streaming_text_accumulation` - 文本累积
-  - `test_streaming_usage_tracking` - usage 统计
-  - `test_streaming_stop_reason` - stop_reason 验证
-
-- **阶段 3**: 流式工具调用
-  - `test_streaming_tool_use` - 流式工具调用
-  - `test_streaming_input_json_delta` - input_json_delta 事件
-
-- **阶段 4**: 流式错误处理
-  - `test_streaming_error_event` - 错误事件
-  - `test_streaming_ping_event` - ping 事件
-
-### Anthropic API 特性
-
-**与 OpenAI 的主要区别：**
-
-1. **API Key 传递方式**
-   - OpenAI: `Authorization: Bearer {api_key}` header
-   - Anthropic: `x-api-key: {api_key}` header
-
-2. **必需参数**
-   - Anthropic 强制要求 `max_tokens` 参数
-   - 需要明确的 `anthropic-version` header（如 "2023-06-01"）
-
-3. **角色系统**
-   - `system` 参数独立于 messages 数组
-   - messages 只支持 `user` 和 `assistant` 角色
-
-4. **内容块结构**
-   - 支持丰富的内容块类型：text, image, tool_use, tool_result
-   - content 可以是字符串或块数组
-
-5. **工具调用**
-   - 原生支持工具调用（tool_use / tool_result 块）
-   - 支持 tool_choice：auto / any / tool（指定特定工具）
-   - 流式响应中支持 input_json_delta 增量更新
-
-6. **思考模式（Extended Thinking）**
-   - Claude 3.7+ 支持 thinking 配置
-   - 可设置 budget_tokens 控制思考深度
-
-7. **Prompt Caching**
-   - Usage 字段包含 cache_creation_input_tokens 和 cache_read_input_tokens
-   - 支持对系统提示和对话历史的缓存
-
-8. **流式响应**
-   - SSE (Server-Sent Events) 格式
-   - 7种事件类型：message_start, content_block_start/delta/stop, message_delta/stop, ping, error
-
----
-
-## Gemini Provider 实现详情
-
-### Schema 结构
-
-Gemini 的 schema 按照 API endpoints 拆分为独立文件：
-
-**llm_spec/validation/schemas/gemini/**
-- **generate_content.py** - GenerateContent API 相关 schema
-  - 请求类：`Part`, `Content`, `Tool`, `SafetySetting`, `GenerationConfig`, `SystemInstruction` 等
-  - 响应类：`Candidate`, `SafetyRating`, `UsageMetadata`, `GenerateContentResponse` 等
-  - 类型别名：`HarmCategory`, `HarmBlockThreshold`, `FinishReason`, `BlockReason` 等
-
-- **embeddings.py** - EmbedContent/BatchEmbedContents API
-  - `TaskType` 枚举（9种任务类型）
-  - `EmbedContentRequest`, `Embedding`, `EmbedContentResponse`, `BatchEmbedContentsResponse`
-
-- **tokens.py** - CountTokens API
-  - `CountTokensResponse`, `ModalityTokenDetails`
-
-### 测试覆盖
-
-**tests/providers/gemini/**
-
-#### test_generate_content.py (17个测试)
-- **阶段 1**: 基线测试
-  - `test_baseline` - 仅必需参数
-  - `test_param_temperature` - temperature 参数
-  - `test_param_max_output_tokens` - maxOutputTokens 参数
-
-- **阶段 2**: 基础参数测试
-  - `test_param_top_p` - topP 参数
-  - `test_param_top_k` - topK 参数
-  - `test_param_candidate_count` - candidateCount 参数（多个候选响应）
-  - `test_param_stop_sequences` - stopSequences 参数
-
-- **阶段 3**: 响应格式测试
-  - `test_response_format_json` - JSON 响应格式
-  - `test_response_format_json_with_schema` - 带 schema 的 JSON 响应
-
-- **阶段 4**: 安全设置测试
-  - `test_param_safety_settings` - safetySettings 基础测试
-  - `test_safety_threshold_variants[4个阈值]` - 安全阈值变体测试
-
-- **阶段 5**: 系统指令测试
-  - `test_param_system_instruction` - systemInstruction 参数
-
-- **阶段 6**: 工具调用测试
-  - `test_param_function_calling` - 函数调用功能
-  - `test_param_code_execution` - 代码执行功能
-
-#### test_embed_content.py (11个测试)
-- **阶段 1**: 基线测试
-  - `test_baseline` - 仅必需参数
-
-- **阶段 2**: TaskType 测试
-  - `test_param_task_type_retrieval_query` - RETRIEVAL_QUERY
-  - `test_param_task_type_retrieval_document` - RETRIEVAL_DOCUMENT（带 title）
-  - `test_task_type_variants[7种]` - 所有 TaskType 变体
-
-- **阶段 3**: 输出维度测试
-  - `test_param_output_dimensionality` - outputDimensionality 参数
-
-#### test_count_tokens.py (4个测试)
-- **阶段 1**: 基线测试 - `test_baseline`
-- **阶段 2**: 多轮对话测试 - `test_multi_turn_conversation`
-- **阶段 3**: 系统指令测试 - `test_with_system_instruction`
-- **阶段 4**: 工具定义测试 - `test_with_tools`
-
-### Gemini API 特性
-
-**与 OpenAI 的主要区别：**
-
-1. **API Key 传递方式**
-   - OpenAI: `Authorization: Bearer {api_key}` header
-   - Gemini: URL 参数 `?key={api_key}`
-
-2. **参数结构**
-   - OpenAI: 扁平化参数（如 `temperature`, `top_p`）
-   - Gemini: 嵌套在 `generationConfig` 中（如 `generationConfig.temperature`）
-
-3. **安全设置**
-   - Gemini 提供细粒度的 `safetySettings`（6种类别 × 4种阈值）
-   - 包括 `HARM_CATEGORY_HARASSMENT`, `HARM_CATEGORY_HATE_SPEECH` 等
-
-4. **工具能力**
-   - 支持 `functionDeclarations`（函数调用）
-   - 支持 `codeExecution`（代码执行）
-
-5. **多模态支持**
-   - 原生支持 `inlineData`（base64）和 `fileData`（File API）
-   - 支持图片、视频、音频、PDF 等多种输入格式
-
-6. **响应结构**
-   - 提供 `promptFeedback`（提示词反馈）
-   - 包含 `citationMetadata`（引用来源）
-   - 支持 `groundingAttributions`（搜索增强）

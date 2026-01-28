@@ -13,7 +13,7 @@
 ### 文件结构
 
 ```
-tests/providers/anthropic/
+tests/anthropic/
 ├── __init__.py
 ├── test_messages_basic.py        # 539行, 13个测试
 ├── test_messages_advanced.py     # 572行, 13个测试
@@ -129,31 +129,31 @@ tests/providers/anthropic/
 
 ### 运行所有Anthropic测试
 ```bash
-pytest tests/providers/anthropic/ -v
+pytest tests/anthropic/ -v
 ```
 
 ### 运行特定测试文件
 ```bash
 # 基础参数测试
-pytest tests/providers/anthropic/test_messages_basic.py -v
+pytest tests/anthropic/test_messages_basic.py -v
 
 # 高级功能测试
-pytest tests/providers/anthropic/test_messages_advanced.py -v
+pytest tests/anthropic/test_messages_advanced.py -v
 
 # 工具调用测试
-pytest tests/providers/anthropic/test_messages_tools.py -v
+pytest tests/anthropic/test_messages_tools.py -v
 
 # 流式响应测试
-pytest tests/providers/anthropic/test_messages_streaming.py -v
+pytest tests/anthropic/test_messages_streaming.py -v
 ```
 
 ### 运行特定测试
 ```bash
 # 运行模型变体测试
-pytest tests/providers/anthropic/test_messages_basic.py::TestMessagesBasic::test_model_variants -v
+pytest tests/anthropic/test_messages_basic.py::TestMessagesBasic::test_model_variants -v
 
 # 运行工具调用测试
-pytest tests/providers/anthropic/test_messages_tools.py::TestMessagesTools::test_tool_choice_auto -v
+pytest tests/anthropic/test_messages_tools.py::TestMessagesTools::test_tool_choice_auto -v
 ```
 
 ### 查看报告

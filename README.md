@@ -45,16 +45,16 @@ timeout = 30.0
 
 ```bash
 # 运行单个endpoint测试
-pytest tests/providers/openai/test_chat_completions.py -v
+pytest tests/openai/test_chat_completions.py -v
 
 # 运行所有OpenAI测试
-pytest tests/providers/openai/ -v
+pytest tests/openai/ -v
 
 # 运行所有Anthropic测试
-pytest tests/providers/anthropic/ -v
+pytest tests/anthropic/ -v
 
 # 运行所有Gemini测试
-pytest tests/providers/gemini/ -v
+pytest tests/gemini/ -v
 
 # 运行所有测试
 pytest tests/ -v
@@ -84,11 +84,10 @@ llm-spec/
 │   ├── validation/        # 响应验证
 │   └── reporting/         # 报告生成
 ├── tests/                 # 测试代码
-│   └── providers/
-│       ├── openai/        # OpenAI 测试（7个文件）
-│       ├── anthropic/     # Anthropic 测试（4个文件）
-│       ├── gemini/        # Gemini 测试（3个文件）
-│       └── xai/           # xAI 测试
+│   ├── openai/            # OpenAI 测试（7个文件）
+│   ├── anthropic/         # Anthropic 测试（4个文件）
+│   ├── gemini/            # Gemini 测试（3个文件）
+│   └── xai/               # xAI 测试
 ├── test_assets/           # 测试资源
 ├── reports/               # 生成的报告
 └── logs/                  # 日志文件
