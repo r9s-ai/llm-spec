@@ -1,0 +1,375 @@
+openapi: 3.1.0
+info:
+  title: Google Gemini CountTokens API
+  version: v1beta
+  description: |
+    Gemini API的CountTokens端点，用于计算给定内容的token数量。
+
+    支持的功能：
+    - 计算文本和多模态内容的token数
+    - 支持多轮对话历史
+    - 支持系统指令
+    - 支持工具定义
+    - 按模态分类统计（文本、图片、视频、音频）
+    - 缓存内容token统计
+
+  contact:
+    name: Google AI
+    url: https://ai.google.dev/
+
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: https://generativelanguage.googleapis.com/v1beta
+    description: Gemini API v1beta endpoint
+
+security:
+  - ApiKeyHeader: []
+
+paths:
+  /models/{model}:countTokens:
+    post:
+      operationId: countTokens
+      summary: 计算token数量
+      description: |
+        计算给定内容（包括对话历史、系统指令、工具定义等）的token数量。
+        这对于估算API调用成本和确保不超过模型token限制非常有用。
+
+      parameters:
+        - name: model
+          in: path
+          required: true
+          description: 模型名称
+          schema:
+            type: string
+            examples:
+              - gemini-pro
+              - gemini-1.5-pro
+              - gemini-1.5-flash
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CountTokensRequest'
+            examples:
+              simpleText:
+                summary: 简单文本
+                value:
+                  contents:
+                    - parts:
+                        - text: "Hello, how many tokens is this?"
+
+              multiTurn:
+                summary: 多轮对话
+                value:
+                  contents:
+                    - role: user
+                      parts:
+                        - text: "What is the capital of France?"
+                    - role: model
+                      parts:
+                        - text: "The capital of France is Paris."
+                    - role: user
+                      parts:
+                        - text: "What about Germany?"
+
+              withSystemInstruction:
+                summary: 带系统指令
+                value:
+                  contents:
+                    - parts:
+                        - text: "Write a poem"
+                  systemInstruction:
+                    parts:
+                      - text: "You are a professional poet."
+
+              withTools:
+                summary: 带工具定义
+                value:
+                  contents:
+                    - parts:
+                        - text: "What's the weather?"
+                  tools:
+                    - functionDeclarations:
+                        - name: get_weather
+                          description: Get current weather
+                          parameters:
+                            type: object
+                            properties:
+                              location:
+                                type: string
+
+      responses:
+        '200':
+          description: 成功计算token数量
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountTokensResponse'
+              examples:
+                basic:
+                  summary: 基础响应
+                  value:
+                    totalTokens: 42
+
+                detailed:
+                  summary: 详细响应（带模态分类）
+                  value:
+                    totalTokens: 150
+                    promptTokensDetails:
+                      - modality: text
+                        tokenCount: 120
+                      - modality: image
+                        tokenCount: 30
+
+                withCache:
+                  summary: 带缓存信息
+                  value:
+                    totalTokens: 200
+                    cachedContentTokenCount: 100
+                    promptTokensDetails:
+                      - modality: text
+                        tokenCount: 100
+                    cacheTokensDetails:
+                      - modality: text
+                        tokenCount: 100
+
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+        '429':
+          description: 速率限制
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    ApiKeyHeader:
+      type: apiKey
+      in: header
+      name: x-goog-api-key
+      description: Google AI API Key
+
+  schemas:
+    CountTokensRequest:
+      type: object
+      required:
+        - contents
+      properties:
+        contents:
+          type: array
+          description: 要计算token的内容数组
+          items:
+            $ref: '#/components/schemas/Content'
+          minItems: 1
+
+        tools:
+          type: array
+          description: 工具定义（也会计算在token中）
+          items:
+            $ref: '#/components/schemas/Tool'
+
+        systemInstruction:
+          $ref: '#/components/schemas/SystemInstruction'
+          description: 系统指令（也会计算在token中）
+
+        generationConfig:
+          $ref: '#/components/schemas/GenerationConfig'
+          description: 生成配置（某些配置可能影响token计算）
+
+    Content:
+      type: object
+      required:
+        - parts
+      properties:
+        parts:
+          type: array
+          description: 内容部分数组
+          items:
+            $ref: '#/components/schemas/Part'
+        role:
+          type: string
+          description: 角色
+          enum:
+            - user
+            - model
+
+    Part:
+      type: object
+      description: 内容部分，支持文本、图片、视频、音频等
+      properties:
+        text:
+          type: string
+          description: 文本内容
+
+        inlineData:
+          $ref: '#/components/schemas/InlineData'
+
+        fileData:
+          $ref: '#/components/schemas/FileData'
+
+    InlineData:
+      type: object
+      required:
+        - mimeType
+        - data
+      properties:
+        mimeType:
+          type: string
+          description: MIME类型
+        data:
+          type: string
+          format: byte
+          description: Base64编码的数据
+
+    FileData:
+      type: object
+      required:
+        - mimeType
+        - fileUri
+      properties:
+        mimeType:
+          type: string
+        fileUri:
+          type: string
+          format: uri
+
+    Tool:
+      type: object
+      properties:
+        functionDeclarations:
+          type: array
+          items:
+            $ref: '#/components/schemas/FunctionDeclaration'
+        codeExecution:
+          type: object
+          description: 代码执行工具
+
+    FunctionDeclaration:
+      type: object
+      required:
+        - name
+        - description
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        parameters:
+          type: object
+          description: JSON Schema格式的参数定义
+          additionalProperties: true
+
+    SystemInstruction:
+      type: object
+      required:
+        - parts
+      properties:
+        parts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Part'
+
+    GenerationConfig:
+      type: object
+      description: 生成配置（影响token计算）
+      properties:
+        stopSequences:
+          type: array
+          items:
+            type: string
+        maxOutputTokens:
+          type: integer
+
+    CountTokensResponse:
+      type: object
+      required:
+        - totalTokens
+      properties:
+        totalTokens:
+          type: integer
+          description: |
+            总token数量，包括：
+            - 所有输入内容（contents）
+            - 系统指令（systemInstruction）
+            - 工具定义（tools）
+          minimum: 0
+          examples:
+            - 42
+            - 150
+            - 1024
+
+        cachedContentTokenCount:
+          type: integer
+          description: |
+            缓存内容的token数量（如果使用了缓存功能）
+          minimum: 0
+
+        promptTokensDetails:
+          type: array
+          description: |
+            按模态分类的提示词token详情。
+            可能包含：text（文本）、image（图片）、video（视频）、audio（音频）
+          items:
+            $ref: '#/components/schemas/ModalityTokenDetails'
+
+        cacheTokensDetails:
+          type: array
+          description: |
+            按模态分类的缓存token详情
+          items:
+            $ref: '#/components/schemas/ModalityTokenDetails'
+
+    ModalityTokenDetails:
+      type: object
+      required:
+        - modality
+        - tokenCount
+      properties:
+        modality:
+          type: string
+          description: 模态类型
+          enum:
+            - text
+            - image
+            - video
+            - audio
+          examples:
+            - text
+            - image
+
+        tokenCount:
+          type: integer
+          description: 该模态的token数量
+          minimum: 0
+          examples:
+            - 120
+            - 30
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: integer
+              description: HTTP状态码
+            message:
+              type: string
+              description: 错误消息
+            status:
+              type: string
+              description: 错误状态

@@ -1,0 +1,789 @@
+openapi: 3.1.0
+info:
+  title: Google Gemini GenerateContent API
+  version: v1beta
+  description: |
+    Gemini API的GenerateContent端点，用于生成文本、图像理解、函数调用等功能。
+
+    支持的功能：
+    - 文本生成
+    - 多模态内容输入（文本、图片、视频、音频）
+    - 函数调用（Function Calling）
+    - 代码执行（Code Execution）
+    - JSON模式输出
+    - 安全设置
+    - 系统指令
+
+  contact:
+    name: Google AI
+    url: https://ai.google.dev/
+
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: https://generativelanguage.googleapis.com/v1beta
+    description: Gemini API v1beta endpoint
+
+security:
+  - ApiKeyHeader: []
+
+paths:
+  /models/{model}:generateContent:
+    post:
+      operationId: generateContent
+      summary: 生成内容
+      description: |
+        使用指定的模型生成文本响应。支持多轮对话、函数调用、多模态输入等功能。
+
+      parameters:
+        - name: model
+          in: path
+          required: true
+          description: 模型名称，如 "gemini-pro", "gemini-pro-vision"
+          schema:
+            type: string
+            examples:
+              - gemini-pro
+              - gemini-1.5-pro
+              - gemini-1.5-flash
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateContentRequest'
+            examples:
+              simpleText:
+                summary: 简单文本生成
+                value:
+                  contents:
+                    - parts:
+                        - text: "Hello, how are you?"
+
+              withConfig:
+                summary: 带生成配置
+                value:
+                  contents:
+                    - parts:
+                        - text: "Write a poem about the ocean"
+                  generationConfig:
+                    temperature: 0.9
+                    topP: 0.95
+                    topK: 40
+                    maxOutputTokens: 1024
+
+              multiTurnConversation:
+                summary: 多轮对话
+                value:
+                  contents:
+                    - role: user
+                      parts:
+                        - text: "What is the capital of France?"
+                    - role: model
+                      parts:
+                        - text: "The capital of France is Paris."
+                    - role: user
+                      parts:
+                        - text: "What about Germany?"
+
+              withSystemInstruction:
+                summary: 带系统指令
+                value:
+                  systemInstruction:
+                    parts:
+                      - text: "You are a professional programmer. Always provide code examples."
+                  contents:
+                    - parts:
+                        - text: "How do I reverse a string in Python?"
+
+              imageInput:
+                summary: 图片输入 (base64)
+                value:
+                  contents:
+                    - parts:
+                        - text: "What do you see in this image?"
+                        - inlineData:
+                            mimeType: "image/jpeg"
+                            data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+              imageInputFile:
+                summary: 图片输入 (File API)
+                value:
+                  contents:
+                    - parts:
+                        - text: "Describe this image in detail"
+                        - fileData:
+                            mimeType: "image/png"
+                            fileUri: "https://generativelanguage.googleapis.com/v1beta/files/abc123"
+
+              videoInput:
+                summary: 视频输入
+                value:
+                  contents:
+                    - parts:
+                        - text: "Summarize what happens in this video"
+                        - fileData:
+                            mimeType: "video/mp4"
+                            fileUri: "https://generativelanguage.googleapis.com/v1beta/files/video_xyz"
+
+              jsonMode:
+                summary: JSON模式输出
+                value:
+                  contents:
+                    - parts:
+                        - text: "List 3 popular programming languages"
+                  generationConfig:
+                    responseMimeType: "application/json"
+
+              jsonModeWithSchema:
+                summary: JSON模式 + Schema
+                value:
+                  contents:
+                    - parts:
+                        - text: "Generate a user profile for John Doe, age 30"
+                  generationConfig:
+                    responseMimeType: "application/json"
+                    responseSchema:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        age:
+                          type: integer
+                        email:
+                          type: string
+                      required:
+                        - name
+                        - age
+
+              safetySettings:
+                summary: 安全设置
+                value:
+                  contents:
+                    - parts:
+                        - text: "Tell me about history"
+                  safetySettings:
+                    - category: HARM_CATEGORY_HATE_SPEECH
+                      threshold: BLOCK_MEDIUM_AND_ABOVE
+                    - category: HARM_CATEGORY_DANGEROUS_CONTENT
+                      threshold: BLOCK_ONLY_HIGH
+
+              functionCalling:
+                summary: 函数调用
+                value:
+                  contents:
+                    - parts:
+                        - text: "What's the weather in San Francisco?"
+                  tools:
+                    - functionDeclarations:
+                        - name: get_weather
+                          description: Get current weather for a location
+                          parameters:
+                            type: object
+                            properties:
+                              location:
+                                type: string
+                                description: City name
+                              unit:
+                                type: string
+                                enum:
+                                  - celsius
+                                  - fahrenheit
+                                description: Temperature unit
+                            required:
+                              - location
+
+              functionCallingMultiTurn:
+                summary: 函数调用多轮对话
+                value:
+                  tools:
+                    - functionDeclarations:
+                        - name: get_weather
+                          description: Get current weather
+                          parameters:
+                            type: object
+                            properties:
+                              location:
+                                type: string
+                  contents:
+                    - role: user
+                      parts:
+                        - text: "What's the weather in Tokyo?"
+                    - role: model
+                      parts:
+                        - functionCall:
+                            name: get_weather
+                            args:
+                              location: "Tokyo"
+                    - role: user
+                      parts:
+                        - functionResponse:
+                            name: get_weather
+                            response:
+                              temperature: 18
+                              condition: "Partly cloudy"
+
+              codeExecution:
+                summary: 代码执行
+                value:
+                  tools:
+                    - codeExecution: {}
+                  contents:
+                    - parts:
+                        - text: "Calculate the fibonacci sequence up to 10"
+
+              imageGeneration:
+                summary: 图片生成 (Imagen 3)
+                value:
+                  contents:
+                    - parts:
+                        - text: "Generate an image of a cat wearing sunglasses on a beach"
+                  generationConfig:
+                    temperature: 0.4
+                    candidateCount: 1
+
+              combinedAdvanced:
+                summary: 组合高级功能
+                value:
+                  systemInstruction:
+                    parts:
+                      - text: "You are a helpful AI assistant with access to tools."
+                  tools:
+                    - functionDeclarations:
+                        - name: search_web
+                          description: Search the web
+                          parameters:
+                            type: object
+                            properties:
+                              query:
+                                type: string
+                  safetySettings:
+                    - category: HARM_CATEGORY_HARASSMENT
+                      threshold: BLOCK_MEDIUM_AND_ABOVE
+                  generationConfig:
+                    temperature: 0.7
+                    topP: 0.9
+                    topK: 40
+                    maxOutputTokens: 2048
+                    stopSequences:
+                      - "END"
+                  contents:
+                    - role: user
+                      parts:
+                        - text: "Search for the latest AI news"
+                        - inlineData:
+                            mimeType: "image/png"
+                            data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+      responses:
+        '200':
+          description: 成功生成内容
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateContentResponse'
+              examples:
+                textResponse:
+                  summary: 文本响应
+                  value:
+                    candidates:
+                      - content:
+                          parts:
+                            - text: "I'm doing well, thank you for asking!"
+                          role: model
+                        finishReason: STOP
+                        safetyRatings:
+                          - category: HARM_CATEGORY_HARASSMENT
+                            probability: NEGLIGIBLE
+                    usageMetadata:
+                      promptTokenCount: 5
+                      candidatesTokenCount: 10
+                      totalTokenCount: 15
+
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+        '429':
+          description: 速率限制
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    ApiKeyHeader:
+      type: apiKey
+      in: header
+      name: x-goog-api-key
+      description: Google AI API Key
+
+  schemas:
+    GenerateContentRequest:
+      type: object
+      required:
+        - contents
+      properties:
+        contents:
+          type: array
+          description: 输入内容数组，支持多轮对话
+          items:
+            $ref: '#/components/schemas/Content'
+
+        tools:
+          type: array
+          description: 可用工具列表（函数声明或代码执行）
+          items:
+            $ref: '#/components/schemas/Tool'
+
+        toolConfig:
+          $ref: '#/components/schemas/ToolConfig'
+
+        safetySettings:
+          type: array
+          description: 安全设置
+          items:
+            $ref: '#/components/schemas/SafetySetting'
+
+        systemInstruction:
+          $ref: '#/components/schemas/SystemInstruction'
+
+        generationConfig:
+          $ref: '#/components/schemas/GenerationConfig'
+
+    Content:
+      type: object
+      required:
+        - parts
+      properties:
+        parts:
+          type: array
+          description: 内容部分数组
+          items:
+            $ref: '#/components/schemas/Part'
+        role:
+          type: string
+          description: 角色（user 或 model）
+          enum:
+            - user
+            - model
+
+    Part:
+      type: object
+      description: 内容部分，可以是文本、图片、函数调用等
+      properties:
+        text:
+          type: string
+          description: 文本内容
+
+        inlineData:
+          $ref: '#/components/schemas/InlineData'
+
+        fileData:
+          $ref: '#/components/schemas/FileData'
+
+        functionCall:
+          $ref: '#/components/schemas/FunctionCall'
+
+        functionResponse:
+          $ref: '#/components/schemas/FunctionResponse'
+
+        executableCode:
+          $ref: '#/components/schemas/ExecutableCode'
+
+        codeExecutionResult:
+          $ref: '#/components/schemas/CodeExecutionResult'
+
+    InlineData:
+      type: object
+      required:
+        - mimeType
+        - data
+      properties:
+        mimeType:
+          type: string
+          description: MIME类型
+          examples:
+            - image/png
+            - image/jpeg
+            - video/mp4
+            - audio/wav
+        data:
+          type: string
+          format: byte
+          description: Base64编码的数据
+
+    FileData:
+      type: object
+      required:
+        - mimeType
+        - fileUri
+      properties:
+        mimeType:
+          type: string
+          description: MIME类型
+        fileUri:
+          type: string
+          description: 文件URI（通过File API上传）
+          format: uri
+
+    FunctionCall:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: 函数名称
+        args:
+          type: object
+          description: 函数参数
+          additionalProperties: true
+
+    FunctionResponse:
+      type: object
+      required:
+        - name
+        - response
+      properties:
+        name:
+          type: string
+          description: 函数名称
+        response:
+          type: object
+          description: 函数返回值
+          additionalProperties: true
+
+    ExecutableCode:
+      type: object
+      required:
+        - code
+      properties:
+        language:
+          type: string
+          enum:
+            - PYTHON
+          default: PYTHON
+        code:
+          type: string
+          description: 要执行的代码
+
+    CodeExecutionResult:
+      type: object
+      required:
+        - outcome
+      properties:
+        outcome:
+          type: string
+          enum:
+            - OUTCOME_OK
+            - OUTCOME_FAILED
+            - OUTCOME_DEADLINE_EXCEEDED
+        output:
+          type: string
+          description: 代码执行输出
+
+    Tool:
+      type: object
+      properties:
+        functionDeclarations:
+          type: array
+          description: 函数声明列表
+          items:
+            $ref: '#/components/schemas/FunctionDeclaration'
+
+        codeExecution:
+          type: object
+          description: 代码执行工具（空对象表示启用）
+
+    FunctionDeclaration:
+      type: object
+      required:
+        - name
+        - description
+      properties:
+        name:
+          type: string
+          description: 函数名称
+        description:
+          type: string
+          description: 函数描述
+        parameters:
+          type: object
+          description: JSON Schema格式的参数定义
+          additionalProperties: true
+
+    ToolConfig:
+      type: object
+      properties:
+        functionCallingConfig:
+          $ref: '#/components/schemas/FunctionCallingConfig'
+
+    FunctionCallingConfig:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+            - AUTO
+            - ANY
+            - NONE
+          description: |
+            函数调用模式：
+            - AUTO: 自动决定是否调用
+            - ANY: 强制调用某个函数
+            - NONE: 禁用函数调用
+        allowedFunctionNames:
+          type: array
+          items:
+            type: string
+          description: 允许调用的函数名称列表
+
+    SafetySetting:
+      type: object
+      required:
+        - category
+        - threshold
+      properties:
+        category:
+          type: string
+          enum:
+            - HARM_CATEGORY_UNSPECIFIED
+            - HARM_CATEGORY_HARASSMENT
+            - HARM_CATEGORY_HATE_SPEECH
+            - HARM_CATEGORY_SEXUALLY_EXPLICIT
+            - HARM_CATEGORY_DANGEROUS_CONTENT
+            - HARM_CATEGORY_CIVIC_INTEGRITY
+        threshold:
+          type: string
+          enum:
+            - HARM_BLOCK_THRESHOLD_UNSPECIFIED
+            - BLOCK_NONE
+            - BLOCK_ONLY_HIGH
+            - BLOCK_MEDIUM_AND_ABOVE
+            - BLOCK_LOW_AND_ABOVE
+
+    SystemInstruction:
+      type: object
+      required:
+        - parts
+      properties:
+        parts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Part'
+
+    GenerationConfig:
+      type: object
+      properties:
+        candidateCount:
+          type: integer
+          description: 生成的候选响应数量
+          minimum: 1
+          maximum: 8
+
+        stopSequences:
+          type: array
+          items:
+            type: string
+          description: 停止序列
+          maxItems: 5
+
+        maxOutputTokens:
+          type: integer
+          description: 最大输出token数
+          minimum: 1
+
+        temperature:
+          type: number
+          description: 温度参数
+          minimum: 0.0
+          maximum: 2.0
+
+        topP:
+          type: number
+          description: Nucleus sampling参数
+          minimum: 0.0
+          maximum: 1.0
+
+        topK:
+          type: integer
+          description: Top-K sampling参数
+          minimum: 1
+
+        responseMimeType:
+          type: string
+          description: 响应MIME类型
+          enum:
+            - text/plain
+            - application/json
+
+        responseSchema:
+          type: object
+          description: JSON响应的schema定义
+          additionalProperties: true
+
+    GenerateContentResponse:
+      type: object
+      properties:
+        candidates:
+          type: array
+          description: 生成的候选响应
+          items:
+            $ref: '#/components/schemas/Candidate'
+
+        promptFeedback:
+          $ref: '#/components/schemas/PromptFeedback'
+
+        usageMetadata:
+          $ref: '#/components/schemas/UsageMetadata'
+
+    Candidate:
+      type: object
+      properties:
+        content:
+          $ref: '#/components/schemas/Content'
+
+        finishReason:
+          type: string
+          enum:
+            - FINISH_REASON_UNSPECIFIED
+            - STOP
+            - MAX_TOKENS
+            - SAFETY
+            - RECITATION
+            - OTHER
+
+        safetyRatings:
+          type: array
+          items:
+            $ref: '#/components/schemas/SafetyRating'
+
+        citationMetadata:
+          $ref: '#/components/schemas/CitationMetadata'
+
+        groundingAttributions:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroundingAttribution'
+
+        index:
+          type: integer
+          description: 候选响应的索引
+
+    SafetyRating:
+      type: object
+      required:
+        - category
+        - probability
+      properties:
+        category:
+          type: string
+          enum:
+            - HARM_CATEGORY_UNSPECIFIED
+            - HARM_CATEGORY_HARASSMENT
+            - HARM_CATEGORY_HATE_SPEECH
+            - HARM_CATEGORY_SEXUALLY_EXPLICIT
+            - HARM_CATEGORY_DANGEROUS_CONTENT
+            - HARM_CATEGORY_CIVIC_INTEGRITY
+        probability:
+          type: string
+          enum:
+            - HARM_PROBABILITY_UNSPECIFIED
+            - NEGLIGIBLE
+            - LOW
+            - MEDIUM
+            - HIGH
+        blocked:
+          type: boolean
+
+    CitationMetadata:
+      type: object
+      properties:
+        citationSources:
+          type: array
+          items:
+            $ref: '#/components/schemas/CitationSource'
+
+    CitationSource:
+      type: object
+      properties:
+        startIndex:
+          type: integer
+        endIndex:
+          type: integer
+        uri:
+          type: string
+          format: uri
+        license:
+          type: string
+
+    GroundingAttribution:
+      type: object
+      properties:
+        segment:
+          type: object
+          additionalProperties: true
+        confidenceScore:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+
+    PromptFeedback:
+      type: object
+      properties:
+        blockReason:
+          type: string
+          enum:
+            - BLOCK_REASON_UNSPECIFIED
+            - SAFETY
+            - OTHER
+        safetyRatings:
+          type: array
+          items:
+            $ref: '#/components/schemas/SafetyRating'
+
+    UsageMetadata:
+      type: object
+      properties:
+        promptTokenCount:
+          type: integer
+          description: 提示词token数量
+        candidatesTokenCount:
+          type: integer
+          description: 候选响应token数量
+        totalTokenCount:
+          type: integer
+          description: 总token数量
+        cachedContentTokenCount:
+          type: integer
+          description: 缓存内容token数量
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: integer
+            message:
+              type: string
+            status:
+              type: string
