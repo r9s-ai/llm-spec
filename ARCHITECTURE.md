@@ -22,19 +22,30 @@ llm-spec/
 │   │   ├── __init__.py
 │   │   ├── base.py                # Provider适配器基类
 │   │   ├── openai.py              # OpenAI适配器
-│   │   ├── anthropic.py           # Anthropic适配器（待实现）
-│   │   ├── gemini.py              # Gemini适配器（待实现）
-│   │   └── xai.py                 # xAI适配器（待实现）
+│   │   ├── anthropic.py           # Anthropic适配器
+│   │   ├── gemini.py              # Gemini适配器 ✅
+│   │   └── xai.py                 # xAI适配器
 │   ├── validation/                # 响应验证层
 │   │   ├── __init__.py
 │   │   ├── validator.py           # 核心验证逻辑
 │   │   └── schemas/               # Pydantic响应模型
 │   │       ├── __init__.py
-│   │       └── openai/
-│   │           ├── __init__.py
-│   │           ├── chat.py        # Chat Completions schemas
-│   │           ├── audio.py       # Audio endpoints schemas（待实现）
-│   │           └── images.py      # Images endpoints schemas（待实现）
+│   │       ├── openai/            # OpenAI schemas
+│   │       │   ├── __init__.py
+│   │       │   ├── chat.py        # Chat Completions
+│   │       │   ├── audio.py       # Audio endpoints ✅
+│   │       │   ├── images.py      # Images endpoints ✅
+│   │       │   ├── embeddings.py  # Embeddings ✅
+│   │       │   └── responses.py   # Responses API ✅
+│   │       ├── gemini/            # Gemini schemas ✅
+│   │       │   ├── __init__.py
+│   │       │   ├── generate_content.py  # GenerateContent API
+│   │       │   ├── embeddings.py        # EmbedContent API
+│   │       │   └── tokens.py            # CountTokens API
+│   │       ├── anthropic/         # Anthropic schemas
+│   │       │   └── __init__.py
+│   │       └── xai/               # xAI schemas
+│   │           └── __init__.py
 │   └── reporting/                 # 报告系统
 │       ├── __init__.py
 │       ├── collector.py           # 测试结果收集器
@@ -44,11 +55,26 @@ llm-spec/
 │   ├── conftest.py                # Pytest全局fixtures
 │   └── providers/
 │       ├── __init__.py
-│       └── openai/
+│       ├── openai/                # OpenAI 测试 ✅
+│       │   ├── __init__.py
+│       │   ├── test_chat_completions.py
+│       │   ├── test_audio_speech.py
+│       │   ├── test_audio_transcriptions.py
+│       │   ├── test_audio_translations.py
+│       │   ├── test_embeddings.py
+│       │   ├── test_images_generations.py
+│       │   └── test_responses.py
+│       ├── gemini/                # Gemini 测试 ✅
+│       │   ├── __init__.py
+│       │   ├── test_generate_content.py
+│       │   ├── test_embed_content.py
+│       │   └── test_count_tokens.py
+│       ├── anthropic/             # Anthropic 测试
+│       │   ├── __init__.py
+│       │   └── test_messages.py
+│       └── xai/                   # xAI 测试
 │           ├── __init__.py
-│           ├── test_chat_completions.py  # Chat API测试
-│           ├── test_audio_speech.py      # 待实现
-│           └── test_images_generations.py # 待实现
+│           └── test_chat_completions.py
 ├── test_assets/                   # 测试资源文件
 │   ├── audio/                     # 音频文件
 │   └── images/                    # 图片文件
@@ -619,12 +645,14 @@ async def test_streaming(self):
 ## 扩展建议
 
 ### 短期
-- [ ] 添加更多OpenAI endpoints（audio, images, embeddings等）
+- [x] 添加更多OpenAI endpoints（audio, images, embeddings等）
+- [x] 添加流式响应的完整验证逻辑
+- [x] 完善 Gemini provider 和测试覆盖
 - [ ] 实现Terminal格式报告输出（使用rich库）
-- [ ] 添加流式响应的完整验证逻辑
 
 ### 中期
-- [ ] 实现Anthropic、Gemini、xAI等provider
+- [x] 实现 Gemini provider ✅
+- [ ] 完善 Anthropic、xAI provider
 - [ ] 支持从YAML/JSON规范文件自动生成测试
 - [ ] 添加并发测试支持（pytest-xdist）
 
@@ -632,3 +660,102 @@ async def test_streaming(self):
 - [ ] 实现自动化CI/CD测试流程
 - [ ] 生成HTML格式的测试报告
 - [ ] 支持性能基准测试（响应时间统计）
+
+---
+
+## Gemini Provider 实现详情
+
+### Schema 结构
+
+Gemini 的 schema 按照 API endpoints 拆分为独立文件：
+
+**llm_spec/validation/schemas/gemini/**
+- **generate_content.py** - GenerateContent API 相关 schema
+  - 请求类：`Part`, `Content`, `Tool`, `SafetySetting`, `GenerationConfig`, `SystemInstruction` 等
+  - 响应类：`Candidate`, `SafetyRating`, `UsageMetadata`, `GenerateContentResponse` 等
+  - 类型别名：`HarmCategory`, `HarmBlockThreshold`, `FinishReason`, `BlockReason` 等
+
+- **embeddings.py** - EmbedContent/BatchEmbedContents API
+  - `TaskType` 枚举（9种任务类型）
+  - `EmbedContentRequest`, `Embedding`, `EmbedContentResponse`, `BatchEmbedContentsResponse`
+
+- **tokens.py** - CountTokens API
+  - `CountTokensResponse`, `ModalityTokenDetails`
+
+### 测试覆盖
+
+**tests/providers/gemini/**
+
+#### test_generate_content.py (17个测试)
+- **阶段 1**: 基线测试
+  - `test_baseline` - 仅必需参数
+  - `test_param_temperature` - temperature 参数
+  - `test_param_max_output_tokens` - maxOutputTokens 参数
+
+- **阶段 2**: 基础参数测试
+  - `test_param_top_p` - topP 参数
+  - `test_param_top_k` - topK 参数
+  - `test_param_candidate_count` - candidateCount 参数（多个候选响应）
+  - `test_param_stop_sequences` - stopSequences 参数
+
+- **阶段 3**: 响应格式测试
+  - `test_response_format_json` - JSON 响应格式
+  - `test_response_format_json_with_schema` - 带 schema 的 JSON 响应
+
+- **阶段 4**: 安全设置测试
+  - `test_param_safety_settings` - safetySettings 基础测试
+  - `test_safety_threshold_variants[4个阈值]` - 安全阈值变体测试
+
+- **阶段 5**: 系统指令测试
+  - `test_param_system_instruction` - systemInstruction 参数
+
+- **阶段 6**: 工具调用测试
+  - `test_param_function_calling` - 函数调用功能
+  - `test_param_code_execution` - 代码执行功能
+
+#### test_embed_content.py (11个测试)
+- **阶段 1**: 基线测试
+  - `test_baseline` - 仅必需参数
+
+- **阶段 2**: TaskType 测试
+  - `test_param_task_type_retrieval_query` - RETRIEVAL_QUERY
+  - `test_param_task_type_retrieval_document` - RETRIEVAL_DOCUMENT（带 title）
+  - `test_task_type_variants[7种]` - 所有 TaskType 变体
+
+- **阶段 3**: 输出维度测试
+  - `test_param_output_dimensionality` - outputDimensionality 参数
+
+#### test_count_tokens.py (4个测试)
+- **阶段 1**: 基线测试 - `test_baseline`
+- **阶段 2**: 多轮对话测试 - `test_multi_turn_conversation`
+- **阶段 3**: 系统指令测试 - `test_with_system_instruction`
+- **阶段 4**: 工具定义测试 - `test_with_tools`
+
+### Gemini API 特性
+
+**与 OpenAI 的主要区别：**
+
+1. **API Key 传递方式**
+   - OpenAI: `Authorization: Bearer {api_key}` header
+   - Gemini: URL 参数 `?key={api_key}`
+
+2. **参数结构**
+   - OpenAI: 扁平化参数（如 `temperature`, `top_p`）
+   - Gemini: 嵌套在 `generationConfig` 中（如 `generationConfig.temperature`）
+
+3. **安全设置**
+   - Gemini 提供细粒度的 `safetySettings`（6种类别 × 4种阈值）
+   - 包括 `HARM_CATEGORY_HARASSMENT`, `HARM_CATEGORY_HATE_SPEECH` 等
+
+4. **工具能力**
+   - 支持 `functionDeclarations`（函数调用）
+   - 支持 `codeExecution`（代码执行）
+
+5. **多模态支持**
+   - 原生支持 `inlineData`（base64）和 `fileData`（File API）
+   - 支持图片、视频、音频、PDF 等多种输入格式
+
+6. **响应结构**
+   - 提供 `promptFeedback`（提示词反馈）
+   - 包含 `citationMetadata`（引用来源）
+   - 支持 `groundingAttributions`（搜索增强）

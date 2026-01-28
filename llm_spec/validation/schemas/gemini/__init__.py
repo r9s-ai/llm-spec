@@ -1,41 +1,99 @@
-"""Google Gemini Content 响应 Pydantic schemas"""
+"""Google Gemini API Pydantic schemas
 
-from typing import Literal
+此模块导出所有 Gemini API 相关的 Pydantic schema。
+"""
 
-from pydantic import BaseModel
+# GenerateContent schemas
+from llm_spec.validation.schemas.gemini.generate_content import (
+    BlockReason,
+    Candidate,
+    CitationMetadata,
+    CitationSource,
+    CodeExecution,
+    CodeExecutionResult,
+    Content,
+    ExecutableCode,
+    FileData,
+    FinishReason,
+    FunctionCall,
+    FunctionCallingConfig,
+    FunctionDeclaration,
+    FunctionResponse,
+    GenerateContentResponse,
+    GenerationConfig,
+    GroundingAttribution,
+    HarmBlockThreshold,
+    HarmCategory,
+    HarmProbability,
+    InlineData,
+    ModelStage,
+    ModelStatus,
+    Part,
+    PromptFeedback,
+    SafetyRating,
+    SafetySetting,
+    SystemInstruction,
+    Tool,
+    ToolConfig,
+    UsageMetadata,
+)
 
+# Embeddings schemas
+from llm_spec.validation.schemas.gemini.embeddings import (
+    BatchEmbedContentsResponse,
+    EmbedContentRequest,
+    EmbedContentResponse,
+    Embedding,
+    TaskType,
+)
 
-class Part(BaseModel):
-    """内容部分"""
+# Tokens schemas
+from llm_spec.validation.schemas.gemini.tokens import (
+    CountTokensResponse,
+    ModalityTokenDetails,
+)
 
-    text: str
-
-
-class Content(BaseModel):
-    """内容"""
-
-    parts: list[Part]
-    role: str
-
-
-class Candidate(BaseModel):
-    """候选响应"""
-
-    content: Content
-    finishReason: str | None = None
-    index: int | None = None
-
-
-class UsageMetadata(BaseModel):
-    """使用量元数据"""
-
-    promptTokenCount: int
-    candidatesTokenCount: int | None = None
-    totalTokenCount: int
-
-
-class GenerateContentResponse(BaseModel):
-    """Generate Content 响应模型"""
-
-    candidates: list[Candidate]
-    usageMetadata: UsageMetadata | None = None
+__all__ = [
+    # GenerateContent - Request
+    "Part",
+    "Content",
+    "InlineData",
+    "FileData",
+    "FunctionCall",
+    "FunctionResponse",
+    "ExecutableCode",
+    "CodeExecutionResult",
+    "Tool",
+    "FunctionDeclaration",
+    "CodeExecution",
+    "FunctionCallingConfig",
+    "ToolConfig",
+    "SafetySetting",
+    "GenerationConfig",
+    "SystemInstruction",
+    "HarmCategory",
+    "HarmBlockThreshold",
+    # GenerateContent - Response
+    "Candidate",
+    "SafetyRating",
+    "CitationSource",
+    "CitationMetadata",
+    "GroundingAttribution",
+    "PromptFeedback",
+    "UsageMetadata",
+    "ModelStatus",
+    "GenerateContentResponse",
+    "HarmProbability",
+    "FinishReason",
+    "BlockReason",
+    "ModelStage",
+    # Embeddings
+    "TaskType",
+    "EmbedContentRequest",
+    "Embedding",
+    "EmbedContentResponse",
+    "BatchEmbedContentsResponse",
+    # Tokens
+    "CountTokensResponse",
+    "ModalityTokenDetails",
+]
