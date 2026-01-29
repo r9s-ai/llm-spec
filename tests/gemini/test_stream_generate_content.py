@@ -24,21 +24,21 @@ class TestStreamGenerateContent:
     # 支持: 基础参数, thinkingConfig (4级别), responseModalities (TEXT, IMAGE)
     ENDPOINT_FLASH = "/v1beta/models/gemini-3-flash-preview:streamGenerateContent"
 
-    # Gemini 3 Pro - Pro 级别模型
-    # 支持: 基础参数, thinkingConfig (2级别: low, high)
-    ENDPOINT_PRO = "/v1beta/models/gemini-3-pro:streamGenerateContent"
+    # # Gemini 3 Pro - Pro 级别模型
+    # # 支持: 基础参数, thinkingConfig (2级别: low, high)
+    # ENDPOINT_PRO = "/v1beta/models/gemini-3-pro:streamGenerateContent"
 
-    # Gemini 3 Pro Image (Nano Banana Pro) - 图像生成模型
-    # 支持: imageConfig, responseModalities[IMAGE], 1K/2K/4K 图像生成
-    ENDPOINT_IMAGE = "/v1beta/models/gemini-3-pro-image-preview:streamGenerateContent"
+    # # Gemini 3 Pro Image (Nano Banana Pro) - 图像生成模型
+    # # 支持: imageConfig, responseModalities[IMAGE], 1K/2K/4K 图像生成
+    # ENDPOINT_IMAGE = "/v1beta/models/gemini-3-pro-image-preview:streamGenerateContent"
 
-    # Gemini 2.5 Flash TTS - 语音生成模型
-    # 支持: speechConfig, voiceConfig, 文本转语音
-    ENDPOINT_TTS_FLASH = "/v1beta/models/gemini-2.5-flash-preview-tts:streamGenerateContent"
+    # # Gemini 2.5 Flash TTS - 语音生成模型
+    # # 支持: speechConfig, voiceConfig, 文本转语音
+    # ENDPOINT_TTS_FLASH = "/v1beta/models/gemini-2.5-flash-preview-tts:streamGenerateContent"
 
-    # Gemini 2.5 Pro TTS - Pro 级语音生成模型
-    # 支持: speechConfig, voiceConfig, 文本转语音
-    ENDPOINT_TTS_PRO = "/v1beta/models/gemini-2.5-pro-preview-tts:streamGenerateContent"
+    # # Gemini 2.5 Pro TTS - Pro 级语音生成模型
+    # # 支持: speechConfig, voiceConfig, 文本转语音
+    # ENDPOINT_TTS_PRO = "/v1beta/models/gemini-2.5-pro-preview-tts:streamGenerateContent"
 
     # 默认使用 Gemini 3 Flash
     ENDPOINT = ENDPOINT_FLASH
@@ -69,8 +69,15 @@ class TestStreamGenerateContent:
     # 辅助方法：通用流式测试模板
     # ========================================================================
 
-    def _run_streaming_test(self, test_name, params, endpoint=None):
-        """通用流式测试方法，减少代码重复"""
+    def _run_streaming_test(self, test_name, params, endpoint=None, unsupported_param=None):
+        """通用流式测试方法，减少代码重复
+
+        Args:
+            test_name: 用例名
+            params: 请求参数
+            endpoint: 可覆盖默认 endpoint
+            unsupported_param: 可选 {"name": str, "value": Any}，在失败时记录 unsupported
+        """
         if endpoint is None:
             endpoint = self.ENDPOINT
 
@@ -106,26 +113,40 @@ class TestStreamGenerateContent:
         # 验证最后一个 chunk
         is_valid = True
         error_msg = None
+        missing_fields = []
+        expected_fields = []
+
         if chunks:
             is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
                 chunks[-1], GenerateContentResponse
             )
         else:
-            missing_fields = []
+            error_msg = "No chunks received"
             expected_fields = ["candidates"]
+
+        status_code = 200 if chunks else 500
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
-            status_code=200,
+            status_code=status_code,
             response_body={
                 "chunks_count": len(chunks),
                 "content_length": len(complete_content),
             },
-            error=error_msg if not is_valid else None,
+            error=error_msg if (error_msg or not is_valid) else None,
             missing_fields=missing_fields,
             expected_fields=expected_fields,
         )
+
+        # 失败时记录不支持的参数
+        if unsupported_param and (not chunks or not is_valid):
+            self.collector.add_unsupported_param(
+                param_name=unsupported_param["name"],
+                param_value=unsupported_param["value"],
+                test_name=test_name,
+                reason=error_msg or "Streaming validation failed",
+            )
 
         return chunks, complete_content, is_valid
 
@@ -196,7 +217,11 @@ class TestStreamGenerateContent:
             **self.BASE_PARAMS,
             "generationConfig": {"candidateCount": 2},
         }
-        chunks, _, is_valid = self._run_streaming_test(test_name, params)
+        chunks, _, is_valid = self._run_streaming_test(
+            test_name,
+            params,
+            unsupported_param={"name": "generationConfig.candidateCount", "value": 2},
+        )
         if not chunks:
             self.collector.add_unsupported_param(
                 param_name="generationConfig.candidateCount",
@@ -229,7 +254,14 @@ class TestStreamGenerateContent:
             **self.BASE_PARAMS,
             "generationConfig": {"responseMimeType": "application/json"},
         }
-        chunks, _, is_valid = self._run_streaming_test(test_name, params)
+        chunks, _, is_valid = self._run_streaming_test(
+            test_name,
+            params,
+            unsupported_param={
+                "name": "generationConfig.responseMimeType",
+                "value": "application/json",
+            },
+        )
         assert len(chunks) > 0
         assert is_valid
 
@@ -256,7 +288,11 @@ class TestStreamGenerateContent:
                 },
             },
         }
-        chunks, _, is_valid = self._run_streaming_test(test_name, params)
+        chunks, _, is_valid = self._run_streaming_test(
+            test_name,
+            params,
+            unsupported_param={"name": "generationConfig.responseSchema", "value": "json_schema"},
+        )
         assert len(chunks) > 0
         assert is_valid
 
@@ -415,7 +451,11 @@ class TestStreamGenerateContent:
             **self.BASE_PARAMS,
             "generationConfig": {"responseLogprobs": True},
         }
-        chunks, _, is_valid = self._run_streaming_test(test_name, params)
+        chunks, _, is_valid = self._run_streaming_test(
+            test_name,
+            params,
+            unsupported_param={"name": "generationConfig.responseLogprobs", "value": True},
+        )
         assert len(chunks) > 0
         assert is_valid
 
@@ -429,7 +469,11 @@ class TestStreamGenerateContent:
                 "logprobs": 3,
             },
         }
-        chunks, _, is_valid = self._run_streaming_test(test_name, params)
+        chunks, _, is_valid = self._run_streaming_test(
+            test_name,
+            params,
+            unsupported_param={"name": "generationConfig.logprobs", "value": 3},
+        )
         assert len(chunks) > 0
         assert is_valid
 
@@ -481,7 +525,11 @@ class TestStreamGenerateContent:
             "generationConfig": {"mediaResolution": resolution},
         }
 
-        chunks, _, is_valid = self._run_streaming_test(test_name, params)
+        chunks, _, is_valid = self._run_streaming_test(
+            test_name,
+            params,
+            unsupported_param={"name": "generationConfig.mediaResolution", "value": resolution},
+        )
         assert len(chunks) > 0
         assert is_valid
 
@@ -501,18 +549,19 @@ class TestStreamGenerateContent:
         """测试 responseModalities 参数（控制响应模态类型）"""
         test_name = f"test_streaming_response_modalities[{','.join(modalities)}]"
 
-        # 根据模态选择合适的模型
-        if "IMAGE" in modalities:
-            endpoint = self.ENDPOINT_IMAGE
-        else:
-            endpoint = self.ENDPOINT_FLASH
+        endpoint = self.ENDPOINT_FLASH  
 
         params = {
             **self.BASE_PARAMS,
             "generationConfig": {"responseModalities": modalities},
         }
 
-        chunks, _, is_valid = self._run_streaming_test(test_name, params, endpoint=endpoint)
+        chunks, _, is_valid = self._run_streaming_test(
+            test_name,
+            params,
+            endpoint=endpoint,
+            unsupported_param={"name": "generationConfig.responseModalities", "value": modalities},
+        )
         assert len(chunks) > 0
         assert is_valid
 
@@ -533,8 +582,7 @@ class TestStreamGenerateContent:
         """测试 speechConfig.voiceConfig 参数（语音输出配置）"""
         test_name = f"test_streaming_speech_config[{voice_name}]"
 
-        # 使用 Gemini 2.5 Flash TTS 模型
-        endpoint = self.ENDPOINT_TTS_FLASH
+        endpoint = self.ENDPOINT_FLASH
 
         params = {
             **self.BASE_PARAMS,
@@ -549,7 +597,15 @@ class TestStreamGenerateContent:
             },
         }
 
-        chunks, _, is_valid = self._run_streaming_test(test_name, params, endpoint=endpoint)
+        chunks, _, is_valid = self._run_streaming_test(
+            test_name,
+            params,
+            endpoint=endpoint,
+            unsupported_param={
+                "name": "generationConfig.speechConfig.voiceConfig",
+                "value": voice_name,
+            },
+        )
 
         if not chunks:
             self.collector.add_unsupported_param(
@@ -591,7 +647,15 @@ class TestStreamGenerateContent:
             },
         }
 
-        chunks, _, is_valid = self._run_streaming_test(test_name, params, endpoint=endpoint)
+        chunks, _, is_valid = self._run_streaming_test(
+            test_name,
+            params,
+            endpoint=endpoint,
+            unsupported_param={
+                "name": "generationConfig.thinkingConfig.thinkingLevel",
+                "value": thinking_level,
+            },
+        )
         assert len(chunks) > 0
         assert is_valid
 
@@ -618,8 +682,7 @@ class TestStreamGenerateContent:
         """测试 imageConfig.aspectRatio 参数（图像生成宽高比）"""
         test_name = f"test_streaming_image_config_aspect_ratio[{aspect_ratio}]"
 
-        # 使用 Gemini 3 Pro Image 模型
-        endpoint = self.ENDPOINT_IMAGE
+        endpoint = self.ENDPOINT_FLASH
 
         params = {
             "contents": [{"parts": [{"text": "Generate an image of a sunset"}]}],
@@ -646,8 +709,7 @@ class TestStreamGenerateContent:
         """测试 imageConfig.imageSize 参数（图像生成尺寸）"""
         test_name = f"test_streaming_image_config_size[{image_size}]"
 
-        # 使用 Gemini 3 Pro Image 模型
-        endpoint = self.ENDPOINT_IMAGE
+        endpoint = self.ENDPOINT_FLASH
 
         params = {
             "contents": [{"parts": [{"text": "Generate an image of mountains"}]}],

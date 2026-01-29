@@ -57,9 +57,11 @@ class TestAudioSpeech:
             test_name=test_name,
             params=self.BASE_PARAMS,
             status_code=status_code,
-            response_body=None,
+            response_body=response_body,
             expected_fields=self.EXPECTED_FIELDS,
-            error=None if 200 <= status_code < 300 else f"HTTP {status_code}",
+            error=None
+            if 200 <= status_code < 300
+            else f"HTTP {status_code}: {response_body}",
         )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}"
@@ -102,9 +104,11 @@ class TestAudioSpeech:
             test_name=test_name,
             params=params,
             status_code=status_code,
-            response_body=None,
+            response_body=response_body,
             expected_fields=self.EXPECTED_FIELDS,
-            error=None if 200 <= status_code < 300 else f"HTTP {status_code}",
+            error=None
+            if 200 <= status_code < 300
+            else f"HTTP {status_code}: {response_body}",
         )
 
         if not (200 <= status_code < 300):
@@ -112,7 +116,7 @@ class TestAudioSpeech:
                 param_name="voice",
                 param_value=voice,
                 test_name=test_name,
-                reason=f"HTTP {status_code}",
+                reason=f"HTTP {status_code}: {response_body}",
             )
 
         assert 200 <= status_code < 300
@@ -146,9 +150,11 @@ class TestAudioSpeech:
             test_name=test_name,
             params=params,
             status_code=status_code,
-            response_body=None,
+            response_body=response_body,
             expected_fields=self.EXPECTED_FIELDS,
-            error=None if 200 <= status_code < 300 else f"HTTP {status_code}",
+            error=None
+            if 200 <= status_code < 300
+            else f"HTTP {status_code}: {response_body}",
         )
 
         if not (200 <= status_code < 300):
@@ -156,7 +162,7 @@ class TestAudioSpeech:
                 param_name="response_format",
                 param_value=response_format,
                 test_name=test_name,
-                reason=f"HTTP {status_code}",
+                reason=f"HTTP {status_code}: {response_body}",
             )
 
         assert 200 <= status_code < 300
@@ -190,9 +196,11 @@ class TestAudioSpeech:
             test_name=test_name,
             params=params,
             status_code=status_code,
-            response_body=None,
+            response_body=response_body,
             expected_fields=self.EXPECTED_FIELDS,
-            error=None if 200 <= status_code < 300 else f"HTTP {status_code}",
+            error=None
+            if 200 <= status_code < 300
+            else f"HTTP {status_code}: {response_body}",
         )
 
         if not (200 <= status_code < 300):
@@ -200,7 +208,7 @@ class TestAudioSpeech:
                 param_name="speed",
                 param_value=speed,
                 test_name=test_name,
-                reason=f"HTTP {status_code}",
+                reason=f"HTTP {status_code}: {response_body}",
             )
 
         assert 200 <= status_code < 300
@@ -226,9 +234,11 @@ class TestAudioSpeech:
             test_name=test_name,
             params=params,
             status_code=status_code,
-            response_body=None,
+            response_body=response_body,
             expected_fields=self.EXPECTED_FIELDS,
-            error=None if 200 <= status_code < 300 else f"HTTP {status_code}",
+            error=None
+            if 200 <= status_code < 300
+            else f"HTTP {status_code}: {response_body}",
         )
 
         if not (200 <= status_code < 300):
@@ -236,7 +246,7 @@ class TestAudioSpeech:
                 param_name="instructions",
                 param_value="Speak in a cheerful and energetic tone.",
                 test_name=test_name,
-                reason=f"HTTP {status_code}",
+                reason=f"HTTP {status_code}: {response_body}",
             )
 
         assert 200 <= status_code < 300
@@ -255,9 +265,11 @@ class TestAudioSpeech:
             test_name=test_name,
             params=params,
             status_code=status_code,
-            response_body=None,
+            response_body=response_body,
             expected_fields=self.EXPECTED_FIELDS,
-            error=None if 200 <= status_code < 300 else f"HTTP {status_code}",
+            error=None
+            if 200 <= status_code < 300
+            else f"HTTP {status_code}: {response_body}",
         )
 
         if not (200 <= status_code < 300):
@@ -265,7 +277,7 @@ class TestAudioSpeech:
                 param_name="stream_format",
                 param_value="audio",
                 test_name=test_name,
-                reason=f"HTTP {status_code}",
+                reason=f"HTTP {status_code}: {response_body}",
             )
 
         assert 200 <= status_code < 300
@@ -287,8 +299,10 @@ class TestAudioSpeech:
             test_name=test_name,
             params=params,
             status_code=status_code,
-            response_body=None,
-            error=None if 200 <= status_code < 300 else f"HTTP {status_code}",
+            response_body=response_body,
+            error=None
+            if 200 <= status_code < 300
+            else f"HTTP {status_code}: {response_body}",
         )
 
         if not (200 <= status_code < 300):
@@ -296,7 +310,7 @@ class TestAudioSpeech:
                 param_name="stream_format",
                 param_value="sse",
                 test_name=test_name,
-                reason=f"HTTP {status_code}",
+                reason=f"HTTP {status_code}: {response_body}",
             )
 
         assert 200 <= status_code < 300

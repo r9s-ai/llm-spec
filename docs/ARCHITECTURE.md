@@ -39,9 +39,10 @@ llm-spec/
 │   │       │   └── responses.py   # Responses API ✅
 │   │       ├── gemini/            # Gemini schemas ✅
 │   │       │   ├── __init__.py
-│   │       │   ├── generate_content.py  # GenerateContent API
-│   │       │   ├── embeddings.py        # EmbedContent API
-│   │       │   └── tokens.py            # CountTokens API
+│   │       │   ├── generate_content.py       # GenerateContent API
+│   │       │   ├── batch_generate_content.py # BatchGenerateContent API ✅
+│   │       │   ├── embeddings.py             # EmbedContent API
+│   │       │   └── tokens.py                 # CountTokens API
 │   │       ├── anthropic/         # Anthropic schemas ✅
 │   │       │   ├── __init__.py
 │   │       │   └── messages.py         # Messages API
@@ -67,6 +68,7 @@ llm-spec/
 │   │   ├── __init__.py
 │   │   ├── test_generate_content.py        # 非流式生成测试
 │   │   ├── test_stream_generate_content.py # 流式生成测试 (15个测试)
+│   │   ├── test_batch_generate_content.py  # 批处理生成测试 ✅ (21个测试)
 │   │   ├── test_embed_content.py
 │   │   └── test_count_tokens.py
 │   ├── anthropic/                 # Anthropic 测试 ✅
@@ -587,6 +589,50 @@ async def test_streaming_async(self):
 3. **多模态流式** (3个): 图片分析、多轮对话、系统指令
 4. **高级功能** (3个): 函数调用、JSON模式、安全设置
 5. **流式特性验证** (2个): usage metadata、finish reason
+
+### 模式 6: 批处理测试
+**目的**：测试异步批量处理API，支持成本优化
+```python
+class TestBatchGenerateContent:
+    """Batch Generate Content API 异步批处理测试"""
+
+    ENDPOINT_CREATE = "/v1beta/models/gemini-3-flash-preview:batchGenerateContent"
+    ENDPOINT_GET = "/v1beta/batches/{batch_id}"
+
+    BASE_PARAMS = {
+        "requests": [
+            {"contents": [{"parts": [{"text": "Request 1"}]}]},
+            {"contents": [{"parts": [{"text": "Request 2"}]}]},
+        ]
+    }
+
+    def test_batch_baseline(self):
+        # 1. 创建批任务（异步）
+        status_code, headers, response = self.client.request(
+            endpoint=self.ENDPOINT_CREATE,
+            params=self.BASE_PARAMS,
+        )
+
+        # 2. 验证创建响应
+        is_valid, error_msg = ResponseValidator.validate(
+            response, BatchCreateResponse
+        )
+
+        # 3. 轮询查询任务状态
+        batch_name = response.get("name")
+        final_status = self._poll_batch_status(batch_name)
+
+        # 4. 记录测试
+        self.collector.record_test(...)
+```
+
+**Gemini BatchGenerateContent 测试结构**（21个测试分6个阶段）：
+1. **基础批处理** (4个): baseline、多请求、显示名称、状态查询
+2. **批配置参数** (3个): 生成配置、安全设置、系统指令
+3. **请求内容变体** (6个): 纯文本、内联图像、函数调用、JSON模式、混合内容
+4. **批量大小和混合** (2个): 不同批大小变体、混合参数
+5. **响应字段验证** (2个): 必需字段、元数据验证
+6. **错误和边界情况** (4个): 空列表、无效格式、超时配置、状态追踪
 
 ---
 

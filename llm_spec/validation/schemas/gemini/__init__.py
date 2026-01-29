@@ -53,6 +53,23 @@ from llm_spec.validation.schemas.gemini.tokens import (
     ModalityTokenDetails,
 )
 
+# Batch Generate Content schemas
+from llm_spec.validation.schemas.gemini.batch_generate_content import (
+    BatchCancelRequest,
+    BatchCancelResponse,
+    BatchCreateRequest,
+    BatchCreateResponse,
+    BatchGetResponse,
+    BatchJobState,
+    BatchListItem,
+    BatchListResponse,
+    BatchRequestConfig,
+    BatchResult,
+    BatchResultsResponse,
+    BatchStats,
+    GenerateContentRequest,
+)
+
 __all__ = [
     # GenerateContent - Request
     "Part",
@@ -96,4 +113,18 @@ __all__ = [
     # Tokens
     "CountTokensResponse",
     "ModalityTokenDetails",
+    # Batch Generate Content
+    "GenerateContentRequest",
+    "BatchRequestConfig",
+    "BatchCreateRequest",
+    "BatchCreateResponse",
+    "BatchGetResponse",
+    "BatchJobState",
+    "BatchStats",
+    "BatchResult",
+    "BatchListItem",
+    "BatchListResponse",
+    "BatchCancelRequest",
+    "BatchCancelResponse",
+    "BatchResultsResponse",
 ]

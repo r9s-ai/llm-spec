@@ -5,7 +5,7 @@ description = "A testing framework to validate LLM API responses against officia
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Liu" }]
+authors = [{ name = "routertokens" }]
 keywords = ["llm", "api", "testing", "validation", "openai", "anthropic", "gemini"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -31,13 +31,13 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=4.0.0",
-    "pytest-xdist>=3.5.0",     # 并行测试
+    "pytest-xdist>=3.5.0",    
     "ruff>=0.8.0",
     "mypy>=1.0.0",
 ]
-# YAML 配置文件支持
+
 yaml = ["pyyaml>=6.0.0"]
-# 完整安装（包含所有可选依赖）
+
 all = [
     "llm-spec[dev,yaml]",
 ]

@@ -20,19 +20,19 @@ class TestGenerateContent:
 
     # Gemini 3 Pro - Pro 级别模型
     # 支持: 基础参数, thinkingConfig (2级别: low, high)
-    ENDPOINT_PRO = "/v1beta/models/gemini-3-pro:generateContent"
+    # ENDPOINT_PRO = "/v1beta/models/gemini-3-pro:generateContent"
 
     # Gemini 3 Pro Image (Nano Banana Pro) - 图像生成模型
     # 支持: imageConfig, responseModalities[IMAGE], 1K/2K/4K 图像生成
-    ENDPOINT_IMAGE = "/v1beta/models/gemini-3-pro-image-preview:generateContent"
+    # ENDPOINT_IMAGE = "/v1beta/models/gemini-3-pro-image-preview:generateContent"
 
     # Gemini 2.5 Flash TTS - 语音生成模型
     # 支持: speechConfig, voiceConfig, 文本转语音
-    ENDPOINT_TTS_FLASH = "/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
+    # ENDPOINT_TTS_FLASH = "/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
 
     # Gemini 2.5 Pro TTS - Pro 级语音生成模型
     # 支持: speechConfig, voiceConfig, 文本转语音
-    ENDPOINT_TTS_PRO = "/v1beta/models/gemini-2.5-pro-preview-tts:generateContent"
+    # ENDPOINT_TTS_PRO = "/v1beta/models/gemini-2.5-pro-preview-tts:generateContent"
 
     # 默认使用 Gemini 3 Flash
     ENDPOINT = ENDPOINT_FLASH
@@ -980,11 +980,7 @@ class TestGenerateContent:
         """测试 responseModalities 参数（控制响应模态类型）"""
         test_name = f"test_param_response_modalities[{','.join(modalities)}]"
 
-        # 根据模态选择合适的模型
-        if "IMAGE" in modalities:
-            endpoint = self.ENDPOINT_IMAGE  # 使用图像生成模型
-        else:
-            endpoint = self.ENDPOINT_FLASH  # 文本使用 Flash
+        endpoint = self.ENDPOINT_FLASH  
 
         params = {
             **self.BASE_PARAMS,
@@ -1038,8 +1034,7 @@ class TestGenerateContent:
         """测试 speechConfig.voiceConfig 参数（语音输出配置）"""
         test_name = f"test_param_speech_config[{voice_name}]"
 
-        # 使用 Gemini 2.5 Flash TTS 模型
-        endpoint = self.ENDPOINT_TTS_FLASH
+        endpoint = self.ENDPOINT_FLASH
 
         params = {
             **self.BASE_PARAMS,
@@ -1167,7 +1162,6 @@ class TestGenerateContent:
         """测试 imageConfig.aspectRatio 参数（图像生成宽高比）"""
         test_name = f"test_param_image_config_aspect_ratio[{aspect_ratio}]"
 
-        # 使用 Gemini 3 Pro Image (Nano Banana Pro) 模型
         endpoint = self.ENDPOINT_IMAGE
 
         params = {
@@ -1221,7 +1215,6 @@ class TestGenerateContent:
         """测试 imageConfig.imageSize 参数（图像生成尺寸）"""
         test_name = f"test_param_image_config_size[{image_size}]"
 
-        # 使用 Gemini 3 Pro Image (Nano Banana Pro) 模型
         endpoint = self.ENDPOINT_IMAGE
 
         params = {
@@ -1304,4 +1297,3 @@ class TestGenerateContent:
 
         assert 200 <= status_code < 300
         assert is_valid
-
