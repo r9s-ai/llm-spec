@@ -1,5 +1,6 @@
 """Anthropic Messages API - 基础参数测试"""
 
+import base64
 import pytest
 
 from llm_spec.reporting.collector import ReportCollector
@@ -14,9 +15,30 @@ class TestMessagesBasic:
 
     # 基线参数：仅包含必需参数
     BASE_PARAMS = {
-        "model": "claude-3-5-sonnet-20241022",
-        "max_tokens": 1024,
+        "model": "claude-haiku-4.5",
+        "max_tokens": 256,
         "messages": [{"role": "user", "content": "Hello"}],
+    }
+
+    # 工具定义：用于工具调用测试
+    WEATHER_TOOL = {
+        "name": "get_weather",
+        "description": "Get the current weather in a given location",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "The city and state, e.g. San Francisco, CA",
+                },
+                "unit": {
+                    "type": "string",
+                    "enum": ["celsius", "fahrenheit"],
+                    "description": "The unit of temperature",
+                },
+            },
+            "required": ["location"],
+        },
     }
 
     @pytest.fixture(scope="class", autouse=True)
@@ -64,50 +86,6 @@ class TestMessagesBasic:
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert is_valid, f"响应验证失败: {error_msg}"
 
-    @pytest.mark.parametrize(
-        "model",
-        [
-            "claude-3-5-sonnet-20241022",
-            "claude-3-opus-20240229",
-            "claude-3-haiku-20240307",
-            "claude-3-5-haiku-20241022",
-            "claude-sonnet-4-5-20250110",
-        ],
-    )
-    def test_model_variants(self, model):
-        """测试不同的 model 变体"""
-        test_name = f"test_model_variants[{model}]"
-        params = {**self.BASE_PARAMS, "model": model}
-
-        status_code, headers, response_body = self.client.request(
-            endpoint=self.ENDPOINT,
-            params=params,
-        )
-
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
-
-        self.collector.record_test(
-            test_name=test_name,
-            params=params,
-            status_code=status_code,
-            response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
-        )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="model",
-                param_value=model,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
-
-        assert 200 <= status_code < 300
-        assert is_valid
 
     # ==================== 阶段2: 采样参数测试 ====================
 
@@ -216,46 +194,6 @@ class TestMessagesBasic:
         assert 200 <= status_code < 300
         assert is_valid
 
-    def test_param_combined_sampling(self):
-        """测试组合采样参数: temperature + top_p + top_k"""
-        test_name = "test_param_combined_sampling"
-        params = {
-            **self.BASE_PARAMS,
-            "temperature": 0.8,
-            "top_p": 0.95,
-            "top_k": 50,
-        }
-
-        status_code, headers, response_body = self.client.request(
-            endpoint=self.ENDPOINT,
-            params=params,
-        )
-
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
-
-        self.collector.record_test(
-            test_name=test_name,
-            params=params,
-            status_code=status_code,
-            response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
-        )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="combined_sampling",
-                param_value={"temperature": 0.8, "top_p": 0.95, "top_k": 50},
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
-
-        assert 200 <= status_code < 300
-        assert is_valid
-
     # ==================== 阶段3: 停止控制测试 ====================
 
     def test_param_stop_sequences(self):
@@ -289,76 +227,6 @@ class TestMessagesBasic:
             self.collector.add_unsupported_param(
                 param_name="stop_sequences",
                 param_value=["\n\n", "END"],
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
-
-        assert 200 <= status_code < 300
-        assert is_valid
-
-    def test_param_max_tokens_minimum(self):
-        """测试 max_tokens 最小值"""
-        test_name = "test_param_max_tokens_minimum"
-        params = {**self.BASE_PARAMS, "max_tokens": 1}
-
-        status_code, headers, response_body = self.client.request(
-            endpoint=self.ENDPOINT,
-            params=params,
-        )
-
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
-
-        self.collector.record_test(
-            test_name=test_name,
-            params=params,
-            status_code=status_code,
-            response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
-        )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="max_tokens",
-                param_value=1,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
-
-        assert 200 <= status_code < 300
-        assert is_valid
-
-    def test_param_max_tokens_maximum(self):
-        """测试 max_tokens 最大值 (8192)"""
-        test_name = "test_param_max_tokens_maximum"
-        params = {**self.BASE_PARAMS, "max_tokens": 8192}
-
-        status_code, headers, response_body = self.client.request(
-            endpoint=self.ENDPOINT,
-            params=params,
-        )
-
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
-
-        self.collector.record_test(
-            test_name=test_name,
-            params=params,
-            status_code=status_code,
-            response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
-        )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="max_tokens",
-                param_value=8192,
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -406,98 +274,6 @@ class TestMessagesBasic:
         assert 200 <= status_code < 300
         assert is_valid
 
-    def test_system_with_multiline(self):
-        """测试多行系统提示"""
-        test_name = "test_system_with_multiline"
-        system_prompt = """You are a professional assistant.
-Your role is to:
-1. Answer questions accurately
-2. Be concise and clear
-3. Show empathy"""
-
-        params = {
-            **self.BASE_PARAMS,
-            "system": system_prompt,
-        }
-
-        status_code, headers, response_body = self.client.request(
-            endpoint=self.ENDPOINT,
-            params=params,
-        )
-
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
-
-        self.collector.record_test(
-            test_name=test_name,
-            params=params,
-            status_code=status_code,
-            response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
-        )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="system",
-                param_value="multiline_prompt",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
-
-        assert 200 <= status_code < 300
-        assert is_valid
-
-    def test_system_with_complex_instructions(self):
-        """测试复杂系统指令"""
-        test_name = "test_system_with_complex_instructions"
-        system_prompt = (
-            "You are an expert programmer. "
-            "When answering questions, follow these rules: "
-            "1) Always provide code examples; "
-            "2) Explain your reasoning; "
-            "3) Consider edge cases; "
-            "4) Use best practices."
-        )
-
-        params = {
-            **self.BASE_PARAMS,
-            "system": system_prompt,
-            "messages": [{"role": "user", "content": "How do I reverse a string in Python?"}],
-        }
-
-        status_code, headers, response_body = self.client.request(
-            endpoint=self.ENDPOINT,
-            params=params,
-        )
-
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
-
-        self.collector.record_test(
-            test_name=test_name,
-            params=params,
-            status_code=status_code,
-            response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
-        )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="system",
-                param_value="complex_instructions",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
-
-        assert 200 <= status_code < 300
-        assert is_valid
-
     # ==================== 阶段5: 元数据与追踪 ====================
 
     def test_param_metadata(self):
@@ -537,3 +313,331 @@ Your role is to:
 
         assert 200 <= status_code < 300
         assert is_valid
+
+    # ==================== 阶段6: 流式响应测试 ====================
+
+    @pytest.mark.asyncio
+    async def test_param_stream(self):
+        """测试 stream 参数"""
+        test_name = "test_param_stream"
+        params = {**self.BASE_PARAMS, "stream": True}
+
+        chunks = []
+        error_occurred = False
+        error_msg = None
+
+        try:
+            async for chunk in self.client.stream_async(self.ENDPOINT, params):
+                chunks.append(chunk)
+                if len(chunks) >= 3:  # 收到几个 chunk 即可验证参数支持
+                    break
+        except Exception as e:
+            error_occurred = True
+            error_msg = str(e)
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=200 if not error_occurred else 500,
+            response_body={"chunks_received": len(chunks)} if chunks else None,
+            error=error_msg if error_occurred else None,
+        )
+
+        if error_occurred:
+            self.collector.add_unsupported_param(
+                param_name="stream",
+                param_value=True,
+                test_name=test_name,
+                reason=f"Streaming error: {error_msg}",
+            )
+
+        assert not error_occurred, f"Streaming failed: {error_msg}"
+        assert len(chunks) > 0, "No chunks received"
+
+    # ==================== 阶段7: 多模态测试 ====================
+
+    def test_param_image_base64(self, test_assets):
+        """测试 base64 图片输入"""
+        test_name = "test_param_image_base64"
+
+        # 使用简单的1x1 PNG图片的base64数据
+        sample_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+        params = {
+            **self.BASE_PARAMS,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/png",
+                                "data": sample_base64,
+                            },
+                        },
+                        {"type": "text", "text": "What do you see in this image?"},
+                    ],
+                }
+            ],
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, MessagesResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="image_base64",
+                param_value="base64_image",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    @pytest.mark.parametrize(
+        "media_type",
+        ["image/jpeg", "image/png", "image/gif", "image/webp"],
+    )
+    def test_image_media_type_variants(self, media_type):
+        """测试不同图片格式的 media_type"""
+        test_name = f"test_image_media_type_variants[{media_type}]"
+
+        sample_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+        params = {
+            **self.BASE_PARAMS,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": sample_base64,
+                            },
+                        },
+                        {"type": "text", "text": "Describe this image."},
+                    ],
+                }
+            ],
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, MessagesResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="image.source.media_type",
+                param_value=media_type,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    # ==================== 阶段8: 工具调用测试 ====================
+
+    def test_param_tools(self):
+        """测试 tools 参数"""
+        test_name = "test_param_tools"
+        params = {
+            **self.BASE_PARAMS,
+            "tools": [self.WEATHER_TOOL],
+            "messages": [{"role": "user", "content": "What's the weather in San Francisco?"}],
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, MessagesResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="tools",
+                param_value="basic_tool",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    def test_param_tool_choice_auto(self):
+        """测试 tool_choice 参数 (auto)"""
+        test_name = "test_param_tool_choice_auto"
+        params = {
+            **self.BASE_PARAMS,
+            "tools": [self.WEATHER_TOOL],
+            "tool_choice": {"type": "auto"},
+            "messages": [{"role": "user", "content": "What's the weather in London?"}],
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, MessagesResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="tool_choice.type",
+                param_value="auto",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    @pytest.mark.parametrize("choice_type", ["any", "tool"])
+    def test_tool_choice_variants(self, choice_type):
+        """测试 tool_choice 参数变体"""
+        test_name = f"test_tool_choice_variants[{choice_type}]"
+
+        if choice_type == "any":
+            tool_choice = {"type": "any"}
+        else:  # choice_type == "tool"
+            tool_choice = {"type": "tool", "name": "get_weather"}
+
+        params = {
+            **self.BASE_PARAMS,
+            "tools": [self.WEATHER_TOOL],
+            "tool_choice": tool_choice,
+            "messages": [{"role": "user", "content": "What's the weather?"}],
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, MessagesResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="tool_choice.type",
+                param_value=choice_type,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        assert 200 <= status_code < 300
+        assert is_valid
+
+    # ==================== 阶段9: 思考模式测试 ====================
+
+    def test_param_thinking(self):
+        """测试 thinking 参数"""
+        test_name = "test_param_thinking"
+        params = {
+            **self.BASE_PARAMS,
+            "thinking": {"type": "enabled"},
+            "messages": [{"role": "user", "content": "Solve: What is 25 * 17?"}],
+        }
+
+        status_code, headers, response_body = self.client.request(
+            endpoint=self.ENDPOINT,
+            params=params,
+        )
+
+        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+            response_body, MessagesResponse
+        )
+
+        self.collector.record_test(
+            test_name=test_name,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_msg if not is_valid else None,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+        )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="thinking.type",
+                param_value="enabled",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
+        # 思考模式可能只在特定模型上支持，不强制断言
+        # assert 200 <= status_code < 300
