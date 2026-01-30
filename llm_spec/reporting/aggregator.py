@@ -80,6 +80,14 @@ class AggregatedReportCollector:
         all_endpoints = set(self.endpoints.keys())
 
         for endpoint, report in self.endpoints.items():
+            # Build a lookup: test_name -> structured error (from endpoint report)
+            # Prefer the first occurrence per test_name (good enough for reporting).
+            errors_by_test: dict[str, dict[str, Any]] = {}
+            for err in report.get("errors", []) or []:
+                tn = err.get("test_name")
+                if isinstance(tn, str) and tn and tn not in errors_by_test:
+                    errors_by_test[tn] = err
+
             # 第一步：构建不支持参数的集合（便于快速查询）
             unsupported_params_list: list[UnsupportedParameter] = (
                 report.get("parameters", {}).get("unsupported", [])
@@ -107,10 +115,23 @@ class AggregatedReportCollector:
                 if param in unsupported_param_names:
                     # 这个参数不支持
                     unsupported_info = unsupported_param_names[param]
+                    test_name = unsupported_info.get("test_name", "")
+                    err = errors_by_test.get(test_name) if isinstance(test_name, str) else None
+
+                    # Prefer structured response_body for detail (user-requested)
+                    reason_detail: str | None = None
+                    if err is not None:
+                        status_code = err.get("status_code")
+                        resp_body = err.get("response_body")
+                        if status_code is not None:
+                            reason_detail = f"HTTP {status_code}: {resp_body}"
+
                     aggregated[param]['endpoints'][endpoint] = {
                         'status': 'unsupported',
+                        # Keep legacy reason for backwards compatibility, but add a detailed one.
                         'reason': unsupported_info.get('reason', 'Unknown'),
-                        'test_name': unsupported_info.get('test_name', ''),
+                        'reason_detail': reason_detail or unsupported_info.get('reason', 'Unknown'),
+                        'test_name': test_name,
                     }
                 else:
                     # 这个参数支持（在 tested 中但不在 unsupported 中）
@@ -144,10 +165,15 @@ class AggregatedReportCollector:
             failed_tests += summary.get("failed", 0)
             error_list.extend(report.get("errors", []))  # Any until error schema is defined
 
-        # 去重错误日志（按 test_name 和 message）
+        # 去重错误日志（按 test_name + status_code + error + response_body）
         unique_errors = {}
         for error in error_list:
-            key = f"{error.get('test_name', '')}_{error.get('message', '')}"
+            key = (
+                f"{error.get('test_name', '')}_"
+                f"{error.get('status_code', '')}_"
+                f"{error.get('error', '')}_"
+                f"{json.dumps(error.get('response_body', None), sort_keys=True, ensure_ascii=False, default=str)}"
+            )
             if key not in unique_errors:
                 unique_errors[key] = error
 
@@ -180,6 +206,7 @@ class AggregatedReportCollector:
                 ),
             },
             'errors_count': len(unique_errors),
+            'errors': list(unique_errors.values()),
         }
 
     def finalize(self, output_dir: str = "./reports") -> dict[str, str]:
@@ -220,6 +247,8 @@ class AggregatedReportCollector:
             'parameters': {
                 'aggregated': self._serialize_aggregated_params(aggregated_params),
             },
+            # ✅ 附加详细错误列表（结构化）
+            'errors': summary.get('errors', []),
         }
 
         # 写入 JSON 文件
@@ -302,10 +331,10 @@ class AggregatedReportCollector:
                     if endpoint_info['status'] == 'supported':
                         status = "✅ 支持"
                     else:
-                        reason = endpoint_info.get('reason', '不支持')
+                        reason = endpoint_info.get('reason_detail') or endpoint_info.get('reason', '不支持')
                         status = f"❌ 不支持"
                         if reason:
-                            status += f" ({reason.split(':')[0]})"
+                            status += f" ({reason})"
                     lines.append(f"| `{param_name}` | {status} |")
 
             lines.append("")
@@ -314,6 +343,12 @@ class AggregatedReportCollector:
         if summary['errors_count'] > 0:
             lines.append(f"## ⚠️ 错误摘要\n")
             lines.append(f"共 {summary['errors_count']} 个错误\n")
+            # 展示详细错误（结构化）
+            for err in report.get("errors", [])[:50]:
+                lines.append(f"- **{err.get('test_name','')}** (HTTP {err.get('status_code','')}, {err.get('type','')})")
+                lines.append(f"  - error: {err.get('error')}")
+                lines.append(f"  - response_body: {err.get('response_body')}")
+                lines.append("")
 
         markdown_content = "\n".join(lines)
         with open(markdown_path, 'w', encoding='utf-8') as f:
@@ -362,6 +397,10 @@ class AggregatedReportCollector:
         .support {{ color: #27ae60; font-weight: 500; }}
         .unsupport {{ color: #e74c3c; }}
         .summary-table td:first-child {{ font-weight: 500; color: #333; }}
+        pre {{ white-space: pre-wrap; word-break: break-word; background: #0b1020; color: #e6edf3; padding: 12px; border-radius: 6px; font-size: 12px; }}
+        .error-card {{ background: #fff6f6; border: 1px solid #ffd6d6; padding: 12px; border-radius: 8px; margin-top: 10px; }}
+        .error-title {{ font-weight: 600; color: #b91c1c; margin-bottom: 6px; }}
+        .reason-detail {{ color: #444; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }}
     </style>
 </head>
 <body>
@@ -427,9 +466,8 @@ class AggregatedReportCollector:
                     if endpoint_info['status'] == 'supported':
                         status_html = '<span class="support">✅ 支持</span>'
                     else:
-                        reason = endpoint_info.get('reason', '不支持')
-                        reason_short = reason.split(':')[0] if reason else '不支持'
-                        status_html = f'<span class="unsupport">❌ {reason_short}</span>'
+                        reason_detail = endpoint_info.get('reason_detail') or endpoint_info.get('reason', '不支持')
+                        status_html = f'<span class="unsupport">❌ 不支持</span><div class="reason-detail">{reason_detail}</div>'
 
                     html_content += f"""
                     <tr>
@@ -443,8 +481,30 @@ class AggregatedReportCollector:
             </div>
             """
 
-        html_content += """
+        # 错误详情（结构化）
+        if report.get("errors"):
+            html_content += """
         </div>
+        <div class="section">
+            <h2>⚠️ 错误详情</h2>
+            <p style="color:#666; font-size: 13px; margin-bottom: 10px;">
+                以下为去重后的错误列表（最多显示 50 条）
+            </p>
+            """
+            import json as _json
+            for err in report.get("errors", [])[:50]:
+                pretty = _json.dumps(err, ensure_ascii=False, indent=2, default=str)
+                html_content += f"""
+            <div class="error-card">
+                <div class="error-title">{err.get('test_name','')} (HTTP {err.get('status_code','')}, {err.get('type','')})</div>
+                <pre>{pretty}</pre>
+            </div>
+                """
+            html_content += """
+        </div>
+            """
+
+        html_content += """
     </div>
 </body>
 </html>

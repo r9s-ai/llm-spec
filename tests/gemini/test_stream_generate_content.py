@@ -55,7 +55,7 @@ class TestStreamGenerateContent:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, gemini_client: GeminiAdapter):
+    def setup_collector(self, request: pytest.FixtureRequest, gemini_client: GeminiAdapter):
         """为整个测试类设置报告收集器"""
         collector = ReportCollector(
             provider="gemini",
@@ -158,6 +158,15 @@ class TestStreamGenerateContent:
                 test_name=test_name,
                 reason=result.error_message or "Streaming validation failed",
             )
+            # generationConfig.* 这类新增参数，额外标记 generationConfig 本体，保持报告一致性
+            name = str(unsupported_param.get("name", ""))
+            if name.startswith("generationConfig."):
+                self.collector.add_unsupported_param(
+                    param_name="generationConfig",
+                    param_value="object",
+                    test_name=test_name,
+                    reason=result.error_message or "Streaming validation failed",
+                )
 
         return chunks, complete_content, result.is_valid
 

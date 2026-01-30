@@ -89,7 +89,16 @@ def pytest_configure(config):
 
     # 以时间戳作为 run_id；所有报告统一写入 reports/<run_id>/
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _RUN_REPORTS_DIR = Path("./reports") / run_id
+    # 报告根目录优先使用 llm-spec.toml 的 [report].output_dir（由 AppConfig.report.output_dir 提供）
+    # 若未配置则回退到 ./reports
+    try:
+        from llm_spec.config.loader import get_config
+
+        report_root = Path(get_config().report.output_dir)
+    except Exception:
+        report_root = Path("./reports")
+
+    _RUN_REPORTS_DIR = report_root / run_id
     _RUN_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
     # 让测试用例/collector 能拿到本次 run 的输出目录

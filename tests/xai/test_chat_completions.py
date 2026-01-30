@@ -25,7 +25,7 @@ class TestChatCompletions:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, xai_client: XAIAdapter):
+    def setup_collector(self, request: pytest.FixtureRequest, xai_client: XAIAdapter):
         """为整个测试类设置报告收集器"""
         # 创建类级别的 collector
         collector = ReportCollector(

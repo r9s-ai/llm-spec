@@ -71,6 +71,16 @@ class TestImagesGenerations:
             expected_fields=result.expected_fields,
         )
 
+        # baseline 失败也需要记录：把必需参数标为不支持（无对照基线可用）
+        if not (200 <= status_code < 300):
+            for k in ("model", "prompt"):
+                self.collector.add_unsupported_param(
+                    param_name=k,
+                    param_value=self.BASE_PARAMS.get(k),
+                    test_name=test_name,
+                    reason=f"HTTP {status_code}: {response_body}",
+                )
+
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
 
@@ -410,6 +420,12 @@ class TestImagesGenerations:
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
+            self.collector.add_unsupported_param(
+                param_name="output_format",
+                param_value="png",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -485,8 +501,14 @@ class TestImagesGenerations:
 
         if not (200 <= status_code < 300):
             self.collector.add_unsupported_param(
-                param_name="output_format/output_compression",
-                param_value={"output_format": "webp", "output_compression": 80},
+                param_name="output_format",
+                param_value="webp",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="output_compression",
+                param_value=80,
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -525,8 +547,14 @@ class TestImagesGenerations:
 
         if not (200 <= status_code < 300):
             self.collector.add_unsupported_param(
-                param_name="output_format/output_compression",
-                param_value={"output_format": "jpeg", "output_compression": 80},
+                param_name="output_format",
+                param_value="jpeg",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="output_compression",
+                param_value=80,
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -923,6 +951,12 @@ class TestImagesGenerations:
             self.collector.add_unsupported_param(
                 param_name="partial_images",
                 param_value=1,
+                test_name=test_name,
+                reason=f"partial_images 流式请求失败: {str(e)}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="stream",
+                param_value=True,
                 test_name=test_name,
                 reason=f"partial_images 流式请求失败: {str(e)}",
             )

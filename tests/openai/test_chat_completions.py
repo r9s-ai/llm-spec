@@ -70,6 +70,16 @@ class TestChatCompletions:
             expected_fields=result.expected_fields,
         )
 
+        # baseline 失败也需要记录：把必需参数标为不支持（无对照基线可用）
+        if not (200 <= status_code < 300):
+            for k in ("model", "messages"):
+                self.collector.add_unsupported_param(
+                    param_name=k,
+                    param_value=self.BASE_PARAMS.get(k),
+                    test_name=test_name,
+                    reason=f"HTTP {status_code}: {response_body}",
+                )
+
         # 断言：测试应该通过
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -750,6 +760,13 @@ class TestChatCompletions:
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
+            # tool_choice 测试依赖 tools
+            self.collector.add_unsupported_param(
+                param_name="tools",
+                param_value="function_call",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -796,6 +813,13 @@ class TestChatCompletions:
             self.collector.add_unsupported_param(
                 param_name="parallel_tool_calls",
                 param_value=True,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            # parallel_tool_calls 测试依赖 tools
+            self.collector.add_unsupported_param(
+                param_name="tools",
+                param_value="function_call",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -871,6 +895,13 @@ class TestChatCompletions:
             self.collector.add_unsupported_param(
                 param_name="top_logprobs",
                 param_value=top_logprobs,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            # top_logprobs 依赖 logprobs 开关
+            self.collector.add_unsupported_param(
+                param_name="logprobs",
+                param_value=True,
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -1030,6 +1061,13 @@ class TestChatCompletions:
                     test_name=test_name,
                     reason="流式响应中未包含 usage 信息",
                 )
+                # stream_options 依赖 stream 开关
+                self.collector.add_unsupported_param(
+                    param_name="stream",
+                    param_value=True,
+                    test_name=test_name,
+                    reason="流式响应中未包含 usage 信息",
+                )
 
             assert len(chunks) > 0, "应该接收到至少一个chunk"
             # 注意：has_usage 可能为 False，这是正常的，表示 API 不支持该功能
@@ -1045,6 +1083,12 @@ class TestChatCompletions:
             self.collector.add_unsupported_param(
                 param_name="stream_options",
                 param_value={"include_usage": True},
+                test_name=test_name,
+                reason=f"带 usage 的流式请求失败: {str(e)}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="stream",
+                param_value=True,
                 test_name=test_name,
                 reason=f"带 usage 的流式请求失败: {str(e)}",
             )

@@ -49,7 +49,7 @@ class TestGenerateContent:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, gemini_client: GeminiAdapter):
+    def setup_collector(self, request: pytest.FixtureRequest, gemini_client: GeminiAdapter):
         """为整个测试类设置报告收集器"""
         # 创建类级别的 collector
         collector = ReportCollector(
@@ -92,6 +92,15 @@ class TestGenerateContent:
             expected_fields=result.expected_fields,
         )
 
+        # baseline 失败也需要记录：把必需参数标为不支持（无对照基线可用）
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="contents",
+                param_value="array",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
 
@@ -126,6 +135,12 @@ class TestGenerateContent:
             self.collector.add_unsupported_param(
                 param_name="generationConfig.temperature",
                 param_value=0.7,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -164,6 +179,12 @@ class TestGenerateContent:
             self.collector.add_unsupported_param(
                 param_name="generationConfig.maxOutputTokens",
                 param_value=100,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -209,6 +230,12 @@ class TestGenerateContent:
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -244,6 +271,12 @@ class TestGenerateContent:
             self.collector.add_unsupported_param(
                 param_name="generationConfig.topK",
                 param_value=40,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -285,6 +318,12 @@ class TestGenerateContent:
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -320,6 +359,12 @@ class TestGenerateContent:
             self.collector.add_unsupported_param(
                 param_name="generationConfig.stopSequences",
                 param_value=["END", "STOP"],
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -362,6 +407,12 @@ class TestGenerateContent:
             self.collector.add_unsupported_param(
                 param_name="generationConfig.responseMimeType",
                 param_value="application/json",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -416,6 +467,12 @@ class TestGenerateContent:
             self.collector.add_unsupported_param(
                 param_name="generationConfig.responseSchema",
                 param_value="json_schema",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -703,6 +760,12 @@ class TestGenerateContent:
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -741,6 +804,12 @@ class TestGenerateContent:
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -776,6 +845,12 @@ class TestGenerateContent:
             self.collector.add_unsupported_param(
                 param_name="generationConfig.seed",
                 param_value=42,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -821,6 +896,12 @@ class TestGenerateContent:
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -859,6 +940,12 @@ class TestGenerateContent:
             self.collector.add_unsupported_param(
                 param_name="generationConfig.logprobs",
                 param_value=3,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -901,6 +988,12 @@ class TestGenerateContent:
             self.collector.add_unsupported_param(
                 param_name="generationConfig.audioTimestamp",
                 param_value=True,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -967,6 +1060,12 @@ class TestGenerateContent:
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -1017,6 +1116,12 @@ class TestGenerateContent:
             self.collector.add_unsupported_param(
                 param_name="generationConfig.responseModalities",
                 param_value=modalities,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -1082,6 +1187,12 @@ class TestGenerateContent:
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -1139,6 +1250,12 @@ class TestGenerateContent:
             self.collector.add_unsupported_param(
                 param_name="generationConfig.thinkingConfig.thinkingLevel",
                 param_value=thinking_level,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -1206,6 +1323,12 @@ class TestGenerateContent:
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -1259,6 +1382,12 @@ class TestGenerateContent:
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -1298,6 +1427,12 @@ class TestGenerateContent:
             self.collector.add_unsupported_param(
                 param_name="generationConfig.enableEnhancedCivicAnswers",
                 param_value=True,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="generationConfig",
+                param_value="object",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )

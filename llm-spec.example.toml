@@ -1,78 +1,47 @@
-# LLM-Spec Configuration File
-# Copy this file to your project root as `llm-spec.toml` or `.llm-spec.toml`
+# llm-spec.toml 示例配置
+#
+# 使用方法：
+# 1) 复制本文件为项目根目录下的 `llm-spec.toml`
+# 2) 填写各 Provider 的 api_key / base_url 等
+# 3) 运行 pytest 生成 reports
 
-# =============================================================================
-# Report Configuration
-# =============================================================================
 
+# 日志配置
+[log]
+enabled = true                 # 是否启用日志
+level = "INFO"                 # DEBUG, INFO, WARNING, ERROR
+console = true                 # 输出到控制台
+file = "./logs/llm-spec.log"   # 输出到文件（可选）
+log_request_body = true        # 记录请求体
+log_response_body = false      # 记录响应体（可能较大）
+max_body_length = 1000         # 最大记录长度
+
+
+# 报告配置
 [report]
-# Output format: "terminal", "json", or "both"
-format = "terminal"
+output_dir = "./reports"       # 报告保存目录（实际会在该目录下按 run_id 再分一层）
 
-# Directory to save JSON reports (optional)
-# output_dir = "./reports"
 
-# Show valid fields in terminal output
-show_valid = true
-
-# Show verbose details
-verbose = false
-
-# Include raw API response in reports
-include_raw_response = false
-
-# =============================================================================
-# OpenAI Configuration
-# =============================================================================
+# Provider 配置（每个 provider 一个 section）
+# timeout 单位：秒
 
 [openai]
-# API key (can also use OPENAI_API_KEY environment variable)
-# api_key = "sk-..."
-
-# Base URL override (for proxies or compatible APIs)
-base_url = "https://api.openai.com/v1"
-
-# Request timeout in seconds
-timeout = 60.0
-
-# =============================================================================
-# Anthropic Configuration
-# =============================================================================
+api_key = "sk-..."
+base_url = "https://api.openai.com"
+timeout = 30.0
 
 [anthropic]
-# API key (can also use ANTHROPIC_API_KEY environment variable)
-# api_key = "sk-ant-..."
-
-# Base URL override
-base_url = "https://api.anthropic.com/v1"
-
-# Request timeout in seconds
-timeout = 60.0
-
-# =============================================================================
-# Google Gemini Configuration
-# =============================================================================
+api_key = "sk-ant-..."
+base_url = "https://api.anthropic.com"
+timeout = 30.0
 
 [gemini]
-# API key (can also use GEMINI_API_KEY environment variable)
-# api_key = "..."
-
-# Base URL override
-base_url = "https://generativelanguage.googleapis.com/v1beta"
-
-# Request timeout in seconds
-timeout = 60.0
-
-# =============================================================================
-# xAI (Grok) Configuration
-# =============================================================================
+api_key = "..."
+base_url = "https://generativelanguage.googleapis.com"
+timeout = 30.0
 
 [xai]
-# API key (can also use XAI_API_KEY environment variable)
-# api_key = "..."
-
-# Base URL override
+api_key = "..."
 base_url = "https://api.x.ai/v1"
+timeout = 30.0
 
-# Request timeout in seconds
-timeout = 60.0

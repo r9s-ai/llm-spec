@@ -48,7 +48,7 @@ class TestMessagesBasic:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, anthropic_client: AnthropicAdapter):
+    def setup_collector(self, request: pytest.FixtureRequest, anthropic_client: AnthropicAdapter):
         """为整个测试类设置报告收集器"""
         collector = ReportCollector(
             provider="anthropic",
@@ -557,6 +557,12 @@ class TestMessagesBasic:
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
+            self.collector.add_unsupported_param(
+                param_name="tools",
+                param_value="function",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -601,6 +607,12 @@ class TestMessagesBasic:
             self.collector.add_unsupported_param(
                 param_name="tool_choice.type",
                 param_value=choice_type,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="tools",
+                param_value="function",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )

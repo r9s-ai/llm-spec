@@ -72,12 +72,14 @@ class TestImagesEdits:
         )
 
         if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="model",
-                param_value=self.BASE_PARAMS["model"],
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
+            # baseline 失败也需要记录：把必需参数标为不支持（无对照基线可用）
+            for k in ("model", "prompt"):
+                self.collector.add_unsupported_param(
+                    param_name=k,
+                    param_value=self.BASE_PARAMS.get(k),
+                    test_name=test_name,
+                    reason=f"HTTP {status_code}: {response_body}",
+                )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -271,6 +273,13 @@ class TestImagesEdits:
             self.collector.add_unsupported_param(
                 param_name="output_compression",
                 param_value=80,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            # output_compression 测试依赖 output_format
+            self.collector.add_unsupported_param(
+                param_name="output_format",
+                param_value="webp",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )

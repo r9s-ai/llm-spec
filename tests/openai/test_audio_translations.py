@@ -93,6 +93,21 @@ class TestAudioTranslations:
             expected_fields=result.expected_fields,
         )
 
+        # baseline 失败也需要记录：把必需参数标为不支持（无对照基线可用）
+        if not (200 <= status_code < 300):
+            # BASE_PARAMS 仅包含 model；file 属于 multipart 必需字段
+            self.collector.add_unsupported_param(
+                param_name="model",
+                param_value=record_params.get("model"),
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="file",
+                param_value="<multipart>",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
 
     # ------------------------------------------------------------------

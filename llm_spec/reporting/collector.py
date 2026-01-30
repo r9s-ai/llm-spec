@@ -140,7 +140,7 @@ class ReportCollector:
             self.failed_tests += 1
 
             # 记录错误
-            if error:
+            if error or status_code >= 400:
                 if 400 <= status_code < 500:
                     error_type = "http_error"
                 elif 500 <= status_code < 600:
@@ -152,7 +152,9 @@ class ReportCollector:
                     {
                         "test_name": test_name,
                         "type": error_type,
-                        "message": f"HTTP {status_code}: {error}",
+                        "status_code": status_code,
+                        "error": error,
+                        "response_body": response_body,
                     }
                 )
 

@@ -24,7 +24,7 @@ class TestCountTokens:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, gemini_client: GeminiAdapter):
+    def setup_collector(self, request: pytest.FixtureRequest, gemini_client: GeminiAdapter):
         """为整个测试类设置报告收集器"""
         # 创建类级别的 collector
         collector = ReportCollector(
@@ -52,10 +52,12 @@ class TestCountTokens:
         """测试基线：仅文本内容"""
         test_name = "test_baseline"
 
-        status_code, _headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=self.BASE_PARAMS,
         )
+        status_code = response.status_code
+        response_body = response.text
 
         result = ResponseValidator.validate_response(response, CountTokensResponse)
 
@@ -68,6 +70,15 @@ class TestCountTokens:
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
         )
+
+        # baseline 失败也需要记录：把必需参数标为不支持（无对照基线可用）
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="contents",
+                param_value="array",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -87,10 +98,12 @@ class TestCountTokens:
             ],
         }
 
-        status_code, _headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
         result = ResponseValidator.validate_response(response, CountTokensResponse)
 
@@ -103,6 +116,14 @@ class TestCountTokens:
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
         )
+
+        if not (200 <= status_code < 300):
+            self.collector.add_unsupported_param(
+                param_name="contents",
+                param_value="array",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -121,10 +142,12 @@ class TestCountTokens:
             },
         }
 
-        status_code, _headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
         result = ResponseValidator.validate_response(response, CountTokensResponse)
 
@@ -141,7 +164,7 @@ class TestCountTokens:
         if not (200 <= status_code < 300):
             self.collector.add_unsupported_param(
                 param_name="systemInstruction",
-                param_value="system_prompt",
+                param_value="object",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -177,10 +200,12 @@ class TestCountTokens:
             ],
         }
 
-        status_code, _headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
         result = ResponseValidator.validate_response(response, CountTokensResponse)
 

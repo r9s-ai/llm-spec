@@ -424,11 +424,14 @@ class AnthropicAdapter(ProviderAdapter):
 #### Step 2: 更新配置文件
 
 ```toml
-# llm-spec.toml
+# llm-spec.toml（示例）
 [anthropic]
 api_key = "sk-ant-..."
 base_url = "https://api.anthropic.com"
 timeout = 30.0
+
+[report]
+output_dir = "./reports"
 ```
 
 #### Step 3: 添加 fixture
@@ -860,5 +863,4 @@ async def test_streaming(self):
 - [ ] 实现Web UI查看报告
 
 ---
-
 

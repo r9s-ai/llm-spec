@@ -32,7 +32,6 @@ log_request_body = true
 log_response_body = false
 
 [report]
-format = "json"
 output_dir = "./reports"
 
 [openai]
@@ -63,14 +62,12 @@ pytest tests/ -v
 ### 4. 查看报告
 
 ```bash
-# OpenAI报告
-cat reports/openai_v1_chat_completions_*.json
+# 报告输出会按 run_id 分目录（例如 reports/20260130_123456/...）
+# 先找到最新的 run_id 目录
+ls -lt reports | head
 
-# Anthropic报告
-cat reports/anthropic_v1_messages_*.json
-
-# Gemini报告
-cat reports/gemini_v1beta_models_*.json
+# 再查看某个 endpoint 的 JSON 报告
+cat reports/<run_id>/openai_v1_chat_completions_*/report.json
 ```
 
 ## 📋 项目结构

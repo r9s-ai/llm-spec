@@ -67,6 +67,16 @@ class TestEmbeddings:
             expected_fields=result.expected_fields,
         )
 
+        # baseline 失败也需要记录：把必需参数标为不支持（无对照基线可用）
+        if not (200 <= status_code < 300):
+            for k in ("model", "input"):
+                self.collector.add_unsupported_param(
+                    param_name=k,
+                    param_value=self.BASE_PARAMS.get(k),
+                    test_name=test_name,
+                    reason=f"HTTP {status_code}: {response_body}",
+                )
+
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
 

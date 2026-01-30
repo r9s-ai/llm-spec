@@ -99,6 +99,23 @@ class TestAudioTranscriptions:
             expected_fields=result.expected_fields,
         )
 
+        # baseline 失败也需要记录：把必需参数标为不支持（无对照基线可用）
+        if not (200 <= status_code < 300):
+            # BASE_PARAMS 仅包含 model；file 属于 multipart 必需字段
+            self.collector.add_unsupported_param(
+                param_name="model",
+                param_value=params.get("model"),
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            # multipart 必需字段 file 不在 params 中；用占位符保证报告里能看到
+            self.collector.add_unsupported_param(
+                param_name="file",
+                param_value="<multipart>",
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
 
@@ -400,6 +417,13 @@ class TestAudioTranscriptions:
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
+            # timestamp granularity / include 相关能力依赖 verbose_json
+            self.collector.add_unsupported_param(
+                param_name="response_format",
+                param_value=params.get("response_format"),
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -441,8 +465,14 @@ class TestAudioTranscriptions:
 
         if not (200 <= status_code < 300):
             self.collector.add_unsupported_param(
-                param_name="known_speaker_names/known_speaker_references",
-                param_value={"names": names, "references": "[data URLs omitted]"},
+                param_name="known_speaker_names",
+                param_value=names,
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="known_speaker_references",
+                param_value="[data URLs omitted]",
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -482,6 +512,12 @@ class TestAudioTranscriptions:
             self.collector.add_unsupported_param(
                 param_name="timestamp_granularities",
                 param_value=params["timestamp_granularities"],
+                test_name=test_name,
+                reason=f"HTTP {status_code}: {response_body}",
+            )
+            self.collector.add_unsupported_param(
+                param_name="response_format",
+                param_value=params.get("response_format"),
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )

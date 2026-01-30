@@ -263,7 +263,9 @@ llm-spec.toml
       │
       ├─ [report] ───────► ReportConfig
       │                        │
-      │                        └──► ReportCollector
+      │                        └──► report.output_dir/<run_id>/
+      │                              │
+      │                              └──► ReportCollector / AggregatedReportCollector
       │
       └─ [openai] ───────► ProviderConfig
                                │
@@ -275,3 +277,5 @@ llm-spec.toml
 ```
 
 所有配置从单一来源（`llm-spec.toml`）加载，通过 Pydantic 验证，然后注入到各个组件中。
+
+注：为避免多次运行互相覆盖，报告实际输出路径为 `report.output_dir/<run_id>/...`。
