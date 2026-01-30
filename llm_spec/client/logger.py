@@ -104,7 +104,7 @@ class RequestLogger:
         if not self.config.enabled:
             return
 
-        log_data = {
+        log_data: dict[str, Any] = {
             "request_id": request_id,
             "type": "request",
             "method": method,
@@ -142,7 +142,7 @@ class RequestLogger:
         if not self.config.enabled:
             return
 
-        log_data = {
+        log_data: dict[str, Any] = {
             "request_id": request_id,
             "type": "response",
             "status_code": status_code,
@@ -179,7 +179,7 @@ class RequestLogger:
         if not self.config.enabled:
             return
 
-        log_data = {
+        log_data: dict[str, Any] = {
             "request_id": request_id,
             "type": "error",
             "error_type": error_type,

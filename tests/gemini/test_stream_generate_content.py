@@ -13,8 +13,14 @@ from llm_spec.validation.schemas.gemini import GenerateContentResponse
 from llm_spec.validation.validator import ResponseValidator
 
 
+from llm_spec.providers.gemini import GeminiAdapter
+
 class TestStreamGenerateContent:
     """StreamGenerateContent API 测试类"""
+
+    client: GeminiAdapter
+
+    collector: ReportCollector
 
     # ========================================================================
     # 模型 Endpoint 配置
@@ -49,7 +55,7 @@ class TestStreamGenerateContent:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, gemini_client):
+    def setup_collector(self, gemini_client: GeminiAdapter):
         """为整个测试类设置报告收集器"""
         collector = ReportCollector(
             provider="gemini",
@@ -62,14 +68,21 @@ class TestStreamGenerateContent:
 
         yield
 
-        report_path = collector.finalize()
+        output_dir = getattr(request.config, "run_reports_dir", "./reports")
+        report_path = collector.finalize(output_dir)
         print(f"\n报告已生成: {report_path}")
 
     # ========================================================================
     # 辅助方法：通用流式测试模板
     # ========================================================================
 
-    def _run_streaming_test(self, test_name, params, endpoint=None, unsupported_param=None):
+    def _run_streaming_test(
+        self,
+        test_name: str,
+        params: dict,
+        endpoint: str | None = None,
+        unsupported_param: dict[str, object] | None = None,
+    ) -> tuple[list[dict], str, bool]:
         """通用流式测试方法，减少代码重复
 
         Args:
@@ -81,7 +94,7 @@ class TestStreamGenerateContent:
         if endpoint is None:
             endpoint = self.ENDPOINT
 
-        chunks = []
+        chunks: list[dict] = []
         complete_content = ""
 
         for chunk_bytes in self.client.stream(endpoint=endpoint, params=params):
@@ -97,7 +110,7 @@ class TestStreamGenerateContent:
                     break
 
                 try:
-                    chunk_data = json.loads(data_str)
+                    chunk_data: dict = json.loads(data_str)
                     chunks.append(chunk_data)
 
                     if chunk_data.get("candidates"):
@@ -110,19 +123,17 @@ class TestStreamGenerateContent:
                 except json.JSONDecodeError:
                     pass
 
-        # 验证最后一个 chunk
-        is_valid = True
-        error_msg = None
-        missing_fields = []
-        expected_fields = []
-
         if chunks:
-            is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-                chunks[-1], GenerateContentResponse
-            )
+            # Validate the last chunk's JSON structure
+            result = ResponseValidator.validate_json(chunks[-1], GenerateContentResponse)
         else:
-            error_msg = "No chunks received"
-            expected_fields = ["candidates"]
+            result = ResponseValidator.validate_json({"candidates": []}, GenerateContentResponse)
+            result = result.__class__(
+                is_valid=False,
+                error_message="No chunks received",
+                missing_fields=[],
+                expected_fields=["candidates"],
+            )
 
         status_code = 200 if chunks else 500
 
@@ -134,21 +145,21 @@ class TestStreamGenerateContent:
                 "chunks_count": len(chunks),
                 "content_length": len(complete_content),
             },
-            error=error_msg if (error_msg or not is_valid) else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if (result.error_message or not result.is_valid) else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         # 失败时记录不支持的参数
-        if unsupported_param and (not chunks or not is_valid):
+        if unsupported_param and (not chunks or not result.is_valid):
             self.collector.add_unsupported_param(
-                param_name=unsupported_param["name"],
+                param_name=str(unsupported_param["name"]),
                 param_value=unsupported_param["value"],
                 test_name=test_name,
-                reason=error_msg or "Streaming validation failed",
+                reason=result.error_message or "Streaming validation failed",
             )
 
-        return chunks, complete_content, is_valid
+        return chunks, complete_content, result.is_valid
 
     # ========================================================================
     # 阶段 1: 基线测试
@@ -263,7 +274,7 @@ class TestStreamGenerateContent:
             },
         )
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     def test_streaming_response_schema(self):
         """测试带 schema 的 JSON 响应格式"""
@@ -294,7 +305,7 @@ class TestStreamGenerateContent:
             unsupported_param={"name": "generationConfig.responseSchema", "value": "json_schema"},
         )
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 4: 安全设置测试
@@ -314,7 +325,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize(
         "threshold",
@@ -339,7 +350,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 5: 系统指令测试
@@ -356,7 +367,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 6: 工具调用测试
@@ -390,7 +401,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     def test_streaming_code_execution(self):
         """测试代码执行功能"""
@@ -401,7 +412,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 7: 生成控制进阶参数
@@ -416,7 +427,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     def test_streaming_frequency_penalty(self):
         """测试 frequencyPenalty 参数（基于频率的token惩罚）"""
@@ -427,7 +438,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     def test_streaming_seed(self):
         """测试 seed 参数（确保生成结果可重复）"""
@@ -438,7 +449,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 8: 概率信息参数
@@ -457,7 +468,7 @@ class TestStreamGenerateContent:
             unsupported_param={"name": "generationConfig.responseLogprobs", "value": True},
         )
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     def test_streaming_logprobs(self):
         """测试 logprobs 参数（与 responseLogprobs 配合使用）"""
@@ -475,7 +486,7 @@ class TestStreamGenerateContent:
             unsupported_param={"name": "generationConfig.logprobs", "value": 3},
         )
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 9: 特定场景参数
@@ -490,7 +501,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize(
         "resolution",
@@ -531,7 +542,7 @@ class TestStreamGenerateContent:
             unsupported_param={"name": "generationConfig.mediaResolution", "value": resolution},
         )
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 10: 响应模态控制
@@ -563,7 +574,7 @@ class TestStreamGenerateContent:
             unsupported_param={"name": "generationConfig.responseModalities", "value": modalities},
         )
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 11: 语音配置（使用 TTS 模型）
@@ -616,7 +627,7 @@ class TestStreamGenerateContent:
             )
 
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 12: 思考配置（Gemini 3）
@@ -657,7 +668,7 @@ class TestStreamGenerateContent:
             },
         )
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 13: 图像配置
@@ -695,7 +706,7 @@ class TestStreamGenerateContent:
 
         chunks, _, is_valid = self._run_streaming_test(test_name, params, endpoint=endpoint)
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize(
         "image_size",
@@ -722,7 +733,7 @@ class TestStreamGenerateContent:
 
         chunks, _, is_valid = self._run_streaming_test(test_name, params, endpoint=endpoint)
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 14: 增强功能参数
@@ -737,4 +748,4 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert is_valid
+        assert result.is_valid

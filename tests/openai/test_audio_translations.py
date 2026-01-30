@@ -9,8 +9,13 @@ from llm_spec.validation.schemas.openai.audio import AudioTranslationResponse
 from llm_spec.validation.validator import ResponseValidator
 
 
+from llm_spec.providers.openai import OpenAIAdapter
+
+
 class TestAudioTranslations:
     """Audio Translations API 测试类"""
+    client: OpenAIAdapter
+    collector: ReportCollector
 
     ENDPOINT = "/v1/audio/translations"
 
@@ -23,7 +28,7 @@ class TestAudioTranslations:
     AUDIO_EN = "test_assets/audio/hello_en.mp3"
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, openai_client):
+    def setup_collector(self, request: pytest.FixtureRequest, openai_client: OpenAIAdapter):
         """为整个测试类设置报告收集器"""
         collector = ReportCollector(
             provider="openai",
@@ -36,7 +41,8 @@ class TestAudioTranslations:
 
         yield
 
-        report_path = collector.finalize()
+        output_dir = getattr(request.config, "run_reports_dir", "./reports")
+        report_path = collector.finalize(output_dir)
         print(f"\n报告已生成: {report_path}")
 
     # ------------------------------------------------------------------
@@ -47,24 +53,18 @@ class TestAudioTranslations:
         params: dict,
         file_path: str | Path | None = None,
         mime_type: str = "audio/mpeg",
-    ):
+    ) -> tuple[object, Path]:
         """使用 multipart/form-data 发送带文件的请求"""
         path = Path(file_path or self.AUDIO_EN)
         with path.open("rb") as f:
             files = {"file": (path.name, f, mime_type)}
-            status_code, headers, response_body = self.client.request(
+            response = self.client.request(
                 endpoint=self.ENDPOINT,
                 params=params,
                 files=files,
             )
-        # 返回路径用于报告展示（文件实际已通过 multipart 上传）
-        return status_code, headers, response_body, path
-
-    def _validate_json_response(self, response_body):
-        """仅在响应是 dict 时做 JSON 验证，非 JSON 响应直接视为通过。"""
-        if not isinstance(response_body, dict):
-            return True, None, [], []
-        return ResponseValidator.validate(response_body, AudioTranslationResponse)
+        # 返回 response 与路径用于报告展示（文件实际已通过 multipart 上传）
+        return response, path
 
     # ------------------------------------------------------------------
     # 基线
@@ -74,25 +74,26 @@ class TestAudioTranslations:
         test_name = "test_baseline"
 
         params = {**self.BASE_PARAMS}
-        status_code, headers, response_body, used_path = self._request_with_file(params)
+        response, used_path = self._request_with_file(params)
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
         record_params = {**params, "file": used_path.name}
 
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
+        # Audio translations endpoint should return JSON; validate_response will parse JSON from httpx.Response.
+        # Here we only assert schema validity if response is JSON.
+        result = ResponseValidator.validate_response(response, AudioTranslationResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=record_params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
 
     # ------------------------------------------------------------------
     # 参数测试
@@ -112,21 +113,20 @@ class TestAudioTranslations:
         test_name = f"test_response_format[{response_format}]"
         params = {**self.BASE_PARAMS, "response_format": response_format}
 
-        status_code, headers, response_body, used_path = self._request_with_file(params)
+        response, used_path = self._request_with_file(params)
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
         record_params = {**params, "file": used_path.name}
 
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
-
+        result = ResponseValidator.validate_response(response, AudioTranslationResponse)
         self.collector.record_test(
             test_name=test_name,
             params=record_params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -138,7 +138,7 @@ class TestAudioTranslations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_prompt(self):
         """测试 prompt 参数（英文提示）"""
@@ -148,21 +148,20 @@ class TestAudioTranslations:
             "prompt": "Please translate the audio politely into English.",
         }
 
-        status_code, headers, response_body, used_path = self._request_with_file(params)
+        response, used_path = self._request_with_file(params)
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
         record_params = {**params, "file": used_path.name}
 
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
-
+        result = ResponseValidator.validate_response(response, AudioTranslationResponse)
         self.collector.record_test(
             test_name=test_name,
             params=record_params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -174,28 +173,27 @@ class TestAudioTranslations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_temperature(self):
         """测试 temperature 参数"""
         test_name = "test_temperature"
         params = {**self.BASE_PARAMS, "temperature": 0.5}
 
-        status_code, headers, response_body, used_path = self._request_with_file(params)
+        response, used_path = self._request_with_file(params)
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
         record_params = {**params, "file": used_path.name}
 
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
-
+        result = ResponseValidator.validate_response(response, AudioTranslationResponse)
         self.collector.record_test(
             test_name=test_name,
             params=record_params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -207,4 +205,4 @@ class TestAudioTranslations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid

@@ -1,16 +1,17 @@
 """Anthropic Provider Adapter"""
 
+from __future__ import annotations
+
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import ProviderConfig
 from llm_spec.providers.base import ProviderAdapter
+from llm_spec.types import Headers
 
 
 class AnthropicAdapter(ProviderAdapter):
     """Anthropic API 适配器"""
 
-    def prepare_headers(
-        self, additional_headers: dict[str, str] | None = None
-    ) -> dict[str, str]:
+    def prepare_headers(self, additional_headers: Headers | None = None) -> dict[str, str]:
         """准备 Anthropic 请求头
 
         Args:

@@ -1,6 +1,7 @@
 """HTTP 客户端 httpx 实现"""
 
-import json as json_module
+from __future__ import annotations
+
 import time
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
@@ -9,6 +10,7 @@ import httpx
 
 from llm_spec.client.base_client import BaseHTTPClient
 from llm_spec.client.logger import RequestLogger
+from llm_spec.types import Headers, JSONValue
 
 
 class HTTPClient(BaseHTTPClient):
@@ -59,17 +61,13 @@ class HTTPClient(BaseHTTPClient):
         self,
         method: str,
         url: str,
-        headers: dict[str, str] | None = None,
-        json_data: dict[str, Any] | None = None,
-        data: dict[str, Any] | None = None,
-        files: dict[str, Any] | None = None,
+        headers: Headers | None = None,
+        json: JSONValue | None = None,
+        data: Any | None = None,
+        files: Any | None = None,
         timeout: float | None = None,
-    ) -> tuple[int, dict[str, str], Any]:
-        """发起同步 HTTP 请求
-
-        Returns:
-            (status_code, response_headers, response_body)
-        """
+    ) -> httpx.Response:
+        """发起同步 HTTP 请求"""
         request_id = self.logger.generate_request_id()
         timeout_val = timeout if timeout is not None else self.default_timeout
 
@@ -78,8 +76,8 @@ class HTTPClient(BaseHTTPClient):
             request_id=request_id,
             method=method,
             url=url,
-            headers=headers,
-            body=json_data or data,
+            headers=dict(headers) if headers is not None else None,
+            body=json or data,
         )
 
         start_time = time.time()
@@ -90,30 +88,24 @@ class HTTPClient(BaseHTTPClient):
                     method=method,
                     url=url,
                     headers=headers,
-                    json=json_data,
+                    json=json,
                     data=data,
                     files=files,
                 )
 
                 duration_ms = (time.time() - start_time) * 1000
 
-                # 尝试解析 JSON 响应
-                try:
-                    response_body = response.json()
-                except (json_module.JSONDecodeError, ValueError):
-                    response_body = response.text
-
                 # 记录响应
                 self.logger.log_response(
                     request_id=request_id,
                     status_code=response.status_code,
                     headers=dict(response.headers),
-                    body=response_body,
+                    body=None,
                     duration_ms=duration_ms,
                 )
 
                 # 4xx 和 5xx 状态码不抛出异常，由调用者处理
-                return response.status_code, dict(response.headers), response_body
+                return response
 
         except Exception as error:
             raise self._handle_error(request_id, error)
@@ -122,17 +114,13 @@ class HTTPClient(BaseHTTPClient):
         self,
         method: str,
         url: str,
-        headers: dict[str, str] | None = None,
-        json_data: dict[str, Any] | None = None,
-        data: dict[str, Any] | None = None,
-        files: dict[str, Any] | None = None,
+        headers: Headers | None = None,
+        json: JSONValue | None = None,
+        data: Any | None = None,
+        files: Any | None = None,
         timeout: float | None = None,
-    ) -> tuple[int, dict[str, str], Any]:
-        """发起异步 HTTP 请求
-
-        Returns:
-            (status_code, response_headers, response_body)
-        """
+    ) -> httpx.Response:
+        """发起异步 HTTP 请求"""
         request_id = self.logger.generate_request_id()
         timeout_val = timeout if timeout is not None else self.default_timeout
 
@@ -141,8 +129,8 @@ class HTTPClient(BaseHTTPClient):
             request_id=request_id,
             method=method,
             url=url,
-            headers=headers,
-            body=json_data or data,
+            headers=dict(headers) if headers is not None else None,
+            body=json or data,
         )
 
         start_time = time.time()
@@ -153,29 +141,23 @@ class HTTPClient(BaseHTTPClient):
                     method=method,
                     url=url,
                     headers=headers,
-                    json=json_data,
+                    json=json,
                     data=data,
                     files=files,
                 )
 
                 duration_ms = (time.time() - start_time) * 1000
 
-                # 尝试解析 JSON 响应
-                try:
-                    response_body = response.json()
-                except (json_module.JSONDecodeError, ValueError):
-                    response_body = response.text
-
                 # 记录响应
                 self.logger.log_response(
                     request_id=request_id,
                     status_code=response.status_code,
                     headers=dict(response.headers),
-                    body=response_body,
+                    body=None,
                     duration_ms=duration_ms,
                 )
 
-                return response.status_code, dict(response.headers), response_body
+                return response
 
         except Exception as error:
             raise self._handle_error(request_id, error)
@@ -184,8 +166,8 @@ class HTTPClient(BaseHTTPClient):
         self,
         method: str,
         url: str,
-        headers: dict[str, str] | None = None,
-        json_data: dict[str, Any] | None = None,
+        headers: Headers | None = None,
+        json: JSONValue | None = None,
         timeout: float | None = None,
     ) -> Iterator[bytes]:
         """发起同步流式请求（Server-Sent Events）
@@ -201,8 +183,8 @@ class HTTPClient(BaseHTTPClient):
             request_id=request_id,
             method=method,
             url=url,
-            headers=headers,
-            body=json_data,
+            headers=dict(headers) if headers is not None else None,
+            body=json,
         )
 
         try:
@@ -211,7 +193,7 @@ class HTTPClient(BaseHTTPClient):
                     method=method,
                     url=url,
                     headers=headers,
-                    json=json_data,
+                    json=json,
                 ) as response:
                     # 记录响应开始
                     self.logger.log_response(
@@ -232,8 +214,8 @@ class HTTPClient(BaseHTTPClient):
         self,
         method: str,
         url: str,
-        headers: dict[str, str] | None = None,
-        json_data: dict[str, Any] | None = None,
+        headers: Headers | None = None,
+        json: JSONValue | None = None,
         timeout: float | None = None,
     ) -> AsyncIterator[bytes]:
         """发起异步流式请求（Server-Sent Events）
@@ -249,8 +231,8 @@ class HTTPClient(BaseHTTPClient):
             request_id=request_id,
             method=method,
             url=url,
-            headers=headers,
-            body=json_data,
+            headers=dict(headers) if headers is not None else None,
+            body=json,
         )
 
         try:
@@ -259,7 +241,7 @@ class HTTPClient(BaseHTTPClient):
                     method=method,
                     url=url,
                     headers=headers,
-                    json=json_data,
+                    json=json,
                 ) as response:
                     # 记录响应开始
                     self.logger.log_response(

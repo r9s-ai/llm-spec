@@ -5,8 +5,13 @@ import pytest
 from llm_spec.reporting.collector import ReportCollector
 
 
+from llm_spec.providers.openai import OpenAIAdapter
+
+
 class TestAudioSpeech:
     """Audio Speech API 测试类"""
+    client: OpenAIAdapter
+    collector: ReportCollector
 
     ENDPOINT = "/v1/audio/speech"
     # 音频接口返回二进制流，没有 JSON 字段，但报告仍需要记录“期望字段”
@@ -20,7 +25,7 @@ class TestAudioSpeech:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, openai_client):
+    def setup_collector(self, request: pytest.FixtureRequest, openai_client: OpenAIAdapter):
         """为整个测试类设置报告收集器"""
         # 创建类级别的 collector
         collector = ReportCollector(
@@ -36,7 +41,8 @@ class TestAudioSpeech:
         yield
 
         # 类的所有测试完成后，生成一次报告
-        report_path = collector.finalize()
+        output_dir = getattr(request.config, "run_reports_dir", "./reports")
+        report_path = collector.finalize(output_dir)
         print(f"\n报告已生成: {report_path}")
 
     # ========================================================================
@@ -47,10 +53,12 @@ class TestAudioSpeech:
         """测试基线：仅必需参数"""
         test_name = "test_baseline"
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=self.BASE_PARAMS,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
         # 音频响应是二进制数据，只验证状态码
         self.collector.record_test(
@@ -95,10 +103,12 @@ class TestAudioSpeech:
         test_name = f"test_voice_variants[{voice}]"
         params = {**self.BASE_PARAMS, "voice": voice}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
         self.collector.record_test(
             test_name=test_name,
@@ -141,10 +151,12 @@ class TestAudioSpeech:
         test_name = f"test_response_format_variants[{response_format}]"
         params = {**self.BASE_PARAMS, "response_format": response_format}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
         self.collector.record_test(
             test_name=test_name,
@@ -187,10 +199,12 @@ class TestAudioSpeech:
         test_name = f"test_speed_variants[{speed}]"
         params = {**self.BASE_PARAMS, "speed": speed}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
         self.collector.record_test(
             test_name=test_name,
@@ -225,10 +239,12 @@ class TestAudioSpeech:
             "instructions": "Speak in a cheerful and energetic tone.",
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
         self.collector.record_test(
             test_name=test_name,
@@ -256,10 +272,12 @@ class TestAudioSpeech:
         test_name = "test_param_stream_format_audio"
         params = {**self.BASE_PARAMS, "stream_format": "audio"}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
         self.collector.record_test(
             test_name=test_name,
@@ -290,10 +308,12 @@ class TestAudioSpeech:
             "stream_format": "sse",
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
         self.collector.record_test(
             test_name=test_name,

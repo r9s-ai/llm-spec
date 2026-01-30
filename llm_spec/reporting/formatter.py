@@ -1,13 +1,16 @@
 """报告格式化器 - 从 JSON 报告生成简洁表格"""
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Dict, List
+
+from llm_spec.reporting.types import ReportData, UnsupportedParameter
 
 
 class ParameterTableFormatter:
     """参数支持情况格式化器"""
 
-    def __init__(self, report_data: dict):
+    def __init__(self, report_data: ReportData):
         """
         Args:
             report_data: JSON 报告数据
@@ -15,12 +18,11 @@ class ParameterTableFormatter:
         self.report = report_data
 
         # 从报告中提取信息
-        self.tested_params = sorted(
-            report_data.get("parameters", {}).get("tested", [])
-        )
+        self.tested_params = sorted(report_data.get("parameters", {}).get("tested", []))
         self.unsupported_params = {
-            p["parameter"]: p
+            p.get("parameter", ""): p
             for p in report_data.get("parameters", {}).get("unsupported", [])
+            if p.get("parameter")
         }
 
         # 测试统计
@@ -36,7 +38,7 @@ class ParameterTableFormatter:
             endpoint = self.report.get("endpoint", "")
             config = find_api_config(endpoint)
             if config:
-                return config.get("api_name", "Unknown API")
+                return str(config.get("api_name", "Unknown API"))
         except Exception:
             pass
 

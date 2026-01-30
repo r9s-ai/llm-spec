@@ -7,8 +7,14 @@ from llm_spec.validation.schemas.gemini import GenerateContentResponse
 from llm_spec.validation.validator import ResponseValidator
 
 
+from llm_spec.providers.gemini import GeminiAdapter
+
 class TestGenerateContent:
     """Generate Content API 测试类"""
+
+    client: GeminiAdapter
+
+    collector: ReportCollector
 
     # ========================================================================
     # 模型 Endpoint 配置
@@ -43,7 +49,7 @@ class TestGenerateContent:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, gemini_client):
+    def setup_collector(self, gemini_client: GeminiAdapter):
         """为整个测试类设置报告收集器"""
         # 创建类级别的 collector
         collector = ReportCollector(
@@ -59,34 +65,35 @@ class TestGenerateContent:
         yield
 
         # 类的所有测试完成后，生成一次报告
-        report_path = collector.finalize()
+        output_dir = getattr(request.config, "run_reports_dir", "./reports")
+        report_path = collector.finalize(output_dir)
         print(f"\n报告已生成: {report_path}")
 
     def test_baseline(self):
         """测试基线：仅必需参数"""
         test_name = "test_baseline"
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=self.BASE_PARAMS,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=self.BASE_PARAMS,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_param_temperature(self):
         """测试 temperature 参数"""
@@ -96,23 +103,23 @@ class TestGenerateContent:
             "generationConfig": {"temperature": 0.7},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -124,7 +131,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_max_output_tokens(self):
         """测试 maxOutputTokens 参数"""
@@ -134,23 +141,23 @@ class TestGenerateContent:
             "generationConfig": {"maxOutputTokens": 100},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -162,7 +169,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 2: 基础参数测试 (控制变量法)
@@ -176,23 +183,23 @@ class TestGenerateContent:
             "generationConfig": {"topP": 0.9},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -204,7 +211,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_top_k(self):
         """测试 topK 参数"""
@@ -214,23 +221,23 @@ class TestGenerateContent:
             "generationConfig": {"topK": 40},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -242,7 +249,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_candidate_count(self):
         """测试 candidateCount 参数（生成多个候选响应）"""
@@ -252,23 +259,23 @@ class TestGenerateContent:
             "generationConfig": {"candidateCount": 2},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -280,7 +287,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_stop_sequences(self):
         """测试 stopSequences 参数"""
@@ -290,23 +297,23 @@ class TestGenerateContent:
             "generationConfig": {"stopSequences": ["END", "STOP"]},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -318,7 +325,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 3: 响应格式测试
@@ -332,23 +339,23 @@ class TestGenerateContent:
             "generationConfig": {"responseMimeType": "application/json"},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -360,7 +367,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_response_format_json_with_schema(self):
         """测试带 schema 的 JSON 响应格式"""
@@ -386,23 +393,23 @@ class TestGenerateContent:
             },
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -414,7 +421,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 4: 安全设置测试
@@ -433,23 +440,23 @@ class TestGenerateContent:
             ],
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -461,7 +468,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize(
         "threshold",
@@ -485,23 +492,23 @@ class TestGenerateContent:
             ],
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -513,7 +520,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 5: 系统指令测试
@@ -529,23 +536,23 @@ class TestGenerateContent:
             },
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -557,7 +564,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 6: 工具调用测试
@@ -590,23 +597,23 @@ class TestGenerateContent:
             ],
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -618,7 +625,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_code_execution(self):
         """测试代码执行功能"""
@@ -628,23 +635,23 @@ class TestGenerateContent:
             "tools": [{"codeExecution": {}}],
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -656,7 +663,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 7: 生成控制进阶参数（惩罚和种子）
@@ -670,23 +677,23 @@ class TestGenerateContent:
             "generationConfig": {"presencePenalty": 0.5},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -698,7 +705,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_frequency_penalty(self):
         """测试 frequencyPenalty 参数（基于频率的token惩罚）"""
@@ -708,23 +715,23 @@ class TestGenerateContent:
             "generationConfig": {"frequencyPenalty": 0.5},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -736,7 +743,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_seed(self):
         """测试 seed 参数（确保生成结果可重复）"""
@@ -746,23 +753,23 @@ class TestGenerateContent:
             "generationConfig": {"seed": 42},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -774,7 +781,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 8: 概率信息参数
@@ -788,23 +795,23 @@ class TestGenerateContent:
             "generationConfig": {"responseLogprobs": True},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -816,7 +823,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_logprobs(self):
         """测试 logprobs 参数（与 responseLogprobs 配合使用）"""
@@ -829,23 +836,23 @@ class TestGenerateContent:
             },
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -857,7 +864,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 9: 特定场景参数
@@ -871,23 +878,23 @@ class TestGenerateContent:
             "generationConfig": {"audioTimestamp": True},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -899,7 +906,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize(
         "resolution",
@@ -934,23 +941,23 @@ class TestGenerateContent:
             "generationConfig": {"mediaResolution": resolution},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -962,7 +969,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 10: 响应模态控制
@@ -987,23 +994,23 @@ class TestGenerateContent:
             "generationConfig": {"responseModalities": modalities},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=endpoint,  # 使用选择的 endpoint
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -1015,7 +1022,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 11: 语音配置（speechConfig + voiceConfig）
@@ -1049,23 +1056,23 @@ class TestGenerateContent:
             },
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=endpoint,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -1077,7 +1084,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 12: 思考配置（thinkingConfig - Gemini 3）
@@ -1109,23 +1116,23 @@ class TestGenerateContent:
             },
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=endpoint,  # 使用 Flash 支持所有级别
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -1137,7 +1144,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 13: 图像配置（imageConfig）
@@ -1173,23 +1180,23 @@ class TestGenerateContent:
             },
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=endpoint,  # 使用图像生成模型
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -1201,7 +1208,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize(
         "image_size",
@@ -1226,23 +1233,23 @@ class TestGenerateContent:
             },
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=endpoint,  # 使用图像生成模型
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -1254,7 +1261,7 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 14: 增强功能参数
@@ -1268,23 +1275,23 @@ class TestGenerateContent:
             "generationConfig": {"enableEnhancedCivicAnswers": True},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, GenerateContentResponse
-        )
+        result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -1296,4 +1303,4 @@ class TestGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid

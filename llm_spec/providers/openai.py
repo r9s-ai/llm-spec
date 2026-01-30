@@ -1,12 +1,15 @@
 """OpenAI Provider 适配器"""
 
+from __future__ import annotations
+
 from llm_spec.providers.base import ProviderAdapter
+from llm_spec.types import Headers
 
 
 class OpenAIAdapter(ProviderAdapter):
     """OpenAI API 适配器"""
 
-    def prepare_headers(self, additional_headers: dict[str, str] | None = None) -> dict[str, str]:
+    def prepare_headers(self, additional_headers: Headers | None = None) -> dict[str, str]:
         """准备 OpenAI 请求头
 
         Args:

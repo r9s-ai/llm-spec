@@ -1,9 +1,14 @@
 """报告收集器，用于累积测试结果"""
 
+from __future__ import annotations
+
 import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from llm_spec.reporting.types import ReportData, UnsupportedParameter
+from llm_spec.types import JSONValue
 
 
 class ReportCollector:
@@ -29,17 +34,19 @@ class ReportCollector:
 
         # 参数跟踪
         self.tested_params: set[str] = set()
-        self.unsupported_params: list[dict[str, Any]] = []
+        self.unsupported_params: list[UnsupportedParameter] = []
 
         # 响应字段跟踪
         self.expected_fields: set[str] = set()
-        self.unsupported_fields: list[dict[str, Any]] = []
+        self.unsupported_fields: list[dict[str, Any]] = []  # TODO: add typed schema later
 
         # 错误跟踪
-        self.errors: list[dict[str, Any]] = []
+        self.errors: list[dict[str, Any]] = []  # TODO: add typed schema later
 
     @staticmethod
-    def _extract_param_paths(params: dict[str, Any], prefix: str = "", max_depth: int = 10) -> set[str]:
+    def _extract_param_paths(
+        params: dict[str, Any], prefix: str = "", max_depth: int = 10
+    ) -> set[str]:
         """递归提取参数路径（支持嵌套结构）
 
         Args:
@@ -97,7 +104,7 @@ class ReportCollector:
         test_name: str,
         params: dict[str, Any],
         status_code: int,
-        response_body: Any,
+        response_body: JSONValue | str | None,
         error: str | None = None,
         missing_fields: list[str] | None = None,
         expected_fields: list[str] | None = None,
@@ -160,6 +167,55 @@ class ReportCollector:
                     }
                 )
 
+    @staticmethod
+    def response_body_from_httpx(response: "object") -> JSONValue | str:
+        """Best-effort extract response body for reporting.
+
+        Preference order:
+        1) JSON (dict/list/primitive) if response.json() succeeds
+        2) text fallback
+        """
+        # Keep this method dependency-light (no hard dependency on httpx at runtime).
+        try:
+            json_method = getattr(response, "json", None)
+            if callable(json_method):
+                value: object = json_method()
+                # Only accept JSON-shaped values
+                if isinstance(value, (dict, list, str, int, float, bool)) or value is None:
+                    return value
+        except Exception:
+            pass
+
+        # Binary-ish responses (e.g. audio) - store a lightweight summary instead of junk text.
+        try:
+            headers_obj = getattr(response, "headers", None)
+            content_type: str | None = None
+            if headers_obj is not None:
+                # headers could be Mapping or httpx.Headers
+                content_type_val = headers_obj.get("content-type")
+                if isinstance(content_type_val, str):
+                    content_type = content_type_val
+
+            if content_type is not None and (
+                content_type.startswith("audio/")
+                or content_type.startswith("image/")
+                or content_type.startswith("application/octet-stream")
+            ):
+                content = getattr(response, "content", b"")
+                size = len(content) if isinstance(content, (bytes, bytearray)) else None
+                return {
+                    "binary": True,
+                    "content_type": content_type,
+                    "size_bytes": size,
+                }
+        except Exception:
+            pass
+
+        text = getattr(response, "text", None)
+        if isinstance(text, str):
+            return text
+        return str(response)
+
     def add_unsupported_param(
         self, param_name: str, param_value: Any, test_name: str, reason: str
     ) -> None:
@@ -172,12 +228,12 @@ class ReportCollector:
             reason: 不支持的原因
         """
         self.unsupported_params.append(
-            {
-                "parameter": param_name,
-                "value": param_value,
-                "test_name": test_name,
-                "reason": reason,
-            }
+            UnsupportedParameter(
+                parameter=param_name,
+                value=param_value,
+                test_name=test_name,
+                reason=reason,
+            )
         )
 
     def finalize(self, output_dir: str = "./reports") -> str:
@@ -199,7 +255,7 @@ class ReportCollector:
         report_dir.mkdir(parents=True, exist_ok=True)
 
         # 构建报告
-        report = {
+        report: ReportData = {
             "test_time": self.test_time,
             "provider": self.provider,
             "endpoint": self.endpoint,
@@ -232,7 +288,7 @@ class ReportCollector:
         return str(json_path)
 
     def _generate_parameter_tables_if_available(
-        self, output_dir: str, report_data: dict
+        self, output_dir: str, report_data: ReportData
     ) -> None:
         """动态生成参数支持表格
 

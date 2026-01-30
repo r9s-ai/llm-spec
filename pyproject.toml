@@ -34,6 +34,7 @@ dev = [
     "pytest-xdist>=3.5.0",    
     "ruff>=0.8.0",
     "mypy>=1.0.0",
+    "pyright>=1.1.350",
 ]
 
 yaml = ["pyyaml>=6.0.0"]
@@ -99,7 +100,7 @@ filterwarnings = [
 
 [tool.mypy]
 python_version = "3.11"
-strict = true
+strict = false
 warn_return_any = true
 warn_unused_ignores = true
 

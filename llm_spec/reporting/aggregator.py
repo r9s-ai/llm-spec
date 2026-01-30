@@ -1,9 +1,13 @@
 """报告聚合器 - 合并多个 endpoint 的测试结果"""
 
+from __future__ import annotations
+
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any
+
+from llm_spec.reporting.types import ReportData, TestSummary, UnsupportedParameter
 
 
 class AggregatedReportCollector:
@@ -23,10 +27,10 @@ class AggregatedReportCollector:
             provider: Provider 名称 (如 'openai', 'anthropic', 'gemini')
         """
         self.provider = provider
-        self.endpoints: Dict[str, Dict[str, Any]] = {}  # endpoint -> report_data
+        self.endpoints: dict[str, ReportData] = {}  # endpoint -> report_data
         self.aggregation_time = datetime.now().isoformat()
 
-    def add_endpoint_report(self, endpoint: str, report_data: Dict[str, Any]) -> None:
+    def add_endpoint_report(self, endpoint: str, report_data: ReportData) -> None:
         """添加单个 endpoint 的报告数据
 
         Args:
@@ -35,7 +39,7 @@ class AggregatedReportCollector:
         """
         self.endpoints[endpoint] = report_data
 
-    def merge_reports(self, report_files: List[Path]) -> None:
+    def merge_reports(self, report_files: list[Path]) -> None:
         """从文件列表合并多个报告
 
         Args:
@@ -44,14 +48,19 @@ class AggregatedReportCollector:
         for report_file in report_files:
             try:
                 with open(report_file, 'r', encoding='utf-8') as f:
-                    report_data = json.load(f)
-                    endpoint = report_data.get('endpoint', 'unknown')
+                    report_data: ReportData = json.load(f)
+                    endpoint = str(report_data.get("endpoint", "unknown"))
                     self.add_endpoint_report(endpoint, report_data)
             except (json.JSONDecodeError, IOError) as e:
                 print(f"Warning: Failed to load report {report_file}: {e}")
 
-    def get_aggregated_parameters(self) -> Dict[str, Dict[str, Any]]:
+    def get_aggregated_parameters(self) -> dict[str, dict[str, Any]]:
         """获取聚合后的参数信息，保持 endpoint 映射关系
+
+        ✅ 修复后的逻辑：
+        1. 先构建"不支持参数"的集合（从 unsupported 数组）
+        2. 只有不在"不支持"集合中的参数才标记为 "supported"
+        3. 在"不支持"集合中的参数标记为 "unsupported"
 
         Returns:
             参数聚合数据，格式：
@@ -67,46 +76,53 @@ class AggregatedReportCollector:
                 ...
             }
         """
-        aggregated = {}
+        aggregated: dict[str, dict[str, Any]] = {}
         all_endpoints = set(self.endpoints.keys())
 
         for endpoint, report in self.endpoints.items():
-            # 处理已测试的参数
-            tested_params = set(report.get('parameters', {}).get('tested', []))
-            for param in tested_params:
+            # 第一步：构建不支持参数的集合（便于快速查询）
+            unsupported_params_list: list[UnsupportedParameter] = (
+                report.get("parameters", {}).get("unsupported", [])
+            )
+            unsupported_param_names: dict[str, UnsupportedParameter] = {
+                str(param.get("parameter")): param
+                for param in unsupported_params_list
+                if param.get("parameter")
+            }
+
+            # 第二步：获取所有参数（tested + unsupported）
+            tested_params = set(report.get("parameters", {}).get("tested", []))
+            all_params = tested_params | set(unsupported_param_names.keys())
+
+            # 第三步：处理每个参数
+            for param in all_params:
                 if param not in aggregated:
                     aggregated[param] = {
                         'endpoints': {},
                         'support_count': 0,
                         'total_endpoints': len(all_endpoints),
                     }
-                aggregated[param]['endpoints'][endpoint] = {
-                    'status': 'supported',
-                    'test_count': report.get('test_summary', {}).get('total_tests', 0),
-                }
-                aggregated[param]['support_count'] += 1
 
-            # 处理不支持的参数
-            unsupported_params = report.get('parameters', {}).get('unsupported', [])
-            for unsupported in unsupported_params:
-                param_name = unsupported.get('parameter', '')
-                if param_name:
-                    if param_name not in aggregated:
-                        aggregated[param_name] = {
-                            'endpoints': {},
-                            'support_count': 0,
-                            'total_endpoints': len(all_endpoints),
-                        }
-                    if endpoint not in aggregated[param_name]['endpoints']:
-                        aggregated[param_name]['endpoints'][endpoint] = {
-                            'status': 'unsupported',
-                            'reason': unsupported.get('reason', 'Unknown'),
-                            'test_name': unsupported.get('test_name', ''),
-                        }
+                # ✅ 关键逻辑：检查参数是否在 unsupported 中
+                if param in unsupported_param_names:
+                    # 这个参数不支持
+                    unsupported_info = unsupported_param_names[param]
+                    aggregated[param]['endpoints'][endpoint] = {
+                        'status': 'unsupported',
+                        'reason': unsupported_info.get('reason', 'Unknown'),
+                        'test_name': unsupported_info.get('test_name', ''),
+                    }
+                else:
+                    # 这个参数支持（在 tested 中但不在 unsupported 中）
+                    aggregated[param]['endpoints'][endpoint] = {
+                        'status': 'supported',
+                        'test_count': report.get("test_summary", {}).get("total_tests", 0),
+                    }
+                    aggregated[param]['support_count'] += 1
 
         return aggregated
 
-    def get_aggregated_summary(self) -> Dict[str, Any]:
+    def get_aggregated_summary(self) -> dict[str, Any]:
         """获取聚合的统计摘要
 
         Returns:
@@ -119,14 +135,14 @@ class AggregatedReportCollector:
         total_tests = 0
         passed_tests = 0
         failed_tests = 0
-        error_list = []
+        error_list: list[Any] = []
 
         for report in self.endpoints.values():
-            summary = report.get('test_summary', {})
-            total_tests += summary.get('total_tests', 0)
-            passed_tests += summary.get('passed', 0)
-            failed_tests += summary.get('failed', 0)
-            error_list.extend(report.get('errors', []))
+            summary: TestSummary = report.get("test_summary", {})
+            total_tests += summary.get("total_tests", 0)
+            passed_tests += summary.get("passed", 0)
+            failed_tests += summary.get("failed", 0)
+            error_list.extend(report.get("errors", []))  # Any until error schema is defined
 
         # 去重错误日志（按 test_name 和 message）
         unique_errors = {}
@@ -166,7 +182,7 @@ class AggregatedReportCollector:
             'errors_count': len(unique_errors),
         }
 
-    def finalize(self, output_dir: str = "./reports") -> Dict[str, str]:
+    def finalize(self, output_dir: str = "./reports") -> dict[str, str]:
         """生成聚合报告
 
         Args:
@@ -222,7 +238,9 @@ class AggregatedReportCollector:
         }
 
     @staticmethod
-    def _serialize_aggregated_params(aggregated_params: Dict[str, Dict]) -> Dict[str, Any]:
+    def _serialize_aggregated_params(
+        aggregated_params: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
         """序列化聚合参数数据用于 JSON 输出"""
         result = {}
         for param_name, param_data in aggregated_params.items():
@@ -235,13 +253,12 @@ class AggregatedReportCollector:
             }
         return result
 
-    def _generate_markdown(self, report_dir: Path, report: Dict) -> Path:
-        """生成 Markdown 格式的聚合报告"""
+    def _generate_markdown(self, report_dir: Path, report: dict[str, Any]) -> Path:
+        """生成 Markdown 格式的聚合报告 - 按 endpoint 分组显示参数"""
         markdown_path = report_dir / "report.md"
 
         summary = report['summary']
         endpoints = report['endpoints']
-        aggregated_params = report['parameters']['aggregated']
 
         lines = []
         lines.append(f"# {summary['provider'].upper()} API 参数支持聚合报告\n")
@@ -255,46 +272,43 @@ class AggregatedReportCollector:
         lines.append(f"- **测试失败**: {summary['test_summary']['failed']} ❌")
         lines.append(f"- **通过率**: {summary['test_summary']['pass_rate']}\n")
 
-        # 参数统计
-        param_stats = summary['parameters']
-        lines.append("## 📈 参数支持统计\n")
-        lines.append(f"- **总参数数**: {param_stats['total_unique']}")
-        lines.append(f"- **完全支持** (全endpoint): {param_stats['fully_supported']}")
-        lines.append(f"- **部分支持** (部分endpoint): {param_stats['partially_supported']}")
-        lines.append(f"- **不支持** (全endpoint): {param_stats['unsupported']}\n")
+        # 按 endpoint 分组显示参数表格
+        lines.append("## 📋 各 Endpoint 参数支持情况\n")
 
-        # Endpoint 列表
-        lines.append("## 🔗 测试的 Endpoint\n")
-        for endpoint, ep_data in sorted(endpoints.items()):
-            ep_summary = ep_data['test_summary']
+        for endpoint in sorted(endpoints.keys()):
+            endpoint_data = endpoints[endpoint]
+            ep_summary = endpoint_data['test_summary']
+
+            # endpoint 标题和统计
+            lines.append(f"### {endpoint}\n")
             lines.append(
-                f"- `{endpoint}` "
-                f"({ep_summary.get('total_tests', 0)} 测试, "
-                f"通过: {ep_summary.get('passed', 0)}, "
-                f"失败: {ep_summary.get('failed', 0)})"
+                f"**测试统计**: {ep_summary.get('total_tests', 0)} 测试, "
+                f"通过: {ep_summary.get('passed', 0)} ✅, "
+                f"失败: {ep_summary.get('failed', 0)} ❌\n"
             )
-        lines.append("")
 
-        # 参数详细表格
-        lines.append("## 📋 参数详细支持情况\n")
-        lines.append("|  参数  | 支持度 | Endpoint 分布 |")
-        lines.append("|--------|--------|--------|")
+            # 获取这个 endpoint 的原始报告数据（从endpoints中的raw数据）
+            # 从聚合参数中提取该endpoint的参数信息
+            aggregated_params = report['parameters']['aggregated']
 
-        for param_name in sorted(aggregated_params.keys()):
-            param_data = aggregated_params[param_name]
-            support_rate = param_data['support_rate']
+            lines.append("| 参数 | 状态 |")
+            lines.append("|------|------|")
 
-            # 构建 endpoint 分布字符串
-            endpoint_dist = []
-            for endpoint in sorted(param_data['endpoints'].keys()):
-                ep_status = param_data['endpoints'][endpoint]['status']
-                status_char = "✅" if ep_status == 'supported' else "❌"
-                endpoint_dist.append(f"{status_char} {endpoint}")
+            for param_name in sorted(aggregated_params.keys()):
+                param_data = aggregated_params[param_name]
+                endpoint_info = param_data['endpoints'].get(endpoint)
 
-            endpoint_str = " / ".join(endpoint_dist)
-            lines.append(f"| `{param_name}` | {support_rate} | {endpoint_str} |")
+                if endpoint_info:
+                    if endpoint_info['status'] == 'supported':
+                        status = "✅ 支持"
+                    else:
+                        reason = endpoint_info.get('reason', '不支持')
+                        status = f"❌ 不支持"
+                        if reason:
+                            status += f" ({reason.split(':')[0]})"
+                    lines.append(f"| `{param_name}` | {status} |")
 
-        lines.append("")
+            lines.append("")
 
         # 错误统计
         if summary['errors_count'] > 0:
@@ -307,15 +321,15 @@ class AggregatedReportCollector:
 
         return markdown_path
 
-    def _generate_html(self, report_dir: Path, report: Dict) -> Path:
-        """生成 HTML 格式的聚合报告"""
+    def _generate_html(self, report_dir: Path, report: dict[str, Any]) -> Path:
+        """生成 HTML 格式的聚合报告 - 按 endpoint 分组显示参数"""
         html_path = report_dir / "report.html"
 
         summary = report['summary']
         endpoints = report['endpoints']
         aggregated_params = report['parameters']['aggregated']
 
-        # 简化的 HTML 模板
+        # HTML 模板 - 按 endpoint 分组
         html_content = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -325,25 +339,29 @@ class AggregatedReportCollector:
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }}
-        .container {{ max-width: 1200px; margin: 0 auto; padding: 20px; }}
+        .container {{ max-width: 1400px; margin: 0 auto; padding: 20px; }}
         .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 8px; margin-bottom: 30px; }}
         .header h1 {{ font-size: 28px; margin-bottom: 10px; }}
         .header p {{ font-size: 14px; opacity: 0.9; }}
-        .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }}
-        .stat-card {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-        .stat-card h3 {{ color: #666; font-size: 14px; margin-bottom: 10px; }}
-        .stat-card .value {{ font-size: 32px; font-weight: bold; color: #667eea; }}
-        .table-section {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }}
-        .table-section h2 {{ font-size: 18px; margin-bottom: 15px; color: #333; }}
+        .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }}
+        .stat-card {{ background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }}
+        .stat-card h3 {{ color: #666; font-size: 13px; margin-bottom: 8px; font-weight: 500; }}
+        .stat-card .value {{ font-size: 28px; font-weight: bold; color: #667eea; }}
+        .section {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }}
+        .section h2 {{ font-size: 18px; margin-bottom: 15px; color: #333; padding-bottom: 10px; border-bottom: 2px solid #f0f0f0; }}
+        .endpoint-group {{ margin-bottom: 30px; padding: 15px; background: #fafafa; border-left: 4px solid #667eea; border-radius: 4px; }}
+        .endpoint-group h3 {{ font-size: 16px; color: #667eea; margin-bottom: 12px; font-family: monospace; }}
+        .endpoint-stats {{ display: flex; gap: 20px; margin-bottom: 12px; font-size: 13px; color: #666; }}
+        .endpoint-stats span {{ display: inline-block; }}
+        .endpoint-stats .pass {{ color: #27ae60; }}
+        .endpoint-stats .fail {{ color: #e74c3c; }}
         table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
-        th {{ background: #f8f8f8; padding: 12px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd; }}
-        td {{ padding: 12px; border-bottom: 1px solid #eee; }}
+        th {{ background: #f8f8f8; padding: 10px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd; }}
+        td {{ padding: 10px; border-bottom: 1px solid #eee; }}
         tr:hover {{ background: #fafafa; }}
-        .endpoint {{ font-family: monospace; color: #667eea; }}
-        .support-rate {{ font-weight: bold; }}
-        .full-support {{ color: #27ae60; }}
-        .partial-support {{ color: #f39c12; }}
-        .no-support {{ color: #e74c3c; }}
+        .support {{ color: #27ae60; font-weight: 500; }}
+        .unsupport {{ color: #e74c3c; }}
+        .summary-table td:first-child {{ font-weight: 500; color: #333; }}
     </style>
 </head>
 <body>
@@ -359,11 +377,11 @@ class AggregatedReportCollector:
                 <div class="value">{summary['test_summary']['total_tests']}</div>
             </div>
             <div class="stat-card">
-                <h3>测试通过</h3>
+                <h3>测试通过 ✅</h3>
                 <div class="value" style="color: #27ae60;">{summary['test_summary']['passed']}</div>
             </div>
             <div class="stat-card">
-                <h3>测试失败</h3>
+                <h3>测试失败 ❌</h3>
                 <div class="value" style="color: #e74c3c;">{summary['test_summary']['failed']}</div>
             </div>
             <div class="stat-card">
@@ -372,99 +390,65 @@ class AggregatedReportCollector:
             </div>
         </div>
 
-        <div class="table-section">
-            <h2>📊 参数支持统计</h2>
-            <table>
-                <tr>
-                    <th>支持类型</th>
-                    <th>数量</th>
-                </tr>
-                <tr>
-                    <td>完全支持 (全endpoint)</td>
-                    <td class="support-rate full-support">{summary['parameters']['fully_supported']}</td>
-                </tr>
-                <tr>
-                    <td>部分支持 (部分endpoint)</td>
-                    <td class="support-rate partial-support">{summary['parameters']['partially_supported']}</td>
-                </tr>
-                <tr>
-                    <td>不支持 (全endpoint)</td>
-                    <td class="support-rate no-support">{summary['parameters']['unsupported']}</td>
-                </tr>
-            </table>
-        </div>
-
-        <div class="table-section">
-            <h2>🔗 测试的 Endpoint ({len(endpoints)})</h2>
-            <table>
-                <tr>
-                    <th>Endpoint</th>
-                    <th>总测试</th>
-                    <th>通过</th>
-                    <th>失败</th>
-                </tr>
+        <div class="section">
+            <h2>📋 各 Endpoint 参数支持情况</h2>
         """
 
+        # 按 endpoint 分组显示
         for endpoint in sorted(endpoints.keys()):
-            ep_data = endpoints[endpoint]
-            ep_summary = ep_data['test_summary']
-            html_content += f"""        <tr>
-                    <td><span class="endpoint">{endpoint}</span></td>
-                    <td>{ep_summary.get('total_tests', 0)}</td>
-                    <td style="color: #27ae60;">{ep_summary.get('passed', 0)}</td>
-                    <td style="color: #e74c3c;">{ep_summary.get('failed', 0)}</td>
-                </tr>
+            endpoint_data = endpoints[endpoint]
+            ep_summary = endpoint_data['test_summary']
+
+            total_tests = ep_summary.get('total_tests', 0)
+            passed = ep_summary.get('passed', 0)
+            failed = ep_summary.get('failed', 0)
+
+            html_content += f"""
+            <div class="endpoint-group">
+                <h3>{endpoint}</h3>
+                <div class="endpoint-stats">
+                    <span>🔬 {total_tests} 个测试</span>
+                    <span class="pass">✅ {passed} 通过</span>
+                    <span class="fail">❌ {failed} 失败</span>
+                </div>
+                <table>
+                    <tr>
+                        <th style="width: 40%;">参数</th>
+                        <th style="width: 60%;">状态</th>
+                    </tr>
             """
 
-        html_content += """            </table>
-        </div>
+            # 为这个 endpoint 的参数创建表格
+            for param_name in sorted(aggregated_params.keys()):
+                param_data = aggregated_params[param_name]
+                endpoint_info = param_data['endpoints'].get(endpoint)
 
-        <div class="table-section">
-            <h2>📋 参数详细支持情况</h2>
-            <table>
-                <tr>
-                    <th>参数</th>
-                    <th>支持率</th>
-                    <th style="width: 50%;">Endpoint 分布</th>
-                </tr>
-        """
+                if endpoint_info:
+                    if endpoint_info['status'] == 'supported':
+                        status_html = '<span class="support">✅ 支持</span>'
+                    else:
+                        reason = endpoint_info.get('reason', '不支持')
+                        reason_short = reason.split(':')[0] if reason else '不支持'
+                        status_html = f'<span class="unsupport">❌ {reason_short}</span>'
 
-        for param_name in sorted(aggregated_params.keys()):
-            param_data = aggregated_params[param_name]
-            support_rate = param_data['support_rate']
+                    html_content += f"""
+                    <tr>
+                        <td><code>{param_name}</code></td>
+                        <td>{status_html}</td>
+                    </tr>
+                    """
 
-            # 确定支持率样式
-            if param_data['support_count'] == param_data['total_endpoints']:
-                rate_class = "full-support"
-            elif param_data['support_count'] == 0:
-                rate_class = "no-support"
-            else:
-                rate_class = "partial-support"
-
-            # 构建 endpoint 分布
-            endpoint_dist_html = ""
-            for endpoint in sorted(param_data['endpoints'].keys()):
-                ep_status = param_data['endpoints'][endpoint]['status']
-                if ep_status == 'supported':
-                    endpoint_dist_html += f'<span class="endpoint" style="color: #27ae60;">✅ {endpoint}</span> / '
-                else:
-                    endpoint_dist_html += f'<span class="endpoint" style="color: #e74c3c;">❌ {endpoint}</span> / '
-
-            endpoint_dist_html = endpoint_dist_html.rstrip(' / ')
-
-            html_content += f"""        <tr>
-                    <td><code>{param_name}</code></td>
-                    <td class="support-rate {rate_class}">{support_rate}</td>
-                    <td>{endpoint_dist_html}</td>
-                </tr>
+            html_content += """
+                </table>
+            </div>
             """
 
-        html_content += """            </table>
+        html_content += """
         </div>
     </div>
 </body>
 </html>
-"""
+        """
 
         with open(html_path, 'w', encoding='utf-8') as f:
             f.write(html_content)

@@ -7,8 +7,13 @@ from llm_spec.validation.schemas.openai.chat import ChatCompletionResponse
 from llm_spec.validation.validator import ResponseValidator
 
 
+from llm_spec.providers.openai import OpenAIAdapter
+
+
 class TestChatCompletions:
     """Chat Completions API 测试类"""
+    client: OpenAIAdapter
+    collector: ReportCollector
 
     ENDPOINT = "/v1/chat/completions"
 
@@ -19,7 +24,7 @@ class TestChatCompletions:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, openai_client):
+    def setup_collector(self, request: pytest.FixtureRequest, openai_client: OpenAIAdapter):
         """为整个测试类设置报告收集器"""
         # 创建类级别的 collector
         collector = ReportCollector(
@@ -35,7 +40,8 @@ class TestChatCompletions:
         yield
 
         # 类的所有测试完成后，生成一次报告
-        report_path = collector.finalize()
+        output_dir = getattr(request.config, "run_reports_dir", "./reports")
+        report_path = collector.finalize(output_dir)
         print(f"\n报告已生成: {report_path}")
 
     def test_baseline(self):
@@ -43,15 +49,15 @@ class TestChatCompletions:
         test_name = "test_baseline"
 
         # 发起请求
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=self.BASE_PARAMS,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
         # 验证响应
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         # 记录测试结果
         self.collector.record_test(
@@ -59,14 +65,14 @@ class TestChatCompletions:
             params=self.BASE_PARAMS,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         # 断言：测试应该通过
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_param_temperature(self):
         """测试 temperature 参数"""
@@ -74,15 +80,15 @@ class TestChatCompletions:
         params = {**self.BASE_PARAMS, "temperature": 0.7}
 
         # 发起请求
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
         # 验证响应
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         # 记录测试结果
         self.collector.record_test(
@@ -90,9 +96,9 @@ class TestChatCompletions:
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         # 如果失败，记录不支持的参数
@@ -106,7 +112,7 @@ class TestChatCompletions:
 
         # 断言
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_param_max_tokens(self):
         """测试 max_tokens 参数"""
@@ -114,15 +120,15 @@ class TestChatCompletions:
         params = {**self.BASE_PARAMS, "max_tokens": 100}
 
         # 发起请求
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
         # 验证响应
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         # 记录测试结果
         self.collector.record_test(
@@ -130,9 +136,9 @@ class TestChatCompletions:
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         # 如果失败，记录不支持的参数
@@ -146,7 +152,7 @@ class TestChatCompletions:
 
         # 断言
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     # @pytest.mark.parametrize("model", ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"])
     # def test_model_variants(self, model):
@@ -161,7 +167,7 @@ class TestChatCompletions:
     #     )
 
     #     # 验证响应
-    #     is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+    #     is_valid, result.error_message, missing_fields, expected_fields = ResponseValidator.validate(
     #         response_body, ChatCompletionResponse
     #     )
 
@@ -171,8 +177,8 @@ class TestChatCompletions:
     #         params=params,
     #         status_code=status_code,
     #         response_body=response_body,
-    #         error=error_msg if not is_valid else None,
-    #         missing_fields=missing_fields,
+    #         error=result.error_message if not result.is_valid else None,
+    #         missing_fields=result.missing_fields,
     #     )
 
     #     # 如果失败，记录不支持的参数
@@ -186,7 +192,7 @@ class TestChatCompletions:
 
     #     # 断言
     #     assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-    #     assert is_valid, f"响应验证失败: {error_msg}"
+    #     assert result.is_valid, f"响应验证失败: {result.error_message}"
     # ========================================================================
     # 阶段 2: 基础参数测试 (控制变量法)
     # ========================================================================
@@ -196,23 +202,23 @@ class TestChatCompletions:
         test_name = "test_param_top_p"
         params = {**self.BASE_PARAMS, "top_p": 0.9}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -224,30 +230,30 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_param_n(self):
         """测试 n 参数（生成多个响应）"""
         test_name = "test_param_n"
         params = {**self.BASE_PARAMS, "n": 2}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -259,30 +265,30 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_param_stop_string(self):
         """测试 stop 参数（字符串形式）"""
         test_name = "test_param_stop_string"
         params = {**self.BASE_PARAMS, "stop": "\n"}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -294,30 +300,30 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_param_stop_array(self):
         """测试 stop 参数（数组形式）"""
         test_name = "test_param_stop_array"
         params = {**self.BASE_PARAMS, "stop": ["\n", "END"]}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -329,30 +335,30 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_param_frequency_penalty(self):
         """测试 frequency_penalty 参数"""
         test_name = "test_param_frequency_penalty"
         params = {**self.BASE_PARAMS, "frequency_penalty": 0.5}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -364,30 +370,30 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_param_presence_penalty(self):
         """测试 presence_penalty 参数"""
         test_name = "test_param_presence_penalty"
         params = {**self.BASE_PARAMS, "presence_penalty": 0.5}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -399,30 +405,30 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_param_seed(self):
         """测试 seed 参数（确定性输出）"""
         test_name = "test_param_seed"
         params = {**self.BASE_PARAMS, "seed": 12345}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -434,30 +440,30 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_param_max_completion_tokens(self):
         """测试 max_completion_tokens 参数（新参数）"""
         test_name = "test_param_max_completion_tokens"
         params = {**self.BASE_PARAMS, "max_completion_tokens": 100}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -469,30 +475,30 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_param_user(self):
         """测试 user 参数（用户标识）"""
         test_name = "test_param_user"
         params = {**self.BASE_PARAMS, "user": "user-123"}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -504,7 +510,7 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     # ========================================================================
     # 阶段 3: 响应格式测试
@@ -515,23 +521,23 @@ class TestChatCompletions:
         test_name = "test_response_format_text"
         params = {**self.BASE_PARAMS, "response_format": {"type": "text"}}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -543,7 +549,7 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_response_format_json_object(self):
         """测试 response_format 为 json_object"""
@@ -554,23 +560,23 @@ class TestChatCompletions:
             "response_format": {"type": "json_object"},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -582,7 +588,7 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_response_format_json_schema(self):
         """测试 response_format 为 json_schema"""
@@ -606,23 +612,23 @@ class TestChatCompletions:
             },
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -634,7 +640,7 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     # ========================================================================
     # 阶段 4: 工具调用测试
@@ -664,23 +670,23 @@ class TestChatCompletions:
             ],
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -692,7 +698,7 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     @pytest.mark.parametrize("tool_choice", ["none", "auto", "required"])
     def test_tool_choice_variants(self, tool_choice):
@@ -718,23 +724,23 @@ class TestChatCompletions:
             "tool_choice": tool_choice,
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -746,7 +752,7 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_parallel_tool_calls(self):
         """测试 parallel_tool_calls 参数"""
@@ -767,23 +773,23 @@ class TestChatCompletions:
             "parallel_tool_calls": True,
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -795,7 +801,7 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     # ========================================================================
     # 阶段 5: Logprobs 测试
@@ -806,23 +812,23 @@ class TestChatCompletions:
         test_name = "test_param_logprobs"
         params = {**self.BASE_PARAMS, "logprobs": True}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -834,7 +840,7 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     @pytest.mark.parametrize("top_logprobs", [1, 5, 10])
     def test_param_top_logprobs(self, top_logprobs):
@@ -842,23 +848,23 @@ class TestChatCompletions:
         test_name = f"test_param_top_logprobs[{top_logprobs}]"
         params = {**self.BASE_PARAMS, "logprobs": True, "top_logprobs": top_logprobs}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -870,7 +876,7 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     # ========================================================================
     # 阶段 6: 流式响应测试
@@ -915,9 +921,7 @@ class TestChatCompletions:
                             chunks.append(chunk_data)
 
                             # 验证每个 chunk
-                            is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-                                chunk_data, ChatCompletionChunkResponse
-                            )
+                            result = ResponseValidator.validate_response(response, ChatCompletionChunkResponse)
 
                             # 累积内容
                             if chunk_data.get("choices"):
@@ -1005,9 +1009,7 @@ class TestChatCompletions:
                             has_usage = True
 
                         # 验证每个 chunk
-                        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-                            chunk_data, ChatCompletionChunkResponse
-                        )
+                        result = ResponseValidator.validate_response(response, ChatCompletionChunkResponse)
                     except json.JSONDecodeError:
                         pass
 
@@ -1059,23 +1061,23 @@ class TestChatCompletions:
         # 使用 -100 而非 100，因为极端正值可能导致 API 处理异常
         params = {**self.BASE_PARAMS, "logit_bias": {"31373": -100}}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -1087,30 +1089,30 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_param_service_tier(self):
         """测试 service_tier 参数"""
         test_name = "test_param_service_tier"
         params = {**self.BASE_PARAMS, "service_tier": "auto"}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -1122,4 +1124,4 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"

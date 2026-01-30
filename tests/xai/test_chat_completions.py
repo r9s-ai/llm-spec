@@ -7,8 +7,14 @@ from llm_spec.validation.schemas.xai import ChatCompletionResponse
 from llm_spec.validation.validator import ResponseValidator
 
 
+from llm_spec.providers.xai import XAIAdapter
+
 class TestChatCompletions:
     """Chat Completions API 测试类"""
+
+    client: XAIAdapter
+
+    collector: ReportCollector
 
     ENDPOINT = "/v1/chat/completions"
 
@@ -19,7 +25,7 @@ class TestChatCompletions:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, xai_client):
+    def setup_collector(self, xai_client: XAIAdapter):
         """为整个测试类设置报告收集器"""
         # 创建类级别的 collector
         collector = ReportCollector(
@@ -35,57 +41,58 @@ class TestChatCompletions:
         yield
 
         # 类的所有测试完成后，生成一次报告
-        report_path = collector.finalize()
+        output_dir = getattr(request.config, "run_reports_dir", "./reports")
+        report_path = collector.finalize(output_dir)
         print(f"\n报告已生成: {report_path}")
 
     def test_baseline(self):
         """测试基线：仅必需参数"""
         test_name = "test_baseline"
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=self.BASE_PARAMS,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=self.BASE_PARAMS,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_param_temperature(self):
         """测试 temperature 参数"""
         test_name = "test_param_temperature"
         params = {**self.BASE_PARAMS, "temperature": 0.7}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -97,30 +104,30 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_max_tokens(self):
         """测试 max_tokens 参数"""
         test_name = "test_param_max_tokens"
         params = {**self.BASE_PARAMS, "max_tokens": 100}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ChatCompletionResponse
-        )
+        result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -132,4 +139,4 @@ class TestChatCompletions:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid

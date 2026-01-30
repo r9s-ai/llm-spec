@@ -1,8 +1,10 @@
 """配置加载器模块，解析 llm-spec.toml 配置文件"""
 
+from __future__ import annotations
+
 import tomllib
 from pathlib import Path
-from typing import Any
+from typing import ClassVar
 
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -45,8 +47,8 @@ class AppConfig(BaseSettings):
     log: LogConfig = Field(default_factory=LogConfig)
     report: ReportConfig = Field(default_factory=ReportConfig)
 
-    # Provider configs 动态加载
-    _provider_configs: dict[str, ProviderConfig] = {}
+    # Provider configs 动态加载（Pydantic v2 不允许字段名以下划线开头）
+    provider_configs: dict[str, ProviderConfig] = Field(default_factory=dict, exclude=True)
 
     @classmethod
     def from_toml(cls, config_path: Path | str = "llm-spec.toml") -> "AppConfig":
@@ -78,7 +80,7 @@ class AppConfig(BaseSettings):
                 provider_configs[key] = ProviderConfig(**value)
 
         config = cls(log=log_config, report=report_config)
-        config._provider_configs = provider_configs
+        config.provider_configs = provider_configs
 
         return config
 
@@ -94,9 +96,9 @@ class AppConfig(BaseSettings):
         Raises:
             KeyError: 如果 provider 配置不存在
         """
-        if provider_name not in self._provider_configs:
+        if provider_name not in self.provider_configs:
             raise KeyError(f"未找到 provider '{provider_name}' 的配置")
-        return self._provider_configs[provider_name]
+        return self.provider_configs[provider_name]
 
     def list_providers(self) -> list[str]:
         """列出所有配置的 providers
@@ -104,7 +106,7 @@ class AppConfig(BaseSettings):
         Returns:
             Provider 名称列表
         """
-        return list(self._provider_configs.keys())
+        return list(self.provider_configs.keys())
 
 
 # 全局配置实例（懒加载）

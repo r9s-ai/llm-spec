@@ -7,8 +7,13 @@ from llm_spec.validation.schemas.openai.images import ImageResponse
 from llm_spec.validation.validator import ResponseValidator
 
 
+from llm_spec.providers.openai import OpenAIAdapter
+
+
 class TestImagesEdits:
     """Images Edit API 测试类"""
+    client: OpenAIAdapter
+    collector: ReportCollector
 
     ENDPOINT = "/v1/images/edits"
     IMAGE_PATH = "test_assets/images/test_base.png"
@@ -20,7 +25,7 @@ class TestImagesEdits:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, openai_client):
+    def setup_collector(self, request: pytest.FixtureRequest, openai_client: OpenAIAdapter):
         """为整个测试类设置报告收集器"""
         collector = ReportCollector(
             provider="openai",
@@ -33,7 +38,8 @@ class TestImagesEdits:
 
         yield
 
-        report_path = collector.finalize()
+        output_dir = getattr(request.config, "run_reports_dir", "./reports")
+        report_path = collector.finalize(output_dir)
         print(f"\n报告已生成: {report_path}")
 
     # ====================================================================
@@ -45,24 +51,24 @@ class TestImagesEdits:
 
         with open(self.IMAGE_PATH, "rb") as img:
             files = {"image": ("image.png", img, "image/png")}
-            status_code, headers, response_body = self.client.request(
+            response = self.client.request(
                 endpoint=self.ENDPOINT,
                 params=self.BASE_PARAMS,
                 files=files,
             )
+            status_code = response.status_code
+            response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=self.BASE_PARAMS,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -74,7 +80,7 @@ class TestImagesEdits:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     # ====================================================================
     # 模型变体
@@ -92,7 +98,7 @@ class TestImagesEdits:
     #             files=files,
     #         )
 
-    #     is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+    #     is_valid, result.error_message, missing_fields, expected_fields = ResponseValidator.validate(
     #         response_body, ImageResponse
     #     )
 
@@ -101,9 +107,9 @@ class TestImagesEdits:
     #         params=params,
     #         status_code=status_code,
     #         response_body=response_body,
-    #         error=error_msg if not is_valid else None,
-    #         missing_fields=missing_fields,
-    #         expected_fields=expected_fields,
+    #         error=result.error_message if not result.is_valid else None,
+    #         missing_fields=result.missing_fields,
+    #         expected_fields=result.expected_fields,
     #     )
 
     #     if not (200 <= status_code < 300):
@@ -115,7 +121,7 @@ class TestImagesEdits:
     #         )
 
     #     assert 200 <= status_code < 300
-    #     assert is_valid
+    #     assert result.is_valid
 
     # ====================================================================
     # 参数变体（控制变量法）
@@ -127,24 +133,24 @@ class TestImagesEdits:
 
         with open(self.IMAGE_PATH, "rb") as img:
             files = {"image": ("image.png", img, "image/png")}
-            status_code, headers, response_body = self.client.request(
+            response = self.client.request(
                 endpoint=self.ENDPOINT,
                 params=params,
                 files=files,
             )
+            status_code = response.status_code
+            response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -156,7 +162,7 @@ class TestImagesEdits:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_background_transparent(self):
         """GPT image 支持 background 透明"""
@@ -165,24 +171,24 @@ class TestImagesEdits:
 
         with open(self.IMAGE_PATH, "rb") as img:
             files = {"image": ("image.png", img, "image/png")}
-            status_code, headers, response_body = self.client.request(
+            response = self.client.request(
                 endpoint=self.ENDPOINT,
                 params=params,
                 files=files,
             )
+            status_code = response.status_code
+            response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -194,7 +200,7 @@ class TestImagesEdits:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_output_format_webp(self):
         """GPT image 支持 output_format=webp"""
@@ -203,24 +209,24 @@ class TestImagesEdits:
 
         with open(self.IMAGE_PATH, "rb") as img:
             files = {"image": ("image.png", img, "image/png")}
-            status_code, headers, response_body = self.client.request(
+            response = self.client.request(
                 endpoint=self.ENDPOINT,
                 params=params,
                 files=files,
             )
+            status_code = response.status_code
+            response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -232,7 +238,7 @@ class TestImagesEdits:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_output_compression(self):
         """GPT image 支持 output_compression (webp/jpeg)"""
@@ -241,24 +247,24 @@ class TestImagesEdits:
 
         with open(self.IMAGE_PATH, "rb") as img:
             files = {"image": ("image.png", img, "image/png")}
-            status_code, headers, response_body = self.client.request(
+            response = self.client.request(
                 endpoint=self.ENDPOINT,
                 params=params,
                 files=files,
             )
+            status_code = response.status_code
+            response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -270,7 +276,7 @@ class TestImagesEdits:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_size_gpt_landscape(self):
         """GPT image 尺寸横版"""
@@ -279,24 +285,24 @@ class TestImagesEdits:
 
         with open(self.IMAGE_PATH, "rb") as img:
             files = {"image": ("image.png", img, "image/png")}
-            status_code, headers, response_body = self.client.request(
+            response = self.client.request(
                 endpoint=self.ENDPOINT,
                 params=params,
                 files=files,
             )
+            status_code = response.status_code
+            response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -308,7 +314,7 @@ class TestImagesEdits:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_n_multiple(self):
         """生成多张图片 (n=2)"""
@@ -317,24 +323,24 @@ class TestImagesEdits:
 
         with open(self.IMAGE_PATH, "rb") as img:
             files = {"image": ("image.png", img, "image/png")}
-            status_code, headers, response_body = self.client.request(
+            response = self.client.request(
                 endpoint=self.ENDPOINT,
                 params=params,
                 files=files,
             )
+            status_code = response.status_code
+            response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -346,7 +352,7 @@ class TestImagesEdits:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_input_fidelity_high(self):
         """输入忠实度（仅 GPT image 模型）"""
@@ -355,24 +361,24 @@ class TestImagesEdits:
 
         with open(self.IMAGE_PATH, "rb") as img:
             files = {"image": ("image.png", img, "image/png")}
-            status_code, headers, response_body = self.client.request(
+            response = self.client.request(
                 endpoint=self.ENDPOINT,
                 params=params,
                 files=files,
             )
+            status_code = response.status_code
+            response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -384,7 +390,7 @@ class TestImagesEdits:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_mask_png(self):
         """带 mask 的编辑（mask 与第一张图同尺寸 PNG）"""
@@ -396,24 +402,24 @@ class TestImagesEdits:
                 "image": ("image.png", img, "image/png"),
                 "mask": ("mask.png", mask, "image/png"),
             }
-            status_code, headers, response_body = self.client.request(
+            response = self.client.request(
                 endpoint=self.ENDPOINT,
                 params=params,
                 files=files,
             )
+            status_code = response.status_code
+            response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -425,7 +431,7 @@ class TestImagesEdits:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_user(self):
         """用户标识 user"""
@@ -434,24 +440,24 @@ class TestImagesEdits:
 
         with open(self.IMAGE_PATH, "rb") as img:
             files = {"image": ("image.png", img, "image/png")}
-            status_code, headers, response_body = self.client.request(
+            response = self.client.request(
                 endpoint=self.ENDPOINT,
                 params=params,
                 files=files,
             )
+            status_code = response.status_code
+            response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -463,5 +469,4 @@ class TestImagesEdits:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
-
+        assert result.is_valid

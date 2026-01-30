@@ -7,8 +7,14 @@ from llm_spec.validation.schemas.gemini import BatchCreateResponse
 from llm_spec.validation.validator import ResponseValidator
 
 
+from llm_spec.providers.gemini import GeminiAdapter
+
 class TestBatchGenerateContent:
     """Batch Generate Content API 测试类"""
+
+    client: GeminiAdapter
+
+    collector: ReportCollector
 
     # ========================================================================
     # Endpoint 配置 - 仅创建端点
@@ -27,7 +33,7 @@ class TestBatchGenerateContent:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, gemini_client):
+    def setup_collector(self, gemini_client: GeminiAdapter):
         """为整个测试类设置报告收集器"""
         collector = ReportCollector(
             provider="gemini",
@@ -40,7 +46,8 @@ class TestBatchGenerateContent:
 
         yield
 
-        report_path = collector.finalize()
+        output_dir = getattr(request.config, "run_reports_dir", "./reports")
+        report_path = collector.finalize(output_dir)
         print(f"\n报告已生成: {report_path}")
 
     # ========================================================================
@@ -51,12 +58,14 @@ class TestBatchGenerateContent:
         """测试基线：单个请求的最小批"""
         test_name = "test_batch_baseline"
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=self.BASE_PARAMS,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = (
+        is_valid, result.error_message, missing_fields, expected_fields = (
             ResponseValidator.validate(response_body, BatchCreateResponse)
         )
 
@@ -65,13 +74,13 @@ class TestBatchGenerateContent:
             params=self.BASE_PARAMS,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
         assert response_body.get("name"), "批任务名称缺失"
         assert response_body.get("state"), "批任务状态缺失"
 
@@ -86,12 +95,14 @@ class TestBatchGenerateContent:
             ]
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = (
+        is_valid, result.error_message, missing_fields, expected_fields = (
             ResponseValidator.validate(response_body, BatchCreateResponse)
         )
 
@@ -100,13 +111,13 @@ class TestBatchGenerateContent:
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_batch_with_display_name(self):
         """测试 config.displayName 参数"""
@@ -116,12 +127,14 @@ class TestBatchGenerateContent:
             "config": {"displayName": "test-batch-001"},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = (
+        is_valid, result.error_message, missing_fields, expected_fields = (
             ResponseValidator.validate(response_body, BatchCreateResponse)
         )
 
@@ -130,9 +143,9 @@ class TestBatchGenerateContent:
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -144,7 +157,7 @@ class TestBatchGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_batch_with_generation_config(self):
         """测试 generationConfig 参数（temperature、maxOutputTokens）"""
@@ -158,12 +171,14 @@ class TestBatchGenerateContent:
             ]
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = (
+        is_valid, result.error_message, missing_fields, expected_fields = (
             ResponseValidator.validate(response_body, BatchCreateResponse)
         )
 
@@ -172,9 +187,9 @@ class TestBatchGenerateContent:
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -186,7 +201,7 @@ class TestBatchGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_batch_with_safety_settings(self):
         """测试 safetySettings 参数"""
@@ -205,12 +220,14 @@ class TestBatchGenerateContent:
             ]
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = (
+        is_valid, result.error_message, missing_fields, expected_fields = (
             ResponseValidator.validate(response_body, BatchCreateResponse)
         )
 
@@ -219,9 +236,9 @@ class TestBatchGenerateContent:
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -233,7 +250,7 @@ class TestBatchGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_batch_with_system_instruction(self):
         """测试 systemInstruction 参数"""
@@ -249,12 +266,14 @@ class TestBatchGenerateContent:
             ]
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = (
+        is_valid, result.error_message, missing_fields, expected_fields = (
             ResponseValidator.validate(response_body, BatchCreateResponse)
         )
 
@@ -263,9 +282,9 @@ class TestBatchGenerateContent:
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -277,7 +296,7 @@ class TestBatchGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_batch_with_text_content(self):
         """测试纯文本内容的批请求"""
@@ -297,12 +316,14 @@ class TestBatchGenerateContent:
             ]
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = (
+        is_valid, result.error_message, missing_fields, expected_fields = (
             ResponseValidator.validate(response_body, BatchCreateResponse)
         )
 
@@ -311,13 +332,13 @@ class TestBatchGenerateContent:
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_batch_with_inline_image(self):
         """测试包含内联图像的批请求"""
@@ -345,12 +366,14 @@ class TestBatchGenerateContent:
             ]
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = (
+        is_valid, result.error_message, missing_fields, expected_fields = (
             ResponseValidator.validate(response_body, BatchCreateResponse)
         )
 
@@ -359,9 +382,9 @@ class TestBatchGenerateContent:
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -373,7 +396,7 @@ class TestBatchGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_batch_with_function_calling(self):
         """测试包含函数调用的批请求"""
@@ -406,12 +429,14 @@ class TestBatchGenerateContent:
             ]
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = (
+        is_valid, result.error_message, missing_fields, expected_fields = (
             ResponseValidator.validate(response_body, BatchCreateResponse)
         )
 
@@ -420,9 +445,9 @@ class TestBatchGenerateContent:
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -434,7 +459,7 @@ class TestBatchGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_batch_with_json_response_format(self):
         """测试 JSON 响应格式的批请求"""
@@ -448,12 +473,14 @@ class TestBatchGenerateContent:
             ]
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = (
+        is_valid, result.error_message, missing_fields, expected_fields = (
             ResponseValidator.validate(response_body, BatchCreateResponse)
         )
 
@@ -462,9 +489,9 @@ class TestBatchGenerateContent:
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -476,7 +503,7 @@ class TestBatchGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize(
         "request_count",
@@ -492,12 +519,14 @@ class TestBatchGenerateContent:
         ]
         params = {"requests": requests}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = (
+        is_valid, result.error_message, missing_fields, expected_fields = (
             ResponseValidator.validate(response_body, BatchCreateResponse)
         )
 
@@ -506,9 +535,9 @@ class TestBatchGenerateContent:
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -520,7 +549,7 @@ class TestBatchGenerateContent:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_batch_mixed_parameters(self):
         """测试混合不同参数的批请求"""
@@ -542,12 +571,14 @@ class TestBatchGenerateContent:
             ]
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = (
+        is_valid, result.error_message, missing_fields, expected_fields = (
             ResponseValidator.validate(response_body, BatchCreateResponse)
         )
 
@@ -556,22 +587,24 @@ class TestBatchGenerateContent:
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_batch_response_required_fields(self):
         """验证批创建响应的必需字段"""
         test_name = "test_batch_response_required_fields"
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=self.BASE_PARAMS,
         )
+        status_code = response.status_code
+        response_body = response.text
 
         assert 200 <= status_code < 300
 

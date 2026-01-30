@@ -7,8 +7,13 @@ from llm_spec.validation.schemas.openai.embeddings import EmbeddingResponse
 from llm_spec.validation.validator import ResponseValidator
 
 
+from llm_spec.providers.openai import OpenAIAdapter
+
+
 class TestEmbeddings:
     """Embeddings API 测试类"""
+    client: OpenAIAdapter
+    collector: ReportCollector
 
     ENDPOINT = "/v1/embeddings"
 
@@ -19,7 +24,7 @@ class TestEmbeddings:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, openai_client):
+    def setup_collector(self, request: pytest.FixtureRequest, openai_client: OpenAIAdapter):
         """为整个测试类设置报告收集器"""
         # 创建类级别的 collector
         collector = ReportCollector(
@@ -35,34 +40,35 @@ class TestEmbeddings:
         yield
 
         # 类的所有测试完成后，生成一次报告
-        report_path = collector.finalize()
+        output_dir = getattr(request.config, "run_reports_dir", "./reports")
+        report_path = collector.finalize(output_dir)
         print(f"\n报告已生成: {report_path}")
 
     def test_baseline(self):
         """测试基线：仅必需参数"""
         test_name = "test_baseline"
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=self.BASE_PARAMS,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, EmbeddingResponse
-        )
+        result = ResponseValidator.validate_response(response, EmbeddingResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=self.BASE_PARAMS,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     def test_param_input_array(self):
         """测试 input 参数（字符串数组）"""
@@ -72,23 +78,23 @@ class TestEmbeddings:
             "input": ["Hello", "World"],
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, EmbeddingResponse
-        )
+        result = ResponseValidator.validate_response(response, EmbeddingResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -100,7 +106,7 @@ class TestEmbeddings:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_input_tokens(self):
         """测试 input 参数（token 数组）"""
@@ -110,23 +116,23 @@ class TestEmbeddings:
             "input": [[11, 12, 13, 14]],
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, EmbeddingResponse
-        )
+        result = ResponseValidator.validate_response(response, EmbeddingResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -138,7 +144,7 @@ class TestEmbeddings:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # @pytest.mark.parametrize(
     #     "model",
@@ -157,7 +163,7 @@ class TestEmbeddings:
     #         params=params,
     #     )
 
-    #     is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
+    #     is_valid, result.error_message, missing_fields, expected_fields = ResponseValidator.validate(
     #         response_body, EmbeddingResponse
     #     )
 
@@ -166,9 +172,9 @@ class TestEmbeddings:
     #         params=params,
     #         status_code=status_code,
     #         response_body=response_body,
-    #         error=error_msg if not is_valid else None,
-    #         missing_fields=missing_fields,
-    #         expected_fields=expected_fields,
+    #         error=result.error_message if not result.is_valid else None,
+    #         missing_fields=result.missing_fields,
+    #         expected_fields=result.expected_fields,
     #     )
 
     #     if not (200 <= status_code < 300):
@@ -180,30 +186,30 @@ class TestEmbeddings:
     #         )
 
     #     assert 200 <= status_code < 300
-    #     assert is_valid
+    #     assert result.is_valid
 
     def test_param_encoding_format(self):
         """测试 encoding_format 参数（base64）"""
         test_name = "test_param_encoding_format"
         params = {**self.BASE_PARAMS, "encoding_format": "base64"}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, EmbeddingResponse
-        )
+        result = ResponseValidator.validate_response(response, EmbeddingResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -215,30 +221,30 @@ class TestEmbeddings:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_user(self):
         """测试 user 参数（用户标识）"""
         test_name = "test_param_user"
         params = {**self.BASE_PARAMS, "user": "user-123"}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, EmbeddingResponse
-        )
+        result = ResponseValidator.validate_response(response, EmbeddingResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -250,7 +256,7 @@ class TestEmbeddings:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_dimensions(self):
         """测试 dimensions 参数（仅 v3 模型支持）"""
@@ -261,23 +267,23 @@ class TestEmbeddings:
             "dimensions": 512,
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, EmbeddingResponse
-        )
+        result = ResponseValidator.validate_response(response, EmbeddingResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -289,4 +295,4 @@ class TestEmbeddings:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid

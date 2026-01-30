@@ -7,8 +7,13 @@ from llm_spec.validation.schemas.openai.images import ImageResponse
 from llm_spec.validation.validator import ResponseValidator
 
 
+from llm_spec.providers.openai import OpenAIAdapter
+
+
 class TestImagesGenerations:
     """Images API 测试类"""
+    client: OpenAIAdapter
+    collector: ReportCollector
 
     ENDPOINT = "/v1/images/generations"
 
@@ -26,7 +31,7 @@ class TestImagesGenerations:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, openai_client):
+    def setup_collector(self, request: pytest.FixtureRequest, openai_client: OpenAIAdapter):
         """为整个测试类设置报告收集器"""
         collector = ReportCollector(
             provider="openai",
@@ -39,34 +44,35 @@ class TestImagesGenerations:
 
         yield
 
-        report_path = collector.finalize()
+        output_dir = getattr(request.config, "run_reports_dir", "./reports")
+        report_path = collector.finalize(output_dir)
         print(f"\n报告已生成: {report_path}")
 
     def test_baseline(self):
         """测试基线：仅必需参数"""
         test_name = "test_baseline"
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=self.BASE_PARAMS,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=self.BASE_PARAMS,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     # ========================================================================
     # 尺寸参数
@@ -76,23 +82,23 @@ class TestImagesGenerations:
         test_name = "test_param_size"
         params = {**self.BASE_PARAMS, "size": "1024x1024"}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -104,7 +110,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     @pytest.mark.parametrize("size", ["512x512", "256x256"])
     def test_param_size_dalle2(self, size):
@@ -112,23 +118,23 @@ class TestImagesGenerations:
         test_name = f"test_param_size_dalle2[{size}]"
         params = {**self.BASE_PARAMS, "model": "dall-e-2", "size": size}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -140,7 +146,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize("size", ["1792x1024", "1024x1792"])
     def test_param_size_dalle3(self, size):
@@ -148,23 +154,23 @@ class TestImagesGenerations:
         test_name = f"test_param_size_dalle3[{size}]"
         params = {**self.BASE_PARAMS, "size": size}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -176,7 +182,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 质量参数（dall-e-3）
@@ -187,23 +193,23 @@ class TestImagesGenerations:
         test_name = f"test_param_quality_dalle3[{quality}]"
         params = {**self.BASE_PARAMS, "quality": quality}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -215,7 +221,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 响应格式 / 风格
@@ -226,23 +232,23 @@ class TestImagesGenerations:
         test_name = f"test_param_response_format[{response_format}]"
         params = {**self.BASE_PARAMS, "response_format": response_format}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -254,7 +260,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize("style", ["vivid", "natural"])
     def test_param_style(self, style):
@@ -262,23 +268,23 @@ class TestImagesGenerations:
         test_name = f"test_param_style[{style}]"
         params = {**self.BASE_PARAMS, "style": style}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -290,7 +296,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 数量 / 用户标识
@@ -300,23 +306,23 @@ class TestImagesGenerations:
         test_name = "test_param_n_dalle2"
         params = {**self.BASE_PARAMS, "model": "dall-e-2", "n": 2}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -328,30 +334,30 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_user(self):
         """测试 user 参数"""
         test_name = "test_param_user"
         params = {**self.BASE_PARAMS, "user": "user-123"}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -363,7 +369,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ------------------------------------------------------------------
     # GPT Image 专属参数
@@ -378,23 +384,23 @@ class TestImagesGenerations:
             "output_format": "png",
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -406,7 +412,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize("output_format", ["png", "jpeg", "webp"])
     def test_gpt_image_output_formats(self, output_format):
@@ -418,23 +424,23 @@ class TestImagesGenerations:
             "output_format": output_format,
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -446,7 +452,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_gpt_image_output_webp_compression(self):
         """测试 output_format=webp + output_compression（GPT image 模型）"""
@@ -458,23 +464,23 @@ class TestImagesGenerations:
             "output_compression": 80,
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -486,7 +492,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_gpt_image_output_jpeg_compression(self):
         """测试 output_format=jpeg + output_compression（GPT image 模型）"""
@@ -498,23 +504,23 @@ class TestImagesGenerations:
             "output_compression": 80,
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -526,7 +532,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize("background", ["transparent", "opaque", "auto"])
     def test_gpt_image_background_variants(self, background):
@@ -539,23 +545,23 @@ class TestImagesGenerations:
             # 若透明背景，默认 png 支持透明；其它背景也可用 png
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -567,7 +573,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_gpt_image_moderation_low(self):
         """测试 moderation=low（GPT image 模型）"""
@@ -578,23 +584,23 @@ class TestImagesGenerations:
             "moderation": "low",
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -606,7 +612,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_gpt_image_moderation_auto(self):
         """测试 moderation=auto（GPT image 模型）"""
@@ -617,23 +623,23 @@ class TestImagesGenerations:
             "moderation": "auto",
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -645,7 +651,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_gpt_image_quality_high(self):
         """测试 quality=high（GPT image 模型）"""
@@ -656,23 +662,23 @@ class TestImagesGenerations:
             "quality": "high",
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -684,7 +690,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize("quality", ["medium", "low", "auto"])
     def test_gpt_image_quality_variants(self, quality):
@@ -696,23 +702,23 @@ class TestImagesGenerations:
             "quality": quality,
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -724,30 +730,30 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_gpt_image_n_multiple(self):
         """测试 n 参数（GPT image 模型，多张生成）"""
         test_name = "test_gpt_image_n_multiple"
         params = {**self.BASE_GPT_PARAMS, "prompt": "A set of minimal icons", "n": 2}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -759,7 +765,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize("size", ["1024x1024", "1536x1024", "1024x1536"])
     def test_gpt_image_sizes(self, size):
@@ -767,23 +773,23 @@ class TestImagesGenerations:
         test_name = f"test_gpt_image_sizes[{size}]"
         params = {**self.BASE_GPT_PARAMS, "prompt": "A futuristic device render", "size": size}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, ImageResponse
-        )
+        result = ResponseValidator.validate_response(response, ImageResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -795,7 +801,7 @@ class TestImagesGenerations:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ------------------------------------------------------------------
     # GPT Image 流式与 partial_images

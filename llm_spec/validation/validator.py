@@ -1,8 +1,26 @@
-"""响应验证器"""
+"""响应验证器
 
+Validator 负责从 httpx.Response 解析 JSON，并基于 Pydantic schema 做结构校验。
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
 from typing import Any, Type, Union, get_args, get_origin
 
+import httpx
+
 from pydantic import BaseModel, ValidationError
+
+from llm_spec.types import JSONValue
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationResult:
+    is_valid: bool
+    error_message: str | None
+    missing_fields: list[str]
+    expected_fields: list[str]
 
 
 class ResponseValidator:
@@ -76,9 +94,7 @@ class ResponseValidator:
         return fields
 
     @staticmethod
-    def validate(
-        data: dict[str, Any], schema_class: Type[BaseModel]
-    ) -> tuple[bool, str | None, list[str], list[str]]:
+    def validate_json(data: JSONValue, schema_class: Type[BaseModel]) -> ValidationResult:
         """验证响应数据
 
         Args:
@@ -96,8 +112,16 @@ class ResponseValidator:
         expected_fields = ResponseValidator._extract_all_fields(schema_class)
 
         try:
+            if not isinstance(data, dict):
+                return ValidationResult(
+                    is_valid=False,
+                    error_message=f"Expected JSON object for validation, got {type(data).__name__}",
+                    missing_fields=[],
+                    expected_fields=expected_fields,
+                )
+
             schema_class(**data)
-            return True, None, [], expected_fields
+            return ValidationResult(True, None, [], expected_fields)
         except ValidationError as e:
             # 提取缺失字段
             missing_fields = []
@@ -107,4 +131,26 @@ class ResponseValidator:
                     missing_fields.append(field_path)
 
             error_message = str(e)
-            return False, error_message, missing_fields, expected_fields
+            return ValidationResult(False, error_message, missing_fields, expected_fields)
+
+    @staticmethod
+    def validate_response(response: httpx.Response, schema_class: Type[BaseModel]) -> ValidationResult:
+        """从 httpx.Response 解析 JSON 并校验。"""
+        try:
+            data: JSONValue = response.json()
+        except ValueError as e:
+            expected_fields = ResponseValidator._extract_all_fields(schema_class)
+            return ValidationResult(
+                is_valid=False,
+                error_message=f"Response is not valid JSON: {e}",
+                missing_fields=[],
+                expected_fields=expected_fields,
+            )
+
+        return ResponseValidator.validate_json(data, schema_class)
+
+    # Backward-compatible API (older call sites pass already-parsed dict)
+    @staticmethod
+    def validate(data: dict[str, Any], schema_class: Type[BaseModel]) -> tuple[bool, str | None, list[str], list[str]]:
+        result = ResponseValidator.validate_json(data, schema_class)
+        return result.is_valid, result.error_message, result.missing_fields, result.expected_fields

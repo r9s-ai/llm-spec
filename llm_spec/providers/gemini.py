@@ -1,14 +1,17 @@
 """Google Gemini Provider Adapter"""
 
+from __future__ import annotations
+
+import httpx
+
 from llm_spec.providers.base import ProviderAdapter
+from llm_spec.types import Headers, JSONValue
 
 
 class GeminiAdapter(ProviderAdapter):
     """Google Gemini API 适配器"""
 
-    def prepare_headers(
-        self, additional_headers: dict[str, str] | None = None
-    ) -> dict[str, str]:
+    def prepare_headers(self, additional_headers: Headers | None = None) -> dict[str, str]:
         """准备 Gemini 请求头
 
         Args:
@@ -27,32 +30,5 @@ class GeminiAdapter(ProviderAdapter):
 
         return headers
 
-    def request(
-        self,
-        endpoint: str,
-        params: dict,
-        headers: dict[str, str] | None = None,
-        method: str = "POST",
-    ) -> tuple[int, dict[str, str], dict | None]:
-        """发起请求（Gemini 使用 x-goog-api-key Header 认证）
-
-        Args:
-            endpoint: API 端点
-            params: 请求参数
-            headers: 额外的请求头
-            method: HTTP 方法
-
-        Returns:
-            (status_code, headers, response_body)
-        """
-        # Gemini API key 通过 x-goog-api-key header 传递
-        url = f"{self.config.base_url}{endpoint}"
-        headers = self.prepare_headers(headers)
-
-        return self.http_client.request(
-            method=method,
-            url=url,
-            headers=headers,
-            json_data=params,
-            timeout=self.config.timeout,
-        )
+    # Note: Gemini does not need a custom request() override; ProviderAdapter.request already
+    # supports header-based auth. Keep ProviderAdapter.request signature.

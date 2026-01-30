@@ -7,8 +7,14 @@ from llm_spec.validation.schemas.gemini import CountTokensResponse
 from llm_spec.validation.validator import ResponseValidator
 
 
+from llm_spec.providers.gemini import GeminiAdapter
+
 class TestCountTokens:
     """CountTokens API 测试类"""
+
+    client: GeminiAdapter
+
+    collector: ReportCollector
 
     ENDPOINT = "/v1beta/models/gemini-2.5-flash:countTokens"
 
@@ -18,7 +24,7 @@ class TestCountTokens:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, gemini_client):
+    def setup_collector(self, gemini_client: GeminiAdapter):
         """为整个测试类设置报告收集器"""
         # 创建类级别的 collector
         collector = ReportCollector(
@@ -34,7 +40,8 @@ class TestCountTokens:
         yield
 
         # 类的所有测试完成后，生成一次报告
-        report_path = collector.finalize()
+        output_dir = getattr(request.config, "run_reports_dir", "./reports")
+        report_path = collector.finalize(output_dir)
         print(f"\n报告已生成: {report_path}")
 
     # ========================================================================
@@ -50,22 +57,20 @@ class TestCountTokens:
             params=self.BASE_PARAMS,
         )
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, CountTokensResponse
-        )
+        result = ResponseValidator.validate_response(response, CountTokensResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=self.BASE_PARAMS,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     # ========================================================================
     # 阶段 2: 多轮对话测试
@@ -87,22 +92,20 @@ class TestCountTokens:
             params=params,
         )
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, CountTokensResponse
-        )
+        result = ResponseValidator.validate_response(response, CountTokensResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 3: 系统指令测试
@@ -123,18 +126,16 @@ class TestCountTokens:
             params=params,
         )
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, CountTokensResponse
-        )
+        result = ResponseValidator.validate_response(response, CountTokensResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -146,7 +147,7 @@ class TestCountTokens:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ========================================================================
     # 阶段 4: 工具定义测试
@@ -181,18 +182,16 @@ class TestCountTokens:
             params=params,
         )
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, CountTokensResponse
-        )
+        result = ResponseValidator.validate_response(response, CountTokensResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -204,4 +203,4 @@ class TestCountTokens:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid

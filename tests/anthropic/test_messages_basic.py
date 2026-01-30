@@ -8,8 +8,14 @@ from llm_spec.validation.schemas.anthropic import MessagesResponse
 from llm_spec.validation.validator import ResponseValidator
 
 
+from llm_spec.providers.anthropic import AnthropicAdapter
+
 class TestMessagesBasic:
     """Messages API 基础参数测试类"""
+
+    client: AnthropicAdapter
+
+    collector: ReportCollector
 
     ENDPOINT = "/v1/messages"
 
@@ -42,7 +48,7 @@ class TestMessagesBasic:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, anthropic_client):
+    def setup_collector(self, anthropic_client: AnthropicAdapter):
         """为整个测试类设置报告收集器"""
         collector = ReportCollector(
             provider="anthropic",
@@ -55,7 +61,8 @@ class TestMessagesBasic:
 
         yield
 
-        report_path = collector.finalize()
+        output_dir = getattr(request.config, "run_reports_dir", "./reports")
+        report_path = collector.finalize(output_dir)
         print(f"\n报告已生成: {report_path}")
 
     # ==================== 阶段1: 基线与模型测试 ====================
@@ -64,27 +71,27 @@ class TestMessagesBasic:
         """测试基线：仅必需参数"""
         test_name = "test_baseline"
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=self.BASE_PARAMS,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
+        result = ResponseValidator.validate_response(response, MessagesResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=self.BASE_PARAMS,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
 
     # ==================== 阶段2: 采样参数测试 ====================
@@ -94,23 +101,23 @@ class TestMessagesBasic:
         test_name = "test_param_temperature"
         params = {**self.BASE_PARAMS, "temperature": 0.7}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
+        result = ResponseValidator.validate_response(response, MessagesResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -122,30 +129,30 @@ class TestMessagesBasic:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_top_p(self):
         """测试 top_p 参数"""
         test_name = "test_param_top_p"
         params = {**self.BASE_PARAMS, "top_p": 0.9}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
+        result = ResponseValidator.validate_response(response, MessagesResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -157,30 +164,30 @@ class TestMessagesBasic:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_top_k(self):
         """测试 top_k 参数"""
         test_name = "test_param_top_k"
         params = {**self.BASE_PARAMS, "top_k": 40}
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
+        result = ResponseValidator.validate_response(response, MessagesResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -192,7 +199,7 @@ class TestMessagesBasic:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ==================== 阶段3: 停止控制测试 ====================
 
@@ -204,23 +211,23 @@ class TestMessagesBasic:
             "stop_sequences": ["\n\n", "END"],
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
+        result = ResponseValidator.validate_response(response, MessagesResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -232,7 +239,7 @@ class TestMessagesBasic:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ==================== 阶段4: 系统提示测试 ====================
 
@@ -244,23 +251,23 @@ class TestMessagesBasic:
             "system": "You are a helpful assistant.",
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
+        result = ResponseValidator.validate_response(response, MessagesResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -272,7 +279,7 @@ class TestMessagesBasic:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ==================== 阶段5: 元数据与追踪 ====================
 
@@ -284,23 +291,23 @@ class TestMessagesBasic:
             "metadata": {"user_id": "test-user-123"},
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
+        result = ResponseValidator.validate_response(response, MessagesResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -312,7 +319,7 @@ class TestMessagesBasic:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ==================== 阶段6: 流式响应测试 ====================
 
@@ -324,7 +331,7 @@ class TestMessagesBasic:
 
         chunks = []
         error_occurred = False
-        error_msg = None
+        result.error_message = None
 
         try:
             async for chunk in self.client.stream_async(self.ENDPOINT, params):
@@ -333,14 +340,14 @@ class TestMessagesBasic:
                     break
         except Exception as e:
             error_occurred = True
-            error_msg = str(e)
+            result.error_message = str(e)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=200 if not error_occurred else 500,
             response_body={"chunks_received": len(chunks)} if chunks else None,
-            error=error_msg if error_occurred else None,
+            error=result.error_message if error_occurred else None,
         )
 
         if error_occurred:
@@ -348,10 +355,10 @@ class TestMessagesBasic:
                 param_name="stream",
                 param_value=True,
                 test_name=test_name,
-                reason=f"Streaming error: {error_msg}",
+                reason=f"Streaming error: {result.error_message}",
             )
 
-        assert not error_occurred, f"Streaming failed: {error_msg}"
+        assert not error_occurred, f"Streaming failed: {result.error_message}"
         assert len(chunks) > 0, "No chunks received"
 
     # ==================== 阶段7: 多模态测试 ====================
@@ -383,23 +390,23 @@ class TestMessagesBasic:
             ],
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
+        result = ResponseValidator.validate_response(response, MessagesResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -411,7 +418,7 @@ class TestMessagesBasic:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize(
         "media_type",
@@ -443,23 +450,23 @@ class TestMessagesBasic:
             ],
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
+        result = ResponseValidator.validate_response(response, MessagesResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -471,7 +478,7 @@ class TestMessagesBasic:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ==================== 阶段8: 工具调用测试 ====================
 
@@ -484,23 +491,23 @@ class TestMessagesBasic:
             "messages": [{"role": "user", "content": "What's the weather in San Francisco?"}],
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
+        result = ResponseValidator.validate_response(response, MessagesResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -512,7 +519,7 @@ class TestMessagesBasic:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_tool_choice_auto(self):
         """测试 tool_choice 参数 (auto)"""
@@ -524,23 +531,23 @@ class TestMessagesBasic:
             "messages": [{"role": "user", "content": "What's the weather in London?"}],
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
+        result = ResponseValidator.validate_response(response, MessagesResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -552,7 +559,7 @@ class TestMessagesBasic:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     @pytest.mark.parametrize("choice_type", ["any", "tool"])
     def test_tool_choice_variants(self, choice_type):
@@ -571,23 +578,23 @@ class TestMessagesBasic:
             "messages": [{"role": "user", "content": "What's the weather?"}],
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
+        result = ResponseValidator.validate_response(response, MessagesResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -599,7 +606,7 @@ class TestMessagesBasic:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # ==================== 阶段9: 思考模式测试 ====================
 
@@ -612,23 +619,23 @@ class TestMessagesBasic:
             "messages": [{"role": "user", "content": "Solve: What is 25 * 17?"}],
         }
 
-        status_code, headers, response_body = self.client.request(
+        response = self.client.request(
             endpoint=self.ENDPOINT,
             params=params,
         )
+        status_code = response.status_code
+        response_body = response.text
 
-        is_valid, error_msg, missing_fields, expected_fields = ResponseValidator.validate(
-            response_body, MessagesResponse
-        )
+        result = ResponseValidator.validate_response(response, MessagesResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):

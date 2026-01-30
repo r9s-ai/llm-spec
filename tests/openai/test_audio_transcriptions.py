@@ -10,8 +10,13 @@ from llm_spec.validation.schemas.openai.audio import AudioTranscriptionResponse
 from llm_spec.validation.validator import ResponseValidator
 
 
+from llm_spec.providers.openai import OpenAIAdapter
+
+
 class TestAudioTranscriptions:
     """Audio Transcriptions API 测试类"""
+    client: OpenAIAdapter
+    collector: ReportCollector
 
     ENDPOINT = "/v1/audio/transcriptions"
 
@@ -25,7 +30,7 @@ class TestAudioTranscriptions:
     AUDIO_ZH = "test_assets/audio/hello_zh.mp3"
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_collector(self, openai_client):
+    def setup_collector(self, request: pytest.FixtureRequest, openai_client: OpenAIAdapter):
         """为整个测试类设置报告收集器"""
         collector = ReportCollector(
             provider="openai",
@@ -38,7 +43,8 @@ class TestAudioTranscriptions:
 
         yield
 
-        report_path = collector.finalize()
+        output_dir = getattr(request.config, "run_reports_dir", "./reports")
+        report_path = collector.finalize(output_dir)
         print(f"\n报告已生成: {report_path}")
 
     # ------------------------------------------------------------------
@@ -67,11 +73,7 @@ class TestAudioTranscriptions:
         b64 = b64encode(data).decode("ascii")
         return f"data:audio/mpeg;base64,{b64}"
 
-    def _validate_json_response(self, response_body):
-        """仅在响应是 dict 时做 JSON 验证，非 JSON 响应直接视为通过。"""
-        if not isinstance(response_body, dict):
-            return True, None, [], []
-        return ResponseValidator.validate(response_body, AudioTranscriptionResponse)
+    # NOTE: legacy helper removed; tests now validate from httpx.Response via validate_response.
 
     # ------------------------------------------------------------------
     # 基线
@@ -81,24 +83,24 @@ class TestAudioTranscriptions:
         test_name = "test_baseline"
 
         params = {**self.BASE_PARAMS, "model": "whisper-1"}
-        status_code, headers, response_body = self._request_with_file(params)
+        response = self._request_with_file(params)
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
+        result = ResponseValidator.validate_response(response, AudioTranscriptionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
-        assert is_valid, f"响应验证失败: {error_msg}"
+        assert result.is_valid, f"响应验证失败: {result.error_message}"
 
     # ------------------------------------------------------------------
     # 参数测试
@@ -108,20 +110,19 @@ class TestAudioTranscriptions:
         test_name = "test_param_language"
         params = {**self.BASE_PARAMS, "model": "whisper-1", "language": "en"}
 
-        status_code, headers, response_body = self._request_with_file(params)
-
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
+        response = self._request_with_file(params)
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
+        result = ResponseValidator.validate_response(response, AudioTranscriptionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -133,27 +134,26 @@ class TestAudioTranscriptions:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_param_temperature(self):
         """测试 temperature 参数"""
         test_name = "test_param_temperature"
         params = {**self.BASE_PARAMS, "model": "whisper-1", "temperature": 0.0}
 
-        status_code, headers, response_body = self._request_with_file(params)
-
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
+        response = self._request_with_file(params)
+        status_code = response.status_code
+        response_body = self.collector.response_body_from_httpx(response)
+        result = ResponseValidator.validate_response(response, AudioTranscriptionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -165,7 +165,7 @@ class TestAudioTranscriptions:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     # @pytest.mark.parametrize(
     #     "model",
@@ -181,7 +181,7 @@ class TestAudioTranscriptions:
 
     #     status_code, headers, response_body = self._request_with_file(params)
 
-    #     is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
+    #     is_valid, result.error_message, missing_fields, expected_fields = self._validate_json_response(
     #         response_body
     #     )
 
@@ -190,9 +190,9 @@ class TestAudioTranscriptions:
     #         params=params,
     #         status_code=status_code,
     #         response_body=response_body,
-    #         error=error_msg if not is_valid else None,
-    #         missing_fields=missing_fields,
-    #         expected_fields=expected_fields,
+    #         error=result.error_message if not result.is_valid else None,
+    #         missing_fields=result.missing_fields,
+    #         expected_fields=result.expected_fields,
     #     )
 
     #     if not (200 <= status_code < 300):
@@ -204,7 +204,7 @@ class TestAudioTranscriptions:
     #         )
 
     #     assert 200 <= status_code < 300
-    #     assert is_valid
+    #     assert result.is_valid
 
     @pytest.mark.parametrize(
         "response_format",
@@ -222,20 +222,22 @@ class TestAudioTranscriptions:
             "response_format": response_format,
         }
 
-        status_code, headers, response_body = self._request_with_file(params)
+        response = self._request_with_file(params)
 
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
+        status_code = response.status_code
+
+        response_body = self.collector.response_body_from_httpx(response)
+
+        result = ResponseValidator.validate_response(response, AudioTranscriptionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -247,7 +249,7 @@ class TestAudioTranscriptions:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_prompt(self):
         """测试 prompt 参数"""
@@ -258,20 +260,22 @@ class TestAudioTranscriptions:
             "prompt": "Please transcribe in a friendly style.",
         }
 
-        status_code, headers, response_body = self._request_with_file(params)
+        response = self._request_with_file(params)
 
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
+        status_code = response.status_code
+
+        response_body = self.collector.response_body_from_httpx(response)
+
+        result = ResponseValidator.validate_response(response, AudioTranscriptionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -283,7 +287,7 @@ class TestAudioTranscriptions:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_chunking_strategy_auto(self):
         """测试 chunking_strategy = auto"""
@@ -294,20 +298,22 @@ class TestAudioTranscriptions:
             "chunking_strategy": "auto",
         }
 
-        status_code, headers, response_body = self._request_with_file(params)
+        response = self._request_with_file(params)
 
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
+        status_code = response.status_code
+
+        response_body = self.collector.response_body_from_httpx(response)
+
+        result = ResponseValidator.validate_response(response, AudioTranscriptionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -319,7 +325,7 @@ class TestAudioTranscriptions:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_chunking_strategy_server_vad(self):
         """测试 chunking_strategy = server_vad 对象"""
@@ -330,20 +336,22 @@ class TestAudioTranscriptions:
             "chunking_strategy": {"type": "server_vad"},
         }
 
-        status_code, headers, response_body = self._request_with_file(params)
+        response = self._request_with_file(params)
 
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
+        status_code = response.status_code
+
+        response_body = self.collector.response_body_from_httpx(response)
+
+        result = ResponseValidator.validate_response(response, AudioTranscriptionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -355,7 +363,7 @@ class TestAudioTranscriptions:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_include_logprobs(self):
         """测试 include=logprobs（仅支持部分模型 + response_format=json）"""
@@ -367,20 +375,22 @@ class TestAudioTranscriptions:
             "response_format": "json",
         }
 
-        status_code, headers, response_body = self._request_with_file(params)
+        response = self._request_with_file(params)
 
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
+        status_code = response.status_code
+
+        response_body = self.collector.response_body_from_httpx(response)
+
+        result = ResponseValidator.validate_response(response, AudioTranscriptionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -392,7 +402,7 @@ class TestAudioTranscriptions:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_known_speakers(self):
         """测试 known_speaker_names + known_speaker_references"""
@@ -411,20 +421,22 @@ class TestAudioTranscriptions:
             "known_speaker_references": refs,
         }
 
-        status_code, headers, response_body = self._request_with_file(params)
+        response = self._request_with_file(params)
 
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
+        status_code = response.status_code
+
+        response_body = self.collector.response_body_from_httpx(response)
+
+        result = ResponseValidator.validate_response(response, AudioTranscriptionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -436,7 +448,7 @@ class TestAudioTranscriptions:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_timestamp_granularities(self):
         """测试 timestamp_granularities（需 response_format=verbose_json）"""
@@ -448,20 +460,22 @@ class TestAudioTranscriptions:
             "timestamp_granularities": ["word", "segment"],
         }
 
-        status_code, headers, response_body = self._request_with_file(params)
+        response = self._request_with_file(params)
 
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
+        status_code = response.status_code
+
+        response_body = self.collector.response_body_from_httpx(response)
+
+        result = ResponseValidator.validate_response(response, AudioTranscriptionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -473,7 +487,7 @@ class TestAudioTranscriptions:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid
 
     def test_stream_flag(self):
         """测试 stream=true（gpt-4o-mini-transcribe 支持；whisper-1 忽略）"""
@@ -484,20 +498,22 @@ class TestAudioTranscriptions:
             "stream": True,
         }
 
-        status_code, headers, response_body = self._request_with_file(params)
+        response = self._request_with_file(params)
 
-        is_valid, error_msg, missing_fields, expected_fields = self._validate_json_response(
-            response_body
-        )
+        status_code = response.status_code
+
+        response_body = self.collector.response_body_from_httpx(response)
+
+        result = ResponseValidator.validate_response(response, AudioTranscriptionResponse)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=error_msg if not is_valid else None,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
+            error=result.error_message if not result.is_valid else None,
+            missing_fields=result.missing_fields,
+            expected_fields=result.expected_fields,
         )
 
         if not (200 <= status_code < 300):
@@ -509,4 +525,4 @@ class TestAudioTranscriptions:
             )
 
         assert 200 <= status_code < 300
-        assert is_valid
+        assert result.is_valid

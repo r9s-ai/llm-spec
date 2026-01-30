@@ -1,11 +1,16 @@
 """Provider 适配器基类"""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
+import httpx
+
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import ProviderConfig
+from llm_spec.types import Headers, JSONValue
 
 
 class ProviderAdapter(ABC):
@@ -22,7 +27,7 @@ class ProviderAdapter(ABC):
         self.http_client = http_client
 
     @abstractmethod
-    def prepare_headers(self, additional_headers: dict[str, str] | None = None) -> dict[str, str]:
+    def prepare_headers(self, additional_headers: Headers | None = None) -> dict[str, str]:
         """准备请求头（包括认证头）
 
         Args:
@@ -44,11 +49,11 @@ class ProviderAdapter(ABC):
     def request(
         self,
         endpoint: str,
-        params: dict[str, Any],
-        additional_headers: dict[str, str] | None = None,
+        params: JSONValue,
+        additional_headers: Headers | None = None,
         method: str = "POST",
-        files: dict[str, Any] | None = None,
-    ) -> tuple[int, dict[str, str], Any]:
+        files: Any | None = None,
+    ) -> httpx.Response:
         """发起同步请求
 
         Args:
@@ -82,18 +87,18 @@ class ProviderAdapter(ABC):
             method=method,
             url=url,
             headers=headers,
-            json_data=params,
+            json=params,
             timeout=self.config.timeout,
         )
 
     async def request_async(
         self,
         endpoint: str,
-        params: dict[str, Any],
-        additional_headers: dict[str, str] | None = None,
+        params: JSONValue,
+        additional_headers: Headers | None = None,
         method: str = "POST",
-        files: dict[str, Any] | None = None,
-    ) -> tuple[int, dict[str, str], Any]:
+        files: Any | None = None,
+    ) -> httpx.Response:
         """发起异步请求
 
         Args:
@@ -124,15 +129,15 @@ class ProviderAdapter(ABC):
             method=method,
             url=url,
             headers=headers,
-            json_data=params,
+            json=params,
             timeout=self.config.timeout,
         )
 
     def stream(
         self,
         endpoint: str,
-        params: dict[str, Any],
-        additional_headers: dict[str, str] | None = None,
+        params: JSONValue,
+        additional_headers: Headers | None = None,
         method: str = "POST",
     ) -> Iterator[bytes]:
         """发起同步流式请求
@@ -153,15 +158,15 @@ class ProviderAdapter(ABC):
             method=method,
             url=url,
             headers=headers,
-            json_data=params,
+            json=params,
             timeout=self.config.timeout,
         )
 
     def stream_async(
         self,
         endpoint: str,
-        params: dict[str, Any],
-        additional_headers: dict[str, str] | None = None,
+        params: JSONValue,
+        additional_headers: Headers | None = None,
         method: str = "POST",
     ) -> AsyncIterator[bytes]:
         """发起异步流式请求
@@ -182,6 +187,6 @@ class ProviderAdapter(ABC):
             method=method,
             url=url,
             headers=headers,
-            json_data=params,
+            json=params,
             timeout=self.config.timeout,
         )
