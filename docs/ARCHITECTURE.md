@@ -50,8 +50,8 @@ llm-spec/
 │   │           └── __init__.py
 │   └── reporting/                 # 报告系统
 │       ├── __init__.py
-│       ├── collector.py           # 测试结果收集器
-│       └── generator.py           # 报告生成器（待实现）
+│       ├── collector.py           # 测试结果收集器 ✅
+│       └── formatter.py           # 参数表格格式化器 ✅
 ├── tests/                         # 测试代码
 │   ├── __init__.py
 │   ├── conftest.py                # Pytest全局fixtures
@@ -84,7 +84,11 @@ llm-spec/
 │   ├── audio/                     # 音频文件
 │   └── images/                    # 图片文件
 ├── temp/                          # 临时文件（按时间戳分目录）
-├── reports/                       # 生成的JSON报告
+├── reports/                       # 生成的报告目录
+│   └── {provider}_{endpoint}_{timestamp}/  # 每个测试一个子目录
+│       ├── report.json            # JSON 格式报告
+│       ├── parameters.md          # Markdown 参数表格
+│       └── report.html            # HTML 格式报告
 ├── logs/                          # 应用日志
 ├── llm-spec.toml                  # 配置文件
 └── pyproject.toml                 # 项目元数据
@@ -120,11 +124,11 @@ llm-spec/
 - Pydantic模型定义期望的响应结构
 
 ### 第五层：报告系统 (reporting)
-**职责**：测试结果汇总和报告生成
+**职责**：测试结果汇总、参数表格生成
 - 收集测试参数、状态码、错误信息
 - **递归嵌套参数提取**：自动提取嵌套字典和数组中的参数路径（如 `generationConfig.temperature`、`messages[0].role`）
 - 跟踪不支持的参数和缺失的响应字段
-- 生成JSON格式报告
+- 生成 JSON、Markdown、HTML 格式报告
 
 **ReportCollector 核心功能**：
 ```python
@@ -142,6 +146,39 @@ def _extract_param_paths(params: dict[str, Any], prefix: str = "", max_depth: in
 ```
 
 这确保了报告中的 `parameters.tested` 字段包含所有实际使用的参数路径，而不仅仅是顶级键。
+
+**ParameterTableFormatter 核心功能**：
+```python
+class ParameterTableFormatter:
+    """参数支持情况格式化器
+
+    直接从 JSON 报告的 tested_params 生成表格：
+    - 无需手动定义参数列表
+    - 自动检测支持/不支持状态
+    - 支持 Markdown 和 HTML 两种输出格式
+    """
+
+    def __init__(self, report_data: dict):
+        # 从报告中提取：
+        # - tested_params: 已测试的参数列表
+        # - unsupported_params: 不支持的参数及原因
+        # - test_summary: 测试统计（总数、通过、失败）
+
+    def generate_markdown(self) -> str:
+        """生成简洁的 Markdown 表格"""
+
+    def generate_html(self) -> str:
+        """生成美观的 HTML 报告"""
+```
+
+**报告目录结构**：
+```
+reports/
+└── openai_v1_chat_completions_20260129_191805/  # provider_endpoint_timestamp
+    ├── report.json              # JSON 格式（原始数据）
+    ├── parameters.md            # Markdown 格式（参数表格）
+    └── report.html              # HTML 格式（美观展示）
+```
 
 ### 第六层：测试层 (tests)
 **职责**：执行具体的API测试
@@ -638,60 +675,98 @@ class TestBatchGenerateContent:
 
 ## 报告格式说明
 
-生成的JSON报告包含：
+生成的报告包含三种格式：
+
+### 1. JSON 报告（report.json）
 
 ```json
 {
-  "test_time": "测试时间",
-  "provider": "provider名称",
-  "endpoint": "API端点路径",
-  "base_url": "基础URL",
+  "test_time": "2026-01-29T19:14:20.005688",
+  "provider": "openai",
+  "endpoint": "/v1/chat/completions",
+  "base_url": "http://172.18.158.51:3000",
   "test_summary": {
-    "total_tests": "总测试数",
-    "passed": "通过数",
-    "failed": "失败数"
+    "total_tests": 15,
+    "passed": 14,
+    "failed": 1
   },
   "parameters": {
     "tested": [
-      "实际测试过的参数路径（包含嵌套结构）",
-      "扁平结构示例: temperature, max_tokens, model",
-      "嵌套结构示例: generationConfig, generationConfig.temperature,",
-      "generationConfig.topP, contents, contents[0].parts,",
-      "contents[0].parts[0].text, messages[0].role, messages[0].content"
+      "model",
+      "messages",
+      "messages[0].role",
+      "messages[0].content",
+      "temperature",
+      "top_p",
+      "max_tokens"
     ],
-    "untested": ["规范中有但未测试的参数"],
+    "untested": [],
     "unsupported": [
       {
-        "parameter": "参数名（可以是嵌套路径）",
-        "value": "参数值",
-        "test_name": "测试名称",
-        "reason": "不支持的原因（HTTP状态码+错误信息）"
+        "parameter": "streaming_options",
+        "value": null,
+        "test_name": "test_1",
+        "reason": "参数不支持"
       }
     ]
   },
   "response_fields": {
-    "expected": [
-      "顶层字段和所有嵌套字段（使用点号分隔）",
-      "例如: id, object, created, choices, choices.index,",
-      "choices.message, choices.message.role, choices.message.content,",
-      "usage, usage.prompt_tokens, usage.completion_tokens"
-    ],
-    "unsupported": [
-      {
-        "field": "字段名",
-        "test_name": "测试名称",
-        "reason": "缺失原因"
-      }
-    ]
+    "expected": [],
+    "unsupported": []
   },
-  "errors": [
-    {
-      "test_name": "测试名称",
-      "type": "错误类型",
-      "message": "详细错误信息"
-    }
-  ]
+  "errors": []
 }
+```
+
+### 2. Markdown 报告（parameters.md）
+
+```markdown
+# Chat Completions 参数支持报告
+
+**报告时间**: 2026-01-29T19:14:20.005688
+**总测试数**: 15
+**测试通过**: 14 ✅
+**测试失败**: 1 ❌
+
+## 参数支持情况
+
+- **已测试参数**: 7
+  - ✅ 支持: 6
+  - ❌ 不支持: 1
+
+## 参数详情
+
+| 参数 | 状态 |
+|------|------|
+| `model` | ✅ 支持 |
+| `messages` | ✅ 支持 |
+| `temperature` | ✅ 支持 |
+| `streaming_options` | ❌ 不支持 (参数不支持) |
+```
+
+### 3. HTML 报告（report.html）
+
+- 美观的响应式设计
+- 统计信息卡片（总数、通过、失败、支持率）
+- 参数详情表格（参数名、支持状态）
+- 自适应布局
+
+**报告目录结构**：
+每个测试生成一个独立的子目录，包含所有三种格式的报告：
+```
+reports/
+├── openai_v1_chat_completions_20260129_191805/
+│   ├── report.json
+│   ├── parameters.md
+│   └── report.html
+├── openai_v1_embeddings_20260129_191805/
+│   ├── report.json
+│   ├── parameters.md
+│   └── report.html
+└── gemini_v1beta_models_gemini-3-flash-preview:batchGenerateContent_20260129_191805/
+    ├── report.json
+    ├── parameters.md
+    └── report.html
 ```
 
 ---
@@ -767,7 +842,8 @@ async def test_streaming(self):
 - [x] 添加更多OpenAI endpoints（audio, images, embeddings等）
 - [x] 添加流式响应的完整验证逻辑
 - [x] 完善 Gemini provider 和测试覆盖
-- [ ] 实现Terminal格式报告输出（使用rich库）
+- [x] 实现参数表格生成系统（JSON → Markdown/HTML）✅
+- [ ] 实现汇总报告（多个测试的综合统计）
 
 ### 中期
 - [x] 实现 Gemini provider ✅
@@ -775,11 +851,13 @@ async def test_streaming(self):
 - [ ] 完善 xAI provider
 - [ ] 支持从YAML/JSON规范文件自动生成测试
 - [ ] 添加并发测试支持（pytest-xdist）
+- [ ] 实现报告自动清理（保留最近N次测试）
 
 ### 长期
 - [ ] 实现自动化CI/CD测试流程
-- [ ] 生成HTML格式的测试报告
 - [ ] 支持性能基准测试（响应时间统计）
+- [ ] 生成对比报告（新旧版本API差异）
+- [ ] 实现Web UI查看报告
 
 ---
 

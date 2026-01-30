@@ -189,14 +189,14 @@ class ReportCollector:
         Returns:
             报告文件路径
         """
-        # 生成文件名
+        # 生成子目录名
         endpoint_name = self.endpoint.replace("/", "_").strip("_")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{self.provider}_{endpoint_name}_{timestamp}.json"
+        report_dir_name = f"{self.provider}_{endpoint_name}_{timestamp}"
 
-        # 创建输出目录
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
+        # 创建报告目录
+        report_dir = Path(output_dir) / report_dir_name
+        report_dir.mkdir(parents=True, exist_ok=True)
 
         # 构建报告
         report = {
@@ -221,9 +221,39 @@ class ReportCollector:
             "errors": self.errors,
         }
 
-        # 写入文件
-        report_path = output_path / filename
-        with open(report_path, "w", encoding="utf-8") as f:
+        # 写入 JSON 文件
+        json_path = report_dir / "report.json"
+        with open(json_path, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
 
-        return str(report_path)
+        # 生成参数表格
+        self._generate_parameter_tables_if_available(str(report_dir), report)
+
+        return str(json_path)
+
+    def _generate_parameter_tables_if_available(
+        self, output_dir: str, report_data: dict
+    ) -> None:
+        """动态生成参数支持表格
+
+        Args:
+            output_dir: 输出目录
+            report_data: 报告数据
+        """
+        try:
+            from llm_spec.reporting.formatter import ParameterTableFormatter
+
+            # 创建格式化器（只需要报告数据）
+            formatter = ParameterTableFormatter(report_data)
+
+            # 生成 Markdown 表格
+            markdown_path = formatter.save_markdown(output_dir)
+            print(f"参数表格 (Markdown): {markdown_path}")
+
+            # 生成 HTML 报告
+            html_path = formatter.save_html(output_dir)
+            print(f"参数表格 (HTML): {html_path}")
+
+        except (ImportError, AttributeError, ModuleNotFoundError):
+            # 如果导入失败，静默处理（不影响主流程）
+            pass
