@@ -78,7 +78,7 @@ class TestGenerateContent:
             params=self.BASE_PARAMS,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -117,7 +117,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -161,7 +161,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -209,7 +209,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -253,7 +253,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -297,7 +297,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -341,7 +341,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -389,7 +389,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -449,7 +449,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -502,7 +502,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -554,7 +554,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -598,7 +598,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -659,7 +659,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -697,7 +697,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -739,7 +739,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -783,7 +783,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -827,7 +827,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -875,7 +875,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -922,7 +922,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -970,7 +970,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -1039,7 +1039,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -1098,7 +1098,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -1166,7 +1166,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -1232,7 +1232,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -1286,7 +1286,7 @@ class TestGenerateContent:
         """测试 imageConfig.aspectRatio 参数（图像生成宽高比）"""
         test_name = f"test_param_image_config_aspect_ratio[{aspect_ratio}]"
 
-        endpoint = self.ENDPOINT_IMAGE
+        endpoint = self.ENDPOINT_FLASH
 
         params = {
             "contents": [{"parts": [{"text": "Generate an image of a sunset"}]}],
@@ -1302,7 +1302,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -1345,7 +1345,7 @@ class TestGenerateContent:
         """测试 imageConfig.imageSize 参数（图像生成尺寸）"""
         test_name = f"test_param_image_config_size[{image_size}]"
 
-        endpoint = self.ENDPOINT_IMAGE
+        endpoint = self.ENDPOINT_FLASH
 
         params = {
             "contents": [{"parts": [{"text": "Generate an image of mountains"}]}],
@@ -1361,7 +1361,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 
@@ -1409,7 +1409,7 @@ class TestGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, GenerateContentResponse)
 

@@ -1,255 +1,191 @@
-# LLM-Spec
+# llm-spec
 
-一个规范驱动的 LLM API 厂商兼容性测试工具，用于验证各厂商API的参数支持情况和响应格式合规性。
+一个基于 **pytest** 的 LLM API 格式/参数兼容性检查工具：通过“控制变量法”逐项测试请求参数，并用 **Pydantic schema** 校验响应结构，最终生成 **JSON + Markdown + HTML** 报告（支持单 endpoint 报告与按厂商聚合报告）。
 
-## 🎯 核心功能
+## 特性
 
-- ✅ **细粒度参数测试**：使用控制变量法，精确定位不支持的参数和参数值
-- ✅ **参数变体测试**：自动测试参数的所有可能值（如不同的model、voice等）
-- ✅ **响应格式验证**：使用Pydantic模型验证响应结构，字段级别错误定位
-- ✅ **详细JSON报告**：包含测试统计、不支持参数列表、缺失字段、详细错误信息
-- ✅ **结构化日志**：每个请求有唯一ID，完整的请求/响应链路追踪
-- ✅ **多Provider支持**：支持OpenAI、Anthropic、Gemini、xAI等
+- **参数支持情况探测**：在基线请求成功的前提下，逐个引入参数/参数值，定位“不支持”的精确原因（通常是 HTTP 4xx/5xx 或响应校验失败）。
+- **响应格式验证**：为不同厂商/路由提供响应 schema，输出缺失字段列表与字段级错误定位。
+- **报告输出**：
+  - 单 endpoint：`report.json` / `parameters.md` / `report.html`
+  - 多 endpoint（同一厂商目录）：自动生成 `*_aggregated_*` 聚合报告（JSON/MD/HTML）
+- **结构化请求日志**：可选记录请求/响应（支持截断，避免巨大 body）。
 
-## 📦 快速开始
+## 当前支持的厂商与路由
 
-### 1. 安装依赖
+项目内置了以下 provider 适配与测试用例（以 `tests/` 为准）：
+
+### OpenAI
+
+Provider：`openai`（默认 `base_url=https://api.openai.com`）
+
+支持测试路由：
+- `POST /v1/chat/completions`
+- `POST /v1/responses`
+- `POST /v1/embeddings`
+- `POST /v1/images/generations`
+- `POST /v1/images/edits`
+- `POST /v1/audio/speech`（二进制音频返回）
+- `POST /v1/audio/transcriptions`
+- `POST /v1/audio/translations`
+
+测试默认模型/基线（来自测试用例中的 `BASE_PARAMS` 或 endpoint 路径本身）：
+- Chat Completions：`gpt-4o-mini`
+- Responses：`gpt-4o-mini`
+- Embeddings：`text-embedding-3-small`
+- Images Generations：`dall-e-3`（另有 GPT image 基线 `gpt-image-1.5`）
+- Images Edits：`gpt-image-1.5`
+- Audio Speech：`gpt-4o-mini-tts`
+- Audio Transcriptions：`whisper-1`（另在模型变体测试中出现 `gpt-4o-mini-transcribe`）
+- Audio Translations：`whisper-1`
+
+### Anthropic
+
+Provider：`anthropic`（默认 `base_url=https://api.anthropic.com`）
+
+支持测试路由：
+- `POST /v1/messages`
+
+测试默认模型：
+- Messages：`claude-haiku-4.5`
+
+### Google Gemini
+
+Provider：`gemini`（默认 `base_url=https://generativelanguage.googleapis.com`）
+
+支持测试路由：
+- `POST /v1beta/models/{model}:generateContent`
+- `POST /v1beta/models/{model}:streamGenerateContent`（流式）
+- `POST /v1beta/models/{model}:batchGenerateContent`
+- `POST /v1beta/models/{model}:embedContent`
+- `POST /v1beta/models/{model}:countTokens`
+
+测试默认模型/基线（来自 endpoint 路径本身；Gemini 的 model 通常在 URL 中）：
+- Generate：`gemini-3-flash-preview`（`/v1beta/models/gemini-3-flash-preview:generateContent`）
+- StreamGenerate：`gemini-3-flash-preview`（`...:streamGenerateContent`）
+- BatchGenerate：`gemini-3-flash-preview`（`...:batchGenerateContent`）
+- Embed：`text-embedding-005`（`/v1beta/models/text-embedding-005:embedContent`）
+- CountTokens：`gemini-2.5-flash`（`/v1beta/models/gemini-2.5-flash:countTokens`）
+
+### xAI（OpenAI 兼容）
+
+Provider：`xai`（默认 `base_url=https://api.x.ai/v1`）
+
+支持测试路由：
+- `POST /v1/chat/completions`
+
+测试默认模型：
+- Chat Completions：`grok-beta`
+
+## 使用 uv 创建环境并安装依赖
+
+项目是标准 `pyproject.toml`，推荐用 **uv** 管理虚拟环境与依赖。
 
 ```bash
-pip install -e ".[dev]"
+# 1) 创建并使用 venv（Python 3.11+）
+uv venv -p 3.11
+
+# 2) 安装（包含测试依赖）
+uv sync --extra dev
+
+# 3) 进入环境（任选其一）
+source .venv/bin/activate
+# 或不激活，直接用 uv 运行：
+# uv run pytest ...
 ```
 
-### 2. 配置
+## 配置
 
-编辑 `llm-spec.toml`：
+复制示例配置并填写 key：
+
+```bash
+cp llm-spec.example.toml llm-spec.toml
+```
+
+`llm-spec.toml` 关键字段：
+
+- `[report].output_dir`：报告输出目录（默认 `./reports`）
+- `[log]`：日志开关、级别、是否记录 request/response body
+- `[openai] / [anthropic] / [gemini] / [xai]`：各厂商 `api_key` / `base_url` / `timeout`
+
+示例（节选）：
 
 ```toml
-[log]
-enabled = true
-level = "INFO"
-file = "./logs/llm-spec.log"
-log_request_body = true
-log_response_body = false
-
 [report]
 output_dir = "./reports"
 
 [openai]
-api_key = "your-api-key"
+api_key = "sk-..."
 base_url = "https://api.openai.com"
 timeout = 30.0
 ```
 
-### 3. 运行测试
+## 运行方式
+
+### 运行单个 endpoint 测试
 
 ```bash
-# 运行单个endpoint测试
-pytest tests/openai/test_chat_completions.py -v
-
-# 运行所有OpenAI测试
-pytest tests/openai/ -v
-
-# 运行所有Anthropic测试
-pytest tests/anthropic/ -v
-
-# 运行所有Gemini测试
-pytest tests/gemini/ -v
-
-# 运行所有测试
-pytest tests/ -v
+uv run pytest tests/openai/test_chat_completions.py -v
 ```
 
-### 4. 查看报告
+### 运行某个厂商全部路由（会生成聚合报告）
 
 ```bash
-# 报告输出会按 run_id 分目录（例如 reports/20260130_123456/...）
-# 先找到最新的 run_id 目录
+uv run pytest tests/openai/ -v
+uv run pytest tests/anthropic/ -v
+uv run pytest tests/gemini/ -v
+uv run pytest tests/xai/ -v
+```
+
+### 运行全部测试
+
+```bash
+uv run pytest tests/ -v
+```
+
+> 说明：pytest session 开始时会生成本次运行的 `run_id`（时间戳），所有报告会写到 `reports/<run_id>/...`，避免和历史报告混在一起。
+
+## 查看报告
+
+### 1) 定位本次 run 的目录
+
+```bash
 ls -lt reports | head
-
-# 再查看某个 endpoint 的 JSON 报告
-cat reports/<run_id>/openai_v1_chat_completions_*/report.json
 ```
 
-## 📋 项目结构
+你会看到类似：
 
 ```
-llm-spec/
-├── llm_spec/              # 核心代码
-│   ├── config/            # 配置管理
-│   ├── client/            # HTTP客户端
-│   ├── providers/         # Provider适配器
-│   ├── validation/        # 响应验证
-│   └── reporting/         # 报告生成
-├── tests/                 # 测试代码
-│   ├── openai/            # OpenAI 测试（7个文件）
-│   ├── anthropic/         # Anthropic 测试（4个文件）
-│   ├── gemini/            # Gemini 测试（3个文件）
-│   └── xai/               # xAI 测试
-├── test_assets/           # 测试资源
-├── reports/               # 生成的报告
-└── logs/                  # 日志文件
+reports/20260130_141530/
+  openai_v1_chat_completions_20260130_141531/
+    report.json
+    parameters.md
+    report.html
+  openai_aggregated_20260130_141620/
+    report.json
+    report.md
+    report.html
 ```
 
-## 🚀 添加新的 Endpoint 测试
+### 2) 打开 HTML 报告
 
-### 示例：测试 `/v1/audio/speech`
+- 单 endpoint：`reports/<run_id>/<provider>_<endpoint>_<timestamp>/report.html`
+- 聚合报告：`reports/<run_id>/<provider>_aggregated_<timestamp>/report.html`
 
-1. **创建 Pydantic Schema**（如果需要）
+本地直接用浏览器打开即可。
 
-```python
-# llm_spec/validation/schemas/openai/audio.py
-from pydantic import BaseModel
-
-class AudioSpeechResponse(BaseModel):
-    # 音频响应通常是二进制，可能不需要验证
-    pass
-```
-
-2. **创建测试文件**
-
-```python
-# tests/providers/openai/test_audio_speech.py
-import pytest
-from llm_spec.reporting.collector import ReportCollector
-
-class TestAudioSpeech:
-    ENDPOINT = "/v1/audio/speech"
-    BASE_PARAMS = {
-        "model": "tts-1",
-        "input": "Hello",
-        "voice": "alloy",
-    }
-
-    @pytest.fixture(autouse=True)
-    def setup_collector(self, openai_client):
-        self.client = openai_client
-        self.collector = ReportCollector(
-            provider="openai",
-            endpoint=self.ENDPOINT,
-            base_url=openai_client.get_base_url(),
-        )
-        yield
-        self.collector.finalize()
-
-    def test_baseline(self):
-        status_code, headers, body = self.client.request(
-            endpoint=self.ENDPOINT,
-            params=self.BASE_PARAMS,
-        )
-        self.collector.record_test(
-            test_name="test_baseline",
-            params=self.BASE_PARAMS,
-            status_code=status_code,
-            response_body=None,
-            error=None if 200 <= status_code < 300 else f"HTTP {status_code}",
-        )
-        assert 200 <= status_code < 300
-
-    @pytest.mark.parametrize("voice", ["alloy", "echo", "fable"])
-    def test_voice_variants(self, voice):
-        params = {**self.BASE_PARAMS, "voice": voice}
-        status_code, headers, body = self.client.request(
-            endpoint=self.ENDPOINT, params=params
-        )
-        # 记录测试结果...
-```
-
-3. **运行测试**
+### 3) 查看 JSON/Markdown
 
 ```bash
-pytest tests/providers/openai/test_audio_speech.py -v
+cat reports/<run_id>/openai_v1_responses_*/report.json
+cat reports/<run_id>/openai_v1_responses_*/parameters.md
 ```
 
-详细文档见 [ARCHITECTURE.md](ARCHITECTURE.md)
+## 文档
 
-## 🧪 测试模式
+- `docs/ARCHITECTURE.md`：分层架构与组件职责
+- `docs/DATAFLOW.md`：从测试 -> provider -> http client -> validator -> report 的数据流
 
-### 基线测试
-仅使用必需参数，验证基本功能
-
-```python
-def test_baseline(self):
-    params = self.BASE_PARAMS
-    # 测试...
-```
-
-### 单参数测试
-每次测试一个新参数（控制变量法）
-
-```python
-def test_param_temperature(self):
-    params = {**self.BASE_PARAMS, "temperature": 0.7}
-    # 如果失败，记录为不支持
-```
-
-### 参数变体测试
-测试参数的所有可能值
-
-```python
-@pytest.mark.parametrize("model", ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"])
-def test_model_variants(self, model):
-    params = {**self.BASE_PARAMS, "model": model}
-    # 精确报告哪个值不支持
-```
-
-## 📊 报告格式
-
-生成的JSON报告包含：
-
-```json
-{
-  "test_time": "2026-01-27T15:40:00Z",
-  "provider": "openai",
-  "endpoint": "/v1/chat/completions",
-  "test_summary": {
-    "total_tests": 6,
-    "passed": 5,
-    "failed": 1
-  },
-  "parameters": {
-    "tested": ["model", "messages", "temperature", "max_tokens"],
-    "unsupported": [
-      {
-        "parameter": "model",
-        "value": "gpt-4",
-        "test_name": "test_model_variants[gpt-4]",
-        "reason": "HTTP 404: No available channels"
-      }
-    ]
-  },
-  "response_fields": {
-    "expected": ["id", "object", "created", "model", "choices"],
-    "unsupported": [
-      {
-        "field": "system_fingerprint",
-        "reason": "Field missing in response"
-      }
-    ]
-  },
-  "errors": [...]
-}
-```
-
-## 🎨 设计原则
-
-- **显式优于隐式**：所有参数在测试类顶部显式定义
-- **控制变量法**：每次只测试一个新参数
-- **细粒度报告**：精确到参数值、字段级别的错误
-- **统一错误处理**：所有错误都视为失败并记录
-- **低耦合高扩展**：添加新endpoint或provider无需修改核心代码
-
-## 📚 文档
-
-- [ARCHITECTURE.md](ARCHITECTURE.md) - 完整架构文档
-- [llm-spec.toml](llm-spec.toml) - 配置文件示例
-
-## 🔧 依赖
-
-- Python >= 3.11
-- httpx - HTTP客户端
-- pydantic - 数据验证
-- pytest - 测试框架
-
-## 📝 License
+## License
 
 MIT

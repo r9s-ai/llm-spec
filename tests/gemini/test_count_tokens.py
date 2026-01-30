@@ -16,7 +16,7 @@ class TestCountTokens:
 
     collector: ReportCollector
 
-    ENDPOINT = "/v1beta/models/gemini-2.5-flash:countTokens"
+    ENDPOINT = "/v1beta/models/gemini-3-flash-preview:countTokens"
 
     # 基线参数：仅包含必需参数
     BASE_PARAMS = {

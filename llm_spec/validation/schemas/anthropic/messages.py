@@ -52,8 +52,16 @@ class ToolResultBlock(BaseModel):
     is_error: bool | None = None
 
 
+class ThinkingBlock(BaseModel):
+    """思考过程块"""
+
+    type: Literal["thinking"] = "thinking"
+    thinking: str
+    signature: str | None = None
+
+
 # Union type for content blocks
-ContentBlock = TextBlock | ImageBlock | ToolUseBlock | ToolResultBlock
+ContentBlock = TextBlock | ImageBlock | ToolUseBlock | ToolResultBlock | ThinkingBlock
 
 
 class Message(BaseModel):

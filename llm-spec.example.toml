@@ -1,29 +1,29 @@
-# llm-spec.toml 示例配置
+# llm-spec.toml example configuration
 #
-# 使用方法：
-# 1) 复制本文件为项目根目录下的 `llm-spec.toml`
-# 2) 填写各 Provider 的 api_key / base_url 等
-# 3) 运行 pytest 生成 reports
+# Usage:
+# 1) Copy this file to the project root as `llm-spec.toml`
+# 2) Fill in each provider's api_key / base_url
+# 3) Run pytest to generate reports
 
 
-# 日志配置
+# Logging configuration
 [log]
-enabled = true                 # 是否启用日志
+enabled = true                 # Enable logging
 level = "INFO"                 # DEBUG, INFO, WARNING, ERROR
-console = true                 # 输出到控制台
-file = "./logs/llm-spec.log"   # 输出到文件（可选）
-log_request_body = true        # 记录请求体
-log_response_body = false      # 记录响应体（可能较大）
-max_body_length = 1000         # 最大记录长度
+console = true                 # Log to console
+file = "./logs/llm-spec.log"   # Log file path (optional)
+log_request_body = true        # Log request body
+log_response_body = false      # Log response body (may be large)
+max_body_length = 1000         # Max body length to log
 
 
-# 报告配置
+# Report configuration
 [report]
-output_dir = "./reports"       # 报告保存目录（实际会在该目录下按 run_id 再分一层）
+output_dir = "./reports"       # Report output directory (actual path: output_dir/<run_id>/...)
 
 
-# Provider 配置（每个 provider 一个 section）
-# timeout 单位：秒
+# Provider configuration (one section per provider)
+# timeout unit: seconds
 
 [openai]
 api_key = "sk-..."
@@ -44,4 +44,3 @@ timeout = 30.0
 api_key = "..."
 base_url = "https://api.x.ai/v1"
 timeout = 30.0
-

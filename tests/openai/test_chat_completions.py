@@ -924,9 +924,11 @@ class TestChatCompletions:
         test_name = "test_streaming_basic"
         params = {**self.BASE_PARAMS, "stream": True}
 
-        chunks = []
+        chunks: list[dict] = []
         complete_content = ""
-        raw_lines = []  # 调试：收集所有原始行
+        raw_lines: list[str] = []  # 调试：收集所有原始行
+        # SSE 解析缓冲，解决 JSON 被拆到多个网络 chunk 的情况
+        buffer = ""
 
         try:
             for chunk_bytes in self.client.stream(
@@ -936,31 +938,51 @@ class TestChatCompletions:
                 # 解析 SSE 格式
                 chunk_str = chunk_bytes.decode("utf-8")
                 raw_lines.append(repr(chunk_str))  # 调试：记录原始数据
+                buffer += chunk_str
 
-                # SSE 格式：每行可能是 "data: ..." 或空行
-                for line in chunk_str.split('\n'):
-                    line = line.strip()
-                    if not line:
+                # 按 SSE 事件边界（空行）拆分。保留最后一个可能不完整的事件在 buffer 中。
+                events = buffer.split("\n\n")
+                buffer = events.pop()  # last partial
+
+                for event in events:
+                    # 一个 event 可能包含多行，例如:
+                    # data: {...}\n
+                    # data: {...}\n
+                    data_lines = []
+                    for line in event.splitlines():
+                        line = line.strip()
+                        if not line:
+                            continue
+                        if line.startswith("data:"):
+                            data_lines.append(line[5:].lstrip())
+
+                    if not data_lines:
                         continue
 
-                    if line.startswith("data: "):
-                        data_str = line[6:]  # 移除 "data: " 前缀
-                        if data_str == "[DONE]":
-                            break
-                        try:
-                            chunk_data = json.loads(data_str)
-                            chunks.append(chunk_data)
+                    data_str = "\n".join(data_lines)
+                    if data_str == "[DONE]":
+                        buffer = ""  # clean
+                        break
 
-                            # 验证每个 chunk
-                            result = ResponseValidator.validate_response(response, ChatCompletionChunkResponse)
+                    try:
+                        chunk_data = json.loads(data_str)
+                    except json.JSONDecodeError as je:
+                        # 记录但不中断；不稳定网络下可能出现 malformed 或非 json 行
+                        print(f"JSON解析失败: {data_str[:120]}, 错误: {je}")
+                        continue
 
-                            # 累积内容
-                            if chunk_data.get("choices"):
-                                delta_content = chunk_data["choices"][0].get("delta", {}).get("content")
-                                if delta_content:
-                                    complete_content += delta_content
-                        except json.JSONDecodeError as je:
-                            print(f"JSON解析失败: {data_str[:100]}, 错误: {je}")
+                    chunks.append(chunk_data)
+
+                    # 验证每个 chunk（基于 dict 校验，而不是 httpx.Response）
+                    result = ResponseValidator.validate_json(chunk_data, ChatCompletionChunkResponse)
+                    if not result.is_valid:
+                        raise AssertionError(f"流式 chunk 响应验证失败: {result.error_message}")
+
+                    # 累积内容
+                    if chunk_data.get("choices"):
+                        delta_content = chunk_data["choices"][0].get("delta", {}).get("content")
+                        if delta_content:
+                            complete_content += delta_content
 
             # 调试输出
             print(f"\n收到 {len(raw_lines)} 个原始chunk")
@@ -1018,31 +1040,52 @@ class TestChatCompletions:
             "stream_options": {"include_usage": True},
         }
 
-        chunks = []
+        chunks: list[dict] = []
         has_usage = False
+        buffer = ""
 
         try:
             for chunk_bytes in self.client.stream(
                 endpoint=self.ENDPOINT,
                 params=params,
             ):
-                chunk_str = chunk_bytes.decode("utf-8").strip()
-                if chunk_str.startswith("data: "):
-                    data_str = chunk_str[6:]
+                chunk_str = chunk_bytes.decode("utf-8")
+                buffer += chunk_str
+
+                events = buffer.split("\n\n")
+                buffer = events.pop()
+
+                for event in events:
+                    data_lines = []
+                    for line in event.splitlines():
+                        line = line.strip()
+                        if not line:
+                            continue
+                        if line.startswith("data:"):
+                            data_lines.append(line[5:].lstrip())
+                    if not data_lines:
+                        continue
+
+                    data_str = "\n".join(data_lines)
                     if data_str == "[DONE]":
+                        buffer = ""
                         break
+
                     try:
                         chunk_data = json.loads(data_str)
-                        chunks.append(chunk_data)
-
-                        # 检查是否包含 usage
-                        if chunk_data.get("usage"):
-                            has_usage = True
-
-                        # 验证每个 chunk
-                        result = ResponseValidator.validate_response(response, ChatCompletionChunkResponse)
                     except json.JSONDecodeError:
-                        pass
+                        continue
+
+                    chunks.append(chunk_data)
+
+                    # 检查是否包含 usage
+                    if chunk_data.get("usage"):
+                        has_usage = True
+
+                    # 验证每个 chunk（dict 校验）
+                    result = ResponseValidator.validate_json(chunk_data, ChatCompletionChunkResponse)
+                    if not result.is_valid:
+                        raise AssertionError(f"流式 chunk 响应验证失败: {result.error_message}")
 
             # 记录测试结果
             self.collector.record_test(

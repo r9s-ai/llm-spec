@@ -54,7 +54,7 @@ class TestChatCompletions:
             params=self.BASE_PARAMS,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
@@ -81,7 +81,7 @@ class TestChatCompletions:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
@@ -116,7 +116,7 @@ class TestChatCompletions:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 

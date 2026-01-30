@@ -97,31 +97,68 @@ class TestStreamGenerateContent:
         chunks: list[dict] = []
         complete_content = ""
 
+        # Some gateways return true SSE ("data: {...}\n\n"), while others return plain JSON
+        # objects per chunk (no "data:" prefix). Support both.
+        buffer = ""
+
+        def _consume_chunk_obj(chunk_data: dict) -> None:
+            nonlocal complete_content
+            chunks.append(chunk_data)
+            if chunk_data.get("candidates"):
+                for candidate in chunk_data["candidates"]:
+                    if candidate.get("content"):
+                        parts = candidate["content"].get("parts", [])
+                        for part in parts:
+                            if part.get("text"):
+                                complete_content += part["text"]
+
         for chunk_bytes in self.client.stream(endpoint=endpoint, params=params):
             chunk_str = chunk_bytes.decode("utf-8")
+            buffer += chunk_str
 
-            for line in chunk_str.split("\n"):
-                line = line.strip()
-                if not line or not line.startswith("data: "):
+            # Fast path: if the accumulated buffer looks like a full JSON object and does not contain SSE markers,
+            # try to parse it as plain JSON chunk.
+            if "data:" not in buffer:
+                candidate = buffer.strip()
+                # Heuristic: must start/end like a JSON object
+                if candidate.startswith("{") and candidate.endswith("}"):
+                    try:
+                        obj = json.loads(candidate)
+                        if isinstance(obj, dict):
+                            _consume_chunk_obj(obj)
+                            buffer = ""
+                            continue
+                    except json.JSONDecodeError:
+                        # not complete yet
+                        pass
+
+            # SSE path: split by event boundary (blank line)
+            events = buffer.split("\n\n")
+            buffer = events.pop()  # keep last partial
+
+            for event in events:
+                data_lines: list[str] = []
+                for line in event.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    if line.startswith("data:"):
+                        data_lines.append(line[5:].lstrip())
+
+                if not data_lines:
                     continue
 
-                data_str = line[6:]
+                data_str = "\n".join(data_lines)
                 if data_str == "[DONE]":
+                    buffer = ""
                     break
 
                 try:
-                    chunk_data: dict = json.loads(data_str)
-                    chunks.append(chunk_data)
-
-                    if chunk_data.get("candidates"):
-                        for candidate in chunk_data["candidates"]:
-                            if candidate.get("content"):
-                                parts = candidate["content"].get("parts", [])
-                                for part in parts:
-                                    if part.get("text"):
-                                        complete_content += part["text"]
+                    chunk_data = json.loads(data_str)
                 except json.JSONDecodeError:
-                    pass
+                    continue
+                if isinstance(chunk_data, dict):
+                    _consume_chunk_obj(chunk_data)
 
         if chunks:
             # Validate the last chunk's JSON structure
@@ -283,7 +320,7 @@ class TestStreamGenerateContent:
             },
         )
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     def test_streaming_response_schema(self):
         """测试带 schema 的 JSON 响应格式"""
@@ -314,7 +351,7 @@ class TestStreamGenerateContent:
             unsupported_param={"name": "generationConfig.responseSchema", "value": "json_schema"},
         )
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     # ========================================================================
     # 阶段 4: 安全设置测试
@@ -334,7 +371,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     @pytest.mark.parametrize(
         "threshold",
@@ -359,7 +396,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     # ========================================================================
     # 阶段 5: 系统指令测试
@@ -376,7 +413,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     # ========================================================================
     # 阶段 6: 工具调用测试
@@ -410,7 +447,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     def test_streaming_code_execution(self):
         """测试代码执行功能"""
@@ -421,7 +458,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     # ========================================================================
     # 阶段 7: 生成控制进阶参数
@@ -436,7 +473,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     def test_streaming_frequency_penalty(self):
         """测试 frequencyPenalty 参数（基于频率的token惩罚）"""
@@ -447,7 +484,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     def test_streaming_seed(self):
         """测试 seed 参数（确保生成结果可重复）"""
@@ -458,7 +495,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     # ========================================================================
     # 阶段 8: 概率信息参数
@@ -477,7 +514,7 @@ class TestStreamGenerateContent:
             unsupported_param={"name": "generationConfig.responseLogprobs", "value": True},
         )
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     def test_streaming_logprobs(self):
         """测试 logprobs 参数（与 responseLogprobs 配合使用）"""
@@ -495,7 +532,7 @@ class TestStreamGenerateContent:
             unsupported_param={"name": "generationConfig.logprobs", "value": 3},
         )
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     # ========================================================================
     # 阶段 9: 特定场景参数
@@ -510,7 +547,7 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     @pytest.mark.parametrize(
         "resolution",
@@ -551,7 +588,7 @@ class TestStreamGenerateContent:
             unsupported_param={"name": "generationConfig.mediaResolution", "value": resolution},
         )
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     # ========================================================================
     # 阶段 10: 响应模态控制
@@ -583,7 +620,7 @@ class TestStreamGenerateContent:
             unsupported_param={"name": "generationConfig.responseModalities", "value": modalities},
         )
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     # ========================================================================
     # 阶段 11: 语音配置（使用 TTS 模型）
@@ -636,7 +673,7 @@ class TestStreamGenerateContent:
             )
 
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     # ========================================================================
     # 阶段 12: 思考配置（Gemini 3）
@@ -677,7 +714,7 @@ class TestStreamGenerateContent:
             },
         )
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     # ========================================================================
     # 阶段 13: 图像配置
@@ -715,7 +752,7 @@ class TestStreamGenerateContent:
 
         chunks, _, is_valid = self._run_streaming_test(test_name, params, endpoint=endpoint)
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     @pytest.mark.parametrize(
         "image_size",
@@ -742,7 +779,7 @@ class TestStreamGenerateContent:
 
         chunks, _, is_valid = self._run_streaming_test(test_name, params, endpoint=endpoint)
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid
 
     # ========================================================================
     # 阶段 14: 增强功能参数
@@ -757,4 +794,4 @@ class TestStreamGenerateContent:
         }
         chunks, _, is_valid = self._run_streaming_test(test_name, params)
         assert len(chunks) > 0
-        assert result.is_valid
+        assert is_valid

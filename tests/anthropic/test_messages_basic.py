@@ -76,7 +76,7 @@ class TestMessagesBasic:
             params=self.BASE_PARAMS,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, MessagesResponse)
 
@@ -106,7 +106,7 @@ class TestMessagesBasic:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, MessagesResponse)
 
@@ -141,7 +141,7 @@ class TestMessagesBasic:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, MessagesResponse)
 
@@ -176,7 +176,7 @@ class TestMessagesBasic:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, MessagesResponse)
 
@@ -206,9 +206,10 @@ class TestMessagesBasic:
     def test_param_stop_sequences(self):
         """测试 stop_sequences 参数"""
         test_name = "test_param_stop_sequences"
+        # API requires stop sequences to contain non-whitespace characters
         params = {
             **self.BASE_PARAMS,
-            "stop_sequences": ["\n\n", "END"],
+            "stop_sequences": ["StopHere", "EndProcess"],
         }
 
         response = self.client.request(
@@ -216,7 +217,7 @@ class TestMessagesBasic:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, MessagesResponse)
 
@@ -233,7 +234,7 @@ class TestMessagesBasic:
         if not (200 <= status_code < 300):
             self.collector.add_unsupported_param(
                 param_name="stop_sequences",
-                param_value=["\n\n", "END"],
+                param_value=["StopHere", "EndProcess"],
                 test_name=test_name,
                 reason=f"HTTP {status_code}: {response_body}",
             )
@@ -256,7 +257,7 @@ class TestMessagesBasic:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, MessagesResponse)
 
@@ -296,7 +297,7 @@ class TestMessagesBasic:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, MessagesResponse)
 
@@ -331,7 +332,7 @@ class TestMessagesBasic:
 
         chunks = []
         error_occurred = False
-        result.error_message = None
+        error_message: str | None = None
 
         try:
             async for chunk in self.client.stream_async(self.ENDPOINT, params):
@@ -340,14 +341,14 @@ class TestMessagesBasic:
                     break
         except Exception as e:
             error_occurred = True
-            result.error_message = str(e)
+            error_message = str(e)
 
         self.collector.record_test(
             test_name=test_name,
             params=params,
             status_code=200 if not error_occurred else 500,
             response_body={"chunks_received": len(chunks)} if chunks else None,
-            error=result.error_message if error_occurred else None,
+            error=error_message if error_occurred else None,
         )
 
         if error_occurred:
@@ -355,15 +356,15 @@ class TestMessagesBasic:
                 param_name="stream",
                 param_value=True,
                 test_name=test_name,
-                reason=f"Streaming error: {result.error_message}",
+                reason=f"Streaming error: {error_message}",
             )
 
-        assert not error_occurred, f"Streaming failed: {result.error_message}"
+        assert not error_occurred, f"Streaming failed: {error_message}"
         assert len(chunks) > 0, "No chunks received"
 
     # ==================== 阶段7: 多模态测试 ====================
 
-    def test_param_image_base64(self, test_assets):
+    def test_param_image_base64(self):
         """测试 base64 图片输入"""
         test_name = "test_param_image_base64"
 
@@ -395,7 +396,7 @@ class TestMessagesBasic:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, MessagesResponse)
 
@@ -455,7 +456,7 @@ class TestMessagesBasic:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, MessagesResponse)
 
@@ -496,7 +497,7 @@ class TestMessagesBasic:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, MessagesResponse)
 
@@ -536,7 +537,7 @@ class TestMessagesBasic:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, MessagesResponse)
 
@@ -589,7 +590,7 @@ class TestMessagesBasic:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, MessagesResponse)
 
@@ -625,9 +626,14 @@ class TestMessagesBasic:
     def test_param_thinking(self):
         """测试 thinking 参数"""
         test_name = "test_param_thinking"
+        # thinking.enabled requires budget_tokens to be set
         params = {
             **self.BASE_PARAMS,
-            "thinking": {"type": "enabled"},
+            "max_tokens": 512+2048,
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": 2048
+            },
             "messages": [{"role": "user", "content": "Solve: What is 25 * 17?"}],
         }
 
@@ -636,7 +642,7 @@ class TestMessagesBasic:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         result = ResponseValidator.validate_response(response, MessagesResponse)
 
@@ -659,4 +665,4 @@ class TestMessagesBasic:
             )
 
         # 思考模式可能只在特定模型上支持，不强制断言
-        # assert 200 <= status_code < 300
+        assert 200 <= status_code < 300

@@ -63,11 +63,9 @@ class TestBatchGenerateContent:
             params=self.BASE_PARAMS,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, result.error_message, missing_fields, expected_fields = (
-            ResponseValidator.validate(response_body, BatchCreateResponse)
-        )
+        result = ResponseValidator.validate_response(response, BatchCreateResponse)
 
         self.collector.record_test(
             test_name=test_name,
@@ -90,6 +88,7 @@ class TestBatchGenerateContent:
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
+        assert isinstance(response_body, dict), "Expected JSON response"
         assert response_body.get("name"), "批任务名称缺失"
         assert response_body.get("state"), "批任务状态缺失"
 
@@ -109,11 +108,9 @@ class TestBatchGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, result.error_message, missing_fields, expected_fields = (
-            ResponseValidator.validate(response_body, BatchCreateResponse)
-        )
+        result = ResponseValidator.validate_response(response, BatchCreateResponse)
 
         self.collector.record_test(
             test_name=test_name,
@@ -141,11 +138,9 @@ class TestBatchGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, result.error_message, missing_fields, expected_fields = (
-            ResponseValidator.validate(response_body, BatchCreateResponse)
-        )
+        result = ResponseValidator.validate_response(response, BatchCreateResponse)
 
         self.collector.record_test(
             test_name=test_name,
@@ -191,11 +186,9 @@ class TestBatchGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, result.error_message, missing_fields, expected_fields = (
-            ResponseValidator.validate(response_body, BatchCreateResponse)
-        )
+        result = ResponseValidator.validate_response(response, BatchCreateResponse)
 
         self.collector.record_test(
             test_name=test_name,
@@ -240,11 +233,9 @@ class TestBatchGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, result.error_message, missing_fields, expected_fields = (
-            ResponseValidator.validate(response_body, BatchCreateResponse)
-        )
+        result = ResponseValidator.validate_response(response, BatchCreateResponse)
 
         self.collector.record_test(
             test_name=test_name,
@@ -286,11 +277,9 @@ class TestBatchGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, result.error_message, missing_fields, expected_fields = (
-            ResponseValidator.validate(response_body, BatchCreateResponse)
-        )
+        result = ResponseValidator.validate_response(response, BatchCreateResponse)
 
         self.collector.record_test(
             test_name=test_name,
@@ -336,11 +325,9 @@ class TestBatchGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, result.error_message, missing_fields, expected_fields = (
-            ResponseValidator.validate(response_body, BatchCreateResponse)
-        )
+        result = ResponseValidator.validate_response(response, BatchCreateResponse)
 
         self.collector.record_test(
             test_name=test_name,
@@ -386,11 +373,9 @@ class TestBatchGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, result.error_message, missing_fields, expected_fields = (
-            ResponseValidator.validate(response_body, BatchCreateResponse)
-        )
+        result = ResponseValidator.validate_response(response, BatchCreateResponse)
 
         self.collector.record_test(
             test_name=test_name,
@@ -449,11 +434,9 @@ class TestBatchGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, result.error_message, missing_fields, expected_fields = (
-            ResponseValidator.validate(response_body, BatchCreateResponse)
-        )
+        result = ResponseValidator.validate_response(response, BatchCreateResponse)
 
         self.collector.record_test(
             test_name=test_name,
@@ -493,11 +476,9 @@ class TestBatchGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, result.error_message, missing_fields, expected_fields = (
-            ResponseValidator.validate(response_body, BatchCreateResponse)
-        )
+        result = ResponseValidator.validate_response(response, BatchCreateResponse)
 
         self.collector.record_test(
             test_name=test_name,
@@ -539,11 +520,9 @@ class TestBatchGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, result.error_message, missing_fields, expected_fields = (
-            ResponseValidator.validate(response_body, BatchCreateResponse)
-        )
+        result = ResponseValidator.validate_response(response, BatchCreateResponse)
 
         self.collector.record_test(
             test_name=test_name,
@@ -591,11 +570,9 @@ class TestBatchGenerateContent:
             params=params,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
-        is_valid, result.error_message, missing_fields, expected_fields = (
-            ResponseValidator.validate(response_body, BatchCreateResponse)
-        )
+        result = ResponseValidator.validate_response(response, BatchCreateResponse)
 
         self.collector.record_test(
             test_name=test_name,
@@ -619,7 +596,7 @@ class TestBatchGenerateContent:
             params=self.BASE_PARAMS,
         )
         status_code = response.status_code
-        response_body = response.text
+        response_body = self.collector.response_body_from_httpx(response)
 
         assert 200 <= status_code < 300
 

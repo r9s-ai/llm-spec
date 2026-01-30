@@ -18,18 +18,64 @@ class ParameterTableFormatter:
         self.report = report_data
 
         # 从报告中提取信息
-        self.tested_params = sorted(report_data.get("parameters", {}).get("tested", []))
-        self.unsupported_params = {
-            p.get("parameter", ""): p
-            for p in report_data.get("parameters", {}).get("unsupported", [])
-            if p.get("parameter")
-        }
+        raw_tested = sorted(report_data.get("parameters", {}).get("tested", []))
+        # 注意：同一个 parameter 可能在多个测试中多次被标记为 unsupported（不同 value/原因）。
+        # 这里保留“最严重/最有信息量”的那条（优先带 HTTP 错误的 reason 或更长 reason）。
+        self.unsupported_params: dict[str, UnsupportedParameter] = {}
+        for p in report_data.get("parameters", {}).get("unsupported", []) or []:
+            key = p.get("parameter", "")
+            if not key:
+                continue
+            if key not in self.unsupported_params:
+                self.unsupported_params[key] = p
+                continue
+
+            old = self.unsupported_params[key]
+            old_reason = str(old.get("reason", ""))
+            new_reason = str(p.get("reason", ""))
+
+            # Prefer HTTP error reasons (usually start with "HTTP ")
+            def _score(reason: str) -> tuple[int, int]:
+                return (1 if reason.strip().startswith("HTTP") else 0, len(reason))
+
+            if _score(new_reason) > _score(old_reason):
+                self.unsupported_params[key] = p
+
+        # 只展示“叶子参数路径”，避免同时展示容器参数（如 contents）与其子路径（如 contents[0].parts）。
+        # 规则：如果存在 tested 参数以 `p + "."` 或 `p + "["` 开头，则认为 p 是容器路径，应隐藏。
+        self.tested_params = self._leaf_only(raw_tested)
+
+        # 如果父路径参数被标记为 unsupported，则其子路径不应显示为 supported，
+        # 否则会造成 “contents 不支持但 contents[0].parts 支持” 的误导。
+        self._unsupported_prefixes = sorted(self.unsupported_params.keys(), key=len)
 
         # 测试统计
         test_summary = report_data.get("test_summary", {})
         self.total_tests = test_summary.get("total_tests", 0)
         self.passed_tests = test_summary.get("passed", 0)
         self.failed_tests = test_summary.get("failed", 0)
+
+    @staticmethod
+    def _leaf_only(params: list[str]) -> list[str]:
+        """仅保留叶子参数路径（隐藏容器/前缀路径）。
+
+        示例：
+        - 输入: ["contents", "contents[0].parts", "contents[0].parts[0].text"]
+        - 输出: ["contents[0].parts[0].text"]
+        """
+        if not params:
+            return []
+
+        s = set(params)
+        leaves: list[str] = []
+
+        for p in params:
+            # 如果任何其它参数以 p 为前缀（. 或 [），则 p 不是叶子
+            if any((q != p) and (q.startswith(p + ".") or q.startswith(p + "[")) for q in s):
+                continue
+            leaves.append(p)
+
+        return leaves
 
     def _get_api_name(self) -> str:
         """获取 API 名称"""
@@ -91,9 +137,21 @@ class ParameterTableFormatter:
             lines.append("|------|------|")
 
             for param in self.tested_params:
-                if param in self.unsupported_params:
+                # 如果该参数本身 unsupported，或者其任一父路径 unsupported，则视为 unsupported
+                inherited_parent = next(
+                    (p for p in self._unsupported_prefixes if param.startswith(p + ".")),
+                    None,
+                )
+                inherited_index_parent = next(
+                    (p for p in self._unsupported_prefixes if param.startswith(p + "[")),
+                    None,
+                )
+                inherited = inherited_parent or inherited_index_parent
+
+                if param in self.unsupported_params or inherited:
                     status = "❌ 不支持"
-                    reason = self.unsupported_params[param].get("reason", "")
+                    root = param if param in self.unsupported_params else inherited
+                    reason = self.unsupported_params.get(root or "", {}).get("reason", "")
                     if reason:
                         status += f" ({reason})"
                 else:
@@ -243,9 +301,20 @@ class ParameterTableFormatter:
 """
 
         for param in self.tested_params:
-            if param in self.unsupported_params:
+            inherited_parent = next(
+                (p for p in self._unsupported_prefixes if param.startswith(p + ".")),
+                None,
+            )
+            inherited_index_parent = next(
+                (p for p in self._unsupported_prefixes if param.startswith(p + "[")),
+                None,
+            )
+            inherited = inherited_parent or inherited_index_parent
+
+            if param in self.unsupported_params or inherited:
                 status = '<span class="unsupported">❌ 不支持</span>'
-                reason = self.unsupported_params[param].get("reason", "")
+                root = param if param in self.unsupported_params else inherited
+                reason = self.unsupported_params.get(root or "", {}).get("reason", "")
                 if reason:
                     status += f" ({reason})"
             else:
