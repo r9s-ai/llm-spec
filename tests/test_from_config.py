@@ -23,7 +23,7 @@ import pytest
 
 from llm_spec.reporting.collector import ReportCollector
 
-from tests.runners import ConfigDrivenTestRunner, SpecTestCase, SpecTestSuite, load_test_suite
+from llm_spec.runners import ConfigDrivenTestRunner, SpecTestCase, SpecTestSuite, load_test_suite
 
 if TYPE_CHECKING:
     pass
