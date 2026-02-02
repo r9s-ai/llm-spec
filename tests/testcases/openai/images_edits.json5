@@ -1,0 +1,121 @@
+{
+  "suite_name": "OpenAI Images Edits",
+  "provider": "openai",
+  "endpoint": "/v1/images/edits",
+  "method": "POST",
+  "base_params": {
+    "model": "gpt-image-1.5",
+    "prompt": "Replace the background with a blue sky."
+  },
+  "response_schema": "openai.ImageResponse",
+  "tests": [
+    {
+      "name": "test_baseline",
+      "description": "Baseline images edit",
+      "params": {},
+      "files": {
+        "image": "test_assets/images/test_base.png"
+      }
+    },
+    {
+      "name": "test_param_response_format_url_dalle2",
+      "description": "Test response_format=url with dall-e-2",
+      "params": {
+        "model": "dall-e-2",
+        "response_format": "url"
+      },
+      "files": {
+        "image": "test_assets/images/test_base.png"
+      },
+      "unsupported_param": "response_format"
+    },
+    {
+      "name": "test_param_background_transparent",
+      "description": "Test background=transparent",
+      "params": {
+        "background": "transparent"
+      },
+      "files": {
+        "image": "test_assets/images/test_base.png"
+      },
+      "unsupported_param": "background"
+    },
+    {
+      "name": "test_param_output_format_webp",
+      "description": "Test output_format=webp",
+      "params": {
+        "output_format": "webp"
+      },
+      "files": {
+        "image": "test_assets/images/test_base.png"
+      },
+      "unsupported_param": "output_format"
+    },
+    {
+      "name": "test_param_output_compression",
+      "description": "Test output_compression parameter",
+      "params": {
+        "output_format": "webp",
+        "output_compression": 80
+      },
+      "files": {
+        "image": "test_assets/images/test_base.png"
+      },
+      "unsupported_param": "output_compression"
+    },
+    {
+      "name": "test_param_size_gpt_landscape",
+      "description": "Test size parameter",
+      "params": {
+        "size": "1536x1024"
+      },
+      "files": {
+        "image": "test_assets/images/test_base.png"
+      },
+      "unsupported_param": "size"
+    },
+    {
+      "name": "test_param_n_multiple",
+      "description": "Test n=2",
+      "params": {
+        "n": 2
+      },
+      "files": {
+        "image": "test_assets/images/test_base.png"
+      },
+      "unsupported_param": "n"
+    },
+    {
+      "name": "test_param_input_fidelity_high",
+      "description": "Test input_fidelity=high",
+      "params": {
+        "input_fidelity": "high"
+      },
+      "files": {
+        "image": "test_assets/images/test_base.png"
+      },
+      "unsupported_param": "input_fidelity"
+    },
+    {
+      "name": "test_param_mask_png",
+      "description": "Test with mask",
+      "params": {},
+      "files": {
+        "image": "test_assets/images/test_base.png",
+        "mask": "test_assets/images/test_base.png"
+      },
+      "unsupported_param": "mask"
+    },
+    {
+      "name": "test_param_user",
+      "description": "Test user parameter",
+      "params": {
+        "user": "user-123"
+      },
+      "files": {
+        "image": "test_assets/images/test_base.png"
+      },
+      "unsupported_param": "user"
+    }
+  ]
+}

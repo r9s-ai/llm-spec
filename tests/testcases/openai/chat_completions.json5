@@ -1,0 +1,310 @@
+{
+  // OpenAI Chat Completions API 测试配置
+  "provider": "openai",
+  "endpoint": "/v1/chat/completions",
+
+  // Schema 引用
+  "schemas": {
+    "response": "openai.ChatCompletionResponse",
+    "stream_chunk": "openai.ChatCompletionChunkResponse"
+  },
+
+  // 基线参数（必需参数）
+  "base_params": {
+    "model": "gpt-4o-mini",
+    "messages": [{"role": "user", "content": "Say hello"}]
+  },
+
+  // 测试用例列表
+  "tests": [
+    // ==================== 基线测试 ====================
+    {
+      "name": "test_baseline",
+      "description": "测试基线：仅必需参数"
+      // 基线测试无额外参数，无 unsupported_param
+    },
+
+    // ==================== 基础参数测试 ====================
+    {
+      "name": "test_param_temperature",
+      "description": "测试 temperature 参数",
+      "params": {"temperature": 0.7},
+      "unsupported_param": "temperature"
+    },
+
+    {
+      "name": "test_param_max_tokens",
+      "description": "测试 max_tokens 参数",
+      "params": {"max_tokens": 100},
+      "unsupported_param": "max_tokens"
+    },
+
+    {
+      "name": "test_param_top_p",
+      "description": "测试 top_p 参数",
+      "params": {"top_p": 0.9},
+      "unsupported_param": "top_p"
+    },
+
+    {
+      "name": "test_param_n",
+      "description": "测试 n 参数（生成多个响应）",
+      "params": {"n": 2},
+      "unsupported_param": "n"
+    },
+
+    {
+      "name": "test_param_presence_penalty",
+      "description": "测试 presence_penalty 参数",
+      "params": {"presence_penalty": 0.5},
+      "unsupported_param": "presence_penalty"
+    },
+
+    {
+      "name": "test_param_frequency_penalty",
+      "description": "测试 frequency_penalty 参数",
+      "params": {"frequency_penalty": 0.5},
+      "unsupported_param": "frequency_penalty"
+    },
+
+    {
+      "name": "test_param_seed",
+      "description": "测试 seed 参数（确定性输出）",
+      "params": {"seed": 42},
+      "unsupported_param": "seed"
+    },
+
+    {
+      "name": "test_param_user",
+      "description": "测试 user 参数",
+      "params": {"user": "test-user-id"},
+      "unsupported_param": "user"
+    },
+
+    {
+      "name": "test_param_max_completion_tokens",
+      "description": "测试 max_completion_tokens 参数",
+      "params": {"max_completion_tokens": 100},
+      "unsupported_param": "max_completion_tokens"
+    },
+
+    // ==================== stop 参数测试（参数化）====================
+    {
+      "name": "test_param_stop",
+      "description": "测试 stop 参数",
+      "parameterize": {
+        "stop_value": [
+          ["END"],
+          ["STOP", "DONE"],
+          "###"
+        ]
+      },
+      "params": {"stop": "$stop_value"},
+      "unsupported_param": "stop"
+    },
+
+    // ==================== 响应格式测试 ====================
+    {
+      "name": "test_response_format_json",
+      "description": "测试 JSON 响应格式",
+      "override_base": true,
+      "params": {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "Generate a JSON object."}],
+        "response_format": {"type": "json_object"}
+      },
+      "unsupported_param": "response_format.type"
+    },
+
+    {
+      "name": "test_response_format_json_schema",
+      "description": "测试 response_format 为 json_schema",
+      "override_base": true,
+      "params": {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "Generate a person's info"}],
+        "response_format": {
+          "type": "json_schema",
+          "json_schema": {
+            "name": "person",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": {"type": "string"},
+                "age": {"type": "number"}
+              },
+              "required": ["name", "age"]
+            }
+          }
+        }
+      },
+      "unsupported_param": "response_format.type"
+    },
+
+    {
+      "name": "test_response_format_text",
+      "description": "测试 text 响应格式",
+      "params": {
+        "response_format": {"type": "text"}
+      },
+      "unsupported_param": "response_format.type"
+    },
+
+    // ==================== logprobs 参数测试 ====================
+    {
+      "name": "test_param_logprobs",
+      "description": "测试 logprobs 参数",
+      "params": {"logprobs": true},
+      "unsupported_param": "logprobs"
+    },
+
+    {
+      "name": "test_param_top_logprobs",
+      "description": "测试 top_logprobs 参数",
+      "params": {
+        "logprobs": true,
+        "top_logprobs": 5
+      },
+      "unsupported_param": "top_logprobs"
+    },
+
+    // ==================== 流式测试 ====================
+    {
+      "name": "test_streaming_basic",
+      "description": "测试基本流式响应",
+      "params": {"stream": true},
+      "stream": true,
+      "unsupported_param": "stream"
+    },
+
+    {
+      "name": "test_streaming_with_usage",
+      "description": "测试带 usage 的流式响应",
+      "params": {
+        "stream": true,
+        "stream_options": {"include_usage": true}
+      },
+      "stream": true,
+      "stream_validation": {"require_usage": true},
+      "unsupported_param": "stream_options.include_usage"
+    },
+
+    // ==================== 工具调用测试 ====================
+    {
+      "name": "test_tool_calling",
+      "description": "测试函数调用",
+      "override_base": true,
+      "params": {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "What's the weather in Tokyo?"}],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "get_weather",
+              "description": "Get weather for a location",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "location": {"type": "string", "description": "City name"}
+                },
+                "required": ["location"]
+              }
+            }
+          }
+        ]
+      },
+      "unsupported_param": "tools"
+    },
+
+    {
+      "name": "test_tool_choice_auto",
+      "description": "测试 tool_choice=auto",
+      "override_base": true,
+      "params": {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "What's the weather in Tokyo?"}],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "get_weather",
+              "description": "Get weather for a location",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "location": {"type": "string"}
+                },
+                "required": ["location"]
+              }
+            }
+          }
+        ],
+        "tool_choice": "auto"
+      },
+      "unsupported_param": "tool_choice"
+    },
+
+    {
+      "name": "test_parallel_tool_calls",
+      "description": "测试 parallel_tool_calls 参数",
+      "override_base": true,
+      "params": {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "Call functions"}],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "func1",
+              "description": "Function 1",
+              "parameters": {"type": "object", "properties": {}}
+            }
+          }
+        ],
+        "parallel_tool_calls": true
+      },
+      "unsupported_param": "parallel_tool_calls"
+    },
+
+    // ==================== 多模态测试 ====================
+    {
+      "name": "test_vision_url",
+      "description": "测试图像 URL 输入",
+      "override_base": true,
+      "params": {
+        "model": "gpt-4o-mini",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {"type": "text", "text": "What's in this image?"},
+              {
+                "type": "image_url",
+                "image_url": {
+                  "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Cat03.jpg/1200px-Cat03.jpg"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "unsupported_param": "messages[].content[].image_url"
+    },
+
+    // ==================== 高级参数测试 ====================
+    {
+      "name": "test_param_logit_bias",
+      "description": "测试 logit_bias 参数",
+      "params": {"logit_bias": {"31373": -100}},
+      "unsupported_param": "logit_bias"
+    },
+
+    {
+      "name": "test_param_service_tier",
+      "description": "测试 service_tier 参数",
+      "params": {"service_tier": "auto"},
+      "unsupported_param": "service_tier"
+    }
+  ]
+}

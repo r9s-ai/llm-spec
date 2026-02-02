@@ -1,0 +1,248 @@
+{
+  "suite_name": "Gemini Stream Generate Content",
+  "provider": "gemini",
+  "endpoint": "/v1beta/models/gemini-3-flash-preview:streamGenerateContent",
+  "method": "POST",
+  "base_params": {
+    "contents": [{"parts": [{"text": "Say hello"}]}]
+  },
+  "param_wrapper": "generationConfig",
+  "response_schema": "gemini.GenerateContentResponse",
+  "stream": true,
+  "tests": [
+    {
+      "name": "test_streaming_baseline",
+      "description": "Baseline streaming test",
+      "params": {}
+    },
+    {
+      "name": "test_streaming_temperature",
+      "description": "Test temperature parameter",
+      "params": {
+        "temperature": 0.7
+      },
+      "unsupported_param": "temperature"
+    },
+    {
+      "name": "test_streaming_max_output_tokens",
+      "description": "Test maxOutputTokens parameter",
+      "params": {
+        "maxOutputTokens": 100
+      },
+      "unsupported_param": "maxOutputTokens"
+    },
+    {
+      "name": "test_streaming_top_p",
+      "description": "Test topP parameter",
+      "params": {
+        "topP": 0.9
+      },
+      "unsupported_param": "topP"
+    },
+    {
+      "name": "test_streaming_top_k",
+      "description": "Test topK parameter",
+      "params": {
+        "topK": 40
+      },
+      "unsupported_param": "topK"
+    },
+    {
+      "name": "test_streaming_candidate_count",
+      "description": "Test candidateCount parameter",
+      "params": {
+        "candidateCount": 2
+      },
+      "unsupported_param": "candidateCount"
+    },
+    {
+      "name": "test_streaming_stop_sequences",
+      "description": "Test stopSequences parameter",
+      "params": {
+        "stopSequences": ["END", "STOP"]
+      },
+      "unsupported_param": "stopSequences"
+    },
+    {
+      "name": "test_streaming_response_format_json",
+      "description": "Test JSON response format",
+      "params": {
+        "responseMimeType": "application/json"
+      },
+      "unsupported_param": "responseMimeType"
+    },
+    {
+      "name": "test_streaming_response_schema",
+      "description": "Test response schema",
+      "params": {
+        "responseMimeType": "application/json",
+        "responseSchema": {
+          "type": "object",
+          "properties": {
+            "recipes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"}
+                }
+              }
+            }
+          }
+        }
+      },
+      "override_base": true,
+      "base_params_override": {
+        "contents": [{"parts": [{"text": "List 3 popular cookie recipes."}]}]
+      },
+      "unsupported_param": "responseSchema"
+    },
+    {
+      "name": "test_streaming_safety_settings",
+      "description": "Test safety settings",
+      "params": {},
+      "override_base": true,
+      "base_params_override": {
+        "contents": [{"parts": [{"text": "Say hello"}]}],
+        "safetySettings": [
+            {
+                "category": "HARM_CATEGORY_HARASSMENT",
+                "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+            }
+        ]
+      }
+    },
+    {
+      "name": "test_streaming_system_instruction",
+      "description": "Test system instruction",
+      "params": {},
+      "override_base": true,
+      "base_params_override": {
+        "contents": [{"parts": [{"text": "Say hello"}]}],
+        "systemInstruction": {
+            "parts": [{"text": "You are a helpful and friendly assistant."}]
+        }
+      }
+    },
+    {
+      "name": "test_streaming_presence_penalty",
+      "description": "Test presencePenalty parameter",
+      "params": {
+        "presencePenalty": 0.5
+      },
+      "unsupported_param": "presencePenalty"
+    },
+    {
+      "name": "test_streaming_frequency_penalty",
+      "description": "Test frequencyPenalty parameter",
+      "params": {
+        "frequencyPenalty": 0.5
+      },
+      "unsupported_param": "frequencyPenalty"
+    },
+    {
+      "name": "test_streaming_seed",
+      "description": "Test seed parameter",
+      "params": {
+        "seed": 42
+      },
+      "unsupported_param": "seed"
+    },
+    {
+      "name": "test_streaming_response_logprobs",
+      "description": "Test responseLogprobs parameter",
+      "params": {
+        "responseLogprobs": true
+      },
+      "unsupported_param": "responseLogprobs"
+    },
+    {
+      "name": "test_streaming_logprobs",
+      "description": "Test logprobs parameter with responseLogprobs",
+      "params": {
+        "responseLogprobs": true,
+        "logprobs": 3
+      },
+      "unsupported_param": "logprobs"
+    },
+    {
+      "name": "test_streaming_response_modalities_text",
+      "description": "Test responseModalities TEXT",
+      "endpoint_override": "/v1beta/models/gemini-3-flash-preview:streamGenerateContent",
+      "params": {
+        "responseModalities": ["TEXT"]
+      },
+      "unsupported_param": "responseModalities"
+    },
+    {
+      "name": "test_streaming_response_modalities_image",
+      "description": "Test responseModalities IMAGE",
+      "endpoint_override": "/v1beta/models/gemini-2.5-flash-image:streamGenerateContent",
+      "override_base": true,
+      "base_params_override": {
+        "contents": [{"parts": [{"text": "Generate a beautiful landscape"}]}]
+      },
+      "params": {
+        "responseModalities": ["IMAGE"]
+      },
+      "unsupported_param": "responseModalities"
+    },
+    {
+      "name": "test_streaming_response_modalities_audio",
+      "description": "Test responseModalities AUDIO",
+      "endpoint_override": "/v1beta/models/gemini-2.5-flash-preview-tts:streamGenerateContent",
+      "params": {
+        "responseModalities": ["AUDIO"]
+      },
+      "unsupported_param": "responseModalities"
+    },
+    {
+      "name": "test_streaming_speech_config",
+      "description": "Test speechConfig",
+      "endpoint_override": "/v1beta/models/gemini-2.5-flash-preview-tts:streamGenerateContent",
+      "params": {
+        "responseModalities": ["AUDIO"],
+        "speechConfig": {
+            "voiceConfig": {
+                "prebuiltVoiceConfig": {
+                    "voiceName": "$voice"
+                }
+            }
+        }
+      },
+      "parameterize": {
+        "voice": ["Kore", "Puck", "Charon", "Fenrir"]
+      },
+      "unsupported_param": "speechConfig"
+    },
+    {
+      "name": "test_streaming_thinking_config",
+      "description": "Test thinkingConfig",
+      "params": {
+        "thinkingConfig": {
+            "thinkingLevel": "$level"
+        }
+      },
+      "parameterize": {
+        "level": ["minimal", "low", "medium", "high"]
+      },
+      "unsupported_param": "thinkingConfig"
+    },
+    {
+      "name": "test_streaming_image_config_aspect_ratio",
+      "description": "Test imageConfig aspect ratio",
+      "endpoint_override": "/v1beta/models/gemini-2.5-flash-image:streamGenerateContent",
+      "override_base": true,
+      "base_params_override": {
+        "contents": [{"parts": [{"text": "Generate a cat"}]}]
+      },
+      "params": {
+        "responseModalities": ["IMAGE"],
+        "imageConfig": {
+            "aspectRatio": "1:1"
+        }
+      },
+      "unsupported_param": "imageConfig"
+    }
+  ]
+}

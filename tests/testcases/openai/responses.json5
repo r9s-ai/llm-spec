@@ -1,0 +1,187 @@
+{
+  "suite_name": "OpenAI Responses",
+  "provider": "openai",
+  "endpoint": "/v1/responses",
+  "method": "POST",
+  "base_params": {
+    "model": "gpt-4o-mini",
+    "input": "Say hello"
+  },
+  "response_schema": "openai.ResponseObject",
+  "tests": [
+    {
+      "name": "test_baseline",
+      "description": "Baseline responses test",
+      "params": {}
+    },
+    {
+      "name": "test_input_variants",
+      "description": "Test different input formats",
+      "parameterize": {
+        "input_val": [
+           "Hello, how are you?",
+           [{"type": "message", "role": "user", "content": "Say hello"}]
+        ]
+      },
+      "params": {
+        "input": "$input_val"
+      },
+      "unsupported_param": "input"
+    },
+    {
+      "name": "test_param_instructions",
+      "description": "Test instructions parameter",
+      "params": {
+        "instructions": "You are a helpful assistant."
+      },
+      "unsupported_param": "instructions"
+    },
+    {
+      "name": "test_param_temperature",
+      "description": "Test temperature parameter",
+      "params": {
+        "temperature": 0.7
+      },
+      "unsupported_param": "temperature"
+    },
+    {
+      "name": "test_param_top_p",
+      "description": "Test top_p parameter",
+      "params": {
+        "top_p": 0.9
+      },
+      "unsupported_param": "top_p"
+    },
+    {
+      "name": "test_param_max_output_tokens",
+      "description": "Test max_output_tokens parameter",
+      "params": {
+        "max_output_tokens": 100
+      },
+      "unsupported_param": "max_output_tokens"
+    },
+    {
+      "name": "test_param_metadata",
+      "description": "Test metadata parameter",
+      "params": {
+        "metadata": {"session_id": "sess_123", "user_segment": "premium"}
+      },
+      "unsupported_param": "metadata"
+    },
+    {
+      "name": "test_response_format_json_object",
+      "description": "Test response_format with json_object",
+      "params": {
+        "response_format": {"type": "json_object"}
+      },
+      "unsupported_param": "response_format.type"
+    },
+    {
+      "name": "test_response_format_json_schema",
+      "description": "Test response_format with json_schema",
+      "params": {
+        "response_format": {
+          "type": "json_schema",
+          "json_schema": {
+            "name": "person",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": {"type": "string"},
+                "age": {"type": "number"}
+              },
+              "required": ["name", "age"]
+            }
+          }
+        }
+      },
+      "unsupported_param": "response_format.type"
+    },
+    {
+      "name": "test_tools_variants",
+      "description": "Test various tool types",
+      "parameterize": {
+        "tool": [
+          {"type": "function", "function": {"name": "get_weather", "parameters": {"type": "object", "properties": {"location": {"type": "string"}}}}},
+          {"type": "file_search"},
+          {"type": "web_search", "web_search": {}},
+          {"type": "code_interpreter"}
+        ]
+      },
+      "params": {
+        "tools": ["$tool"]
+      },
+      "unsupported_param": "tools"
+    },
+    {
+      "name": "test_tool_choice_variants",
+      "description": "Test tool_choice variants",
+      "params": {
+         "tools": [{"type": "function", "function": {"name": "f", "parameters": {}}}],
+         "tool_choice": "$choice"
+      },
+      "parameterize": {
+        "choice": ["none", "auto", "required"]
+      },
+      "unsupported_param": "tool_choice"
+    },
+    {
+      "name": "test_parallel_tool_calls",
+      "description": "Test parallel_tool_calls",
+      "params": {
+        "parallel_tool_calls": true,
+        "tools": [{"type": "function", "function": {"name": "f", "parameters": {}}}]
+      },
+      "unsupported_param": "parallel_tool_calls"
+    },
+    {
+      "name": "test_param_store",
+      "description": "Test store parameter",
+      "params": {
+        "store": true
+      },
+      "unsupported_param": "store"
+    },
+    {
+      "name": "test_param_service_tier",
+      "description": "Test service_tier parameter",
+      "params": {
+        "service_tier": "auto"
+      },
+      "unsupported_param": "service_tier"
+    },
+    {
+      "name": "test_param_safety_identifier",
+      "description": "Test safety_identifier parameter",
+      "params": {
+        "safety_identifier": "test-safety-policy"
+      },
+      "unsupported_param": "safety_identifier"
+    },
+    {
+      "name": "test_param_max_tool_calls",
+      "description": "Test max_tool_calls parameter",
+      "params": {
+        "max_tool_calls": 5
+      },
+      "unsupported_param": "max_tool_calls"
+    },
+    {
+      "name": "test_param_truncation",
+      "description": "Test truncation strategy",
+      "params": {
+        "truncation_strategy": {"type": "last_messages", "last_messages": 10}
+      },
+      "unsupported_param": "truncation_strategy"
+    },
+    {
+      "name": "test_streaming_basic",
+      "description": "Test streaming response",
+      "params": {
+        "stream": true
+      },
+      "stream": true,
+      "unsupported_param": "stream"
+    }
+  ]
+}

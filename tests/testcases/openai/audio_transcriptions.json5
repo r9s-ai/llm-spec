@@ -1,0 +1,141 @@
+{
+  "suite_name": "OpenAI Audio Transcriptions",
+  "provider": "openai",
+  "endpoint": "/v1/audio/transcriptions",
+  "method": "POST",
+  "base_params": {
+    "model": "whisper-1"
+  },
+  "response_schema": "openai.AudioTranscriptionResponse",
+  "tests": [
+    {
+      "name": "test_baseline",
+      "description": "Baseline transcription",
+      "params": {},
+      "files": {
+        "file": "test_assets/audio/hello_en.mp3"
+      }
+    },
+    {
+      "name": "test_param_language",
+      "description": "Test language parameter",
+      "params": {
+        "language": "en"
+      },
+      "files": {
+        "file": "test_assets/audio/hello_en.mp3"
+      },
+      "unsupported_param": "language"
+    },
+    {
+      "name": "test_param_temperature",
+      "description": "Test temperature parameter",
+      "params": {
+        "temperature": 0.0
+      },
+      "files": {
+        "file": "test_assets/audio/hello_en.mp3"
+      },
+      "unsupported_param": "temperature"
+    },
+    {
+      "name": "test_response_format_variants",
+      "description": "Test response_format variants",
+      "params": {
+        "response_format": "$format"
+      },
+      "parameterize": {
+        "format": ["json", "text", "srt", "verbose_json", "vtt"]
+      },
+      "files": {
+         "file": "test_assets/audio/hello_en.mp3"
+      },
+      "unsupported_param": "response_format"
+    },
+
+    {
+      "name": "test_chunking_strategy_auto",
+      "description": "Test chunking_strategy auto",
+      "params": {
+        "chunking_strategy": "auto"
+      },
+      "files": {
+        "file": "test_assets/audio/hello_en.mp3"
+      },
+      "unsupported_param": "chunking_strategy"
+    },
+
+    {
+      "name": "test_chunking_strategy_server_vad",
+      "description": "Test chunking_strategy server_vad",
+      "params": {
+        "chunking_strategy": "server_vad"
+      },
+      "files": {
+        "file": "test_assets/audio/hello_en.mp3"
+      },
+      "unsupported_param": "chunking_strategy"
+    },
+
+    {
+      "name": "test_include_logprobs",
+      "description": "Test include logprobs",
+      "params": {
+        "include": ["logprobs"]
+      },
+      "files": {
+        "file": "test_assets/audio/hello_en.mp3"
+      },
+      "unsupported_param": "include"
+    },
+
+    {
+      "name": "test_known_speakers",
+      "description": "Test known_speakers",
+      "params": {
+        "known_speakers": {
+            "speaker_ids": ["speaker_1"]
+        }
+      },
+      "files": {
+        "file": "test_assets/audio/hello_en.mp3"
+      },
+      "unsupported_param": "known_speakers"
+    },
+
+    {
+      "name": "test_timestamp_granularities",
+      "description": "Test timestamp_granularities",
+      "params": {
+        "timestamp_granularities": ["word", "segment"]
+      },
+      "files": {
+        "file": "test_assets/audio/hello_en.mp3"
+      },
+      "unsupported_param": "timestamp_granularities"
+    },
+
+    {
+      "name": "test_stream_flag",
+      "description": "Test stream flag",
+      "params": {
+        "stream": true
+      },
+      "files": {
+        "file": "test_assets/audio/hello_en.mp3"
+      },
+      "unsupported_param": "stream"
+    },
+    {
+      "name": "test_prompt",
+      "description": "Test prompt parameter",
+      "params": {
+        "prompt": "Please transcribe"
+      },
+      "files": {
+        "file": "test_assets/audio/hello_en.mp3"
+      },
+      "unsupported_param": "prompt"
+    }
+  ]
+}

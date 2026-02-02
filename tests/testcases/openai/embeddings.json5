@@ -1,0 +1,58 @@
+{
+  "suite_name": "OpenAI Embeddings",
+  "provider": "openai",
+  "endpoint": "/v1/embeddings",
+  "method": "POST",
+  "base_params": {
+    "model": "text-embedding-3-small",
+    "input": "Hello, world!"
+  },
+  "response_schema": "openai.EmbeddingResponse",
+  "tests": [
+    {
+      "name": "test_baseline",
+      "description": "Baseline embeddings test",
+      "params": {}
+    },
+    {
+      "name": "test_param_input_array",
+      "description": "Test input as array",
+      "params": {
+        "input": ["Hello", "World"]
+      },
+      "unsupported_param": "input"
+    },
+    {
+      "name": "test_param_input_tokens",
+      "description": "Test input as token array",
+      "params": {
+        "input": [[11, 12, 13, 14]]
+      },
+      "unsupported_param": "input"
+    },
+    {
+      "name": "test_param_encoding_format",
+      "description": "Test encoding_format base64",
+      "params": {
+        "encoding_format": "base64"
+      },
+      "unsupported_param": "encoding_format"
+    },
+    {
+      "name": "test_param_user",
+      "description": "Test user parameter",
+      "params": {
+        "user": "user-123"
+      },
+      "unsupported_param": "user"
+    },
+    {
+      "name": "test_param_dimensions",
+      "description": "Test dimensions parameter",
+      "params": {
+        "dimensions": 512
+      },
+      "unsupported_param": "dimensions"
+    }
+  ]
+}

@@ -1,0 +1,198 @@
+{
+  "suite_name": "OpenAI Images Generations",
+  "provider": "openai",
+  "endpoint": "/v1/images/generations",
+  "method": "POST",
+  "base_params": {
+    "model": "dall-e-3",
+    "prompt": "A cute cat",
+    "n": 1
+  },
+  "response_schema": "openai.ImageResponse",
+  "tests": [
+    {
+      "name": "test_baseline",
+      "description": "Baseline image generation",
+      "params": {}
+    },
+    {
+      "name": "test_param_size",
+      "description": "Test size parameter",
+      "params": {
+        "size": "1024x1024"
+      },
+      "unsupported_param": "size"
+    },
+    {
+      "name": "test_param_size_dalle2",
+      "description": "Test response_format variants",
+      "params": {
+         "model": "dall-e-2",
+         "size": "$size"
+      },
+      "parameterize": {
+         "size": ["512x512", "256x256"]
+      },
+      "unsupported_param": "size"
+    },
+    {
+      "name": "test_param_quality_dalle3",
+      "description": "Test quality parameter",
+      "params": {
+        "quality": "$quality"
+      },
+      "parameterize": {
+        "quality": ["hd", "standard"]
+      },
+      "unsupported_param": "quality"
+    },
+    {
+      "name": "test_param_response_format",
+      "description": "Test response_format parameter",
+      "params": {
+        "response_format": "$format"
+      },
+      "parameterize": {
+        "format": ["url", "b64_json"]
+      },
+      "unsupported_param": "response_format"
+    },
+    {
+      "name": "test_param_style",
+      "description": "Test style parameter",
+      "params": {
+        "style": "$style"
+      },
+      "parameterize": {
+        "style": ["vivid", "natural"]
+      },
+      "unsupported_param": "style"
+    },
+    {
+      "name": "test_param_user",
+      "description": "Test user parameter",
+      "params": {
+        "user": "user-123"
+      },
+      "unsupported_param": "user"
+    },
+
+    // ==================== GPT Image 专项测试 ====================
+    {
+      "name": "test_gpt_image_background_transparent",
+      "description": "Test background transparent with gpt-image-1.5",
+      "params": {
+        "model": "gpt-image-1.5",
+        "background": "transparent"
+      },
+      "unsupported_param": "background"
+    },
+
+    {
+      "name": "test_gpt_image_output_formats",
+      "description": "Test output formats with gpt-image-1.5",
+      "params": {
+        "model": "gpt-image-1.5",
+        "output_format": "$format"
+      },
+      "parameterize": {
+        "format": ["webp", "jpeg", "png"]
+      },
+      "unsupported_param": "output_format"
+    },
+
+    {
+      "name": "test_gpt_image_output_compression",
+      "description": "Test output compression with gpt-image-1.5",
+      "params": {
+        "model": "gpt-image-1.5",
+        "output_format": "$format",
+        "output_compression": 80
+      },
+      "parameterize": {
+        "format": ["webp", "jpeg"]
+      },
+      "unsupported_param": "output_compression"
+    },
+
+    {
+       "name": "test_gpt_image_background_variants",
+       "description": "Test various backgrounds",
+       "params": {
+         "model": "gpt-image-1.5",
+         "background": "$background"
+       },
+       "parameterize": {
+         "background": ["white", "black", "blurred", "transparent"]
+       },
+       "unsupported_param": "background"
+    },
+
+    {
+       "name": "test_gpt_image_moderation_variants",
+       "description": "Test moderation variants",
+       "params": {
+         "model": "gpt-image-1.5",
+         "moderation": "$moderation"
+       },
+       "parameterize": {
+         "moderation": ["low", "auto"]
+       },
+       "unsupported_param": "moderation"
+    },
+
+    {
+       "name": "test_gpt_image_quality_high",
+       "description": "Test quality high",
+       "params": {
+         "model": "gpt-image-1.5",
+         "quality": "high"
+       },
+       "unsupported_param": "quality"
+    },
+
+    {
+       "name": "test_gpt_image_n_multiple",
+       "description": "Test n=2 with gpt-image",
+       "params": {
+         "model": "gpt-image-1.5",
+         "n": 2
+       },
+       "unsupported_param": "n"
+    },
+
+    {
+       "name": "test_gpt_image_sizes",
+       "description": "Test gpt-image sizes",
+       "params": {
+         "model": "gpt-image-1.5",
+         "size": "$size"
+       },
+       "parameterize": {
+         "size": ["1024x1024", "1536x1024", "1024x1536"]
+       },
+       "unsupported_param": "size"
+    },
+
+    {
+      "name": "test_gpt_image_stream_basic",
+      "description": "Test streaming with gpt-image",
+      "params": {
+         "model": "gpt-image-1.5",
+         "stream": true
+      },
+      "stream": true,
+      "unsupported_param": "stream"
+    },
+
+    {
+      "name": "test_gpt_image_partial_images",
+      "description": "Test partial_images with gpt-image",
+      "params": {
+        "model": "gpt-image-1.5",
+        "partial_images": true
+      },
+      "unsupported_param": "partial_images"
+    }
+  ]
+}

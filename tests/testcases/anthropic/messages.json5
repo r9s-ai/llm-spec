@@ -1,0 +1,227 @@
+{
+  // Anthropic Messages API 测试配置
+  "provider": "anthropic",
+  "endpoint": "/v1/messages",
+
+  "schemas": {
+    "response": "anthropic.MessagesResponse"
+  },
+
+  "base_params": {
+    "model": "claude-haiku-4.5",
+    "max_tokens": 256,
+    "messages": [{"role": "user", "content": "Hello"}]
+  },
+
+  "tests": [
+    // ==================== 基线测试 ====================
+    {
+      "name": "test_baseline",
+      "description": "测试基线"
+    },
+
+    // ==================== 采样参数测试 ====================
+    {
+      "name": "test_param_temperature",
+      "description": "测试 temperature 参数",
+      "params": {"temperature": 0.7},
+      "unsupported_param": "temperature"
+    },
+
+    {
+      "name": "test_param_top_p",
+      "description": "测试 top_p 参数",
+      "params": {"top_p": 0.9},
+      "unsupported_param": "top_p"
+    },
+
+    {
+      "name": "test_param_top_k",
+      "description": "测试 top_k 参数",
+      "params": {"top_k": 40},
+      "unsupported_param": "top_k"
+    },
+
+    // ==================== 停止控制测试 ====================
+    {
+      "name": "test_param_stop_sequences",
+      "description": "测试 stop_sequences 参数",
+      "params": {"stop_sequences": ["StopHere", "EndProcess"]},
+      "unsupported_param": "stop_sequences"
+    },
+
+    // ==================== 系统提示测试 ====================
+    {
+      "name": "test_param_system",
+      "description": "测试 system 参数",
+      "params": {"system": "You are a helpful assistant."},
+      "unsupported_param": "system"
+    },
+
+    // ==================== 元数据测试 ====================
+    {
+      "name": "test_param_metadata",
+      "description": "测试 metadata 参数",
+      "params": {"metadata": {"user_id": "test-user-123"}},
+      "unsupported_param": "metadata"
+    },
+
+    // ==================== 流式测试 ====================
+    {
+      "name": "test_param_stream",
+      "description": "测试 stream 参数",
+      "params": {"stream": true},
+      "stream": true,
+      "unsupported_param": "stream"
+    },
+
+    // ==================== 多模态测试 ====================
+    {
+      "name": "test_param_image_base64",
+      "description": "测试 base64 图片输入",
+      "override_base": true,
+      "params": {
+        "model": "claude-haiku-4.5",
+        "max_tokens": 256,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "image",
+                "source": {
+                  "type": "base64",
+                  "media_type": "image/png",
+                  "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                }
+              },
+              {"type": "text", "text": "What do you see?"}
+            ]
+          }
+        ]
+      },
+      "unsupported_param": "image.source.data"  // 简化路径，为了测试报告
+    },
+
+    {
+      "name": "test_image_media_type",
+      "description": "测试不同图片 media_type",
+      "parameterize": {
+        "media_type": ["image/jpeg", "image/png", "image/gif", "image/webp"]
+      },
+      "override_base": true,
+      "params": {
+        "model": "claude-haiku-4.5",
+        "max_tokens": 256,
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "image",
+                "source": {
+                  "type": "base64",
+                  "media_type": "$media_type",
+                  "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                }
+              },
+              {"type": "text", "text": "Describe usage."}
+            ]
+          }
+        ]
+      },
+      "unsupported_param": "image.source.media_type"
+    },
+
+    // ==================== 工具调用测试 ====================
+    {
+      "name": "test_param_tools",
+      "description": "测试 tools 参数",
+      "params": {
+        "tools": [
+          {
+            "name": "get_weather",
+            "description": "Get weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "location": {"type": "string"}
+              },
+              "required": ["location"]
+            }
+          }
+        ],
+        "messages": [{"role": "user", "content": "Weather in SF?"}]
+      },
+      "unsupported_param": "tools"
+    },
+
+    {
+      "name": "test_param_tool_choice_auto",
+      "description": "测试 tool_choice=auto",
+      "params": {
+        "tools": [
+          {
+            "name": "get_weather",
+            "description": "Get weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "location": {"type": "string"}
+              },
+              "required": ["location"]
+            }
+          }
+        ],
+        "tool_choice": {"type": "auto"},
+        "messages": [{"role": "user", "content": "Weather in London?"}]
+      },
+      "unsupported_param": "tool_choice.type"
+    },
+
+    {
+      "name": "test_tool_choice_variants",
+      "description": "测试 tool_choice 变体",
+      "parameterize": {
+        "choice": [
+          {"type": "any"},
+          {"type": "tool", "name": "get_weather"}
+        ]
+      },
+      "params": {
+        "tools": [
+          {
+            "name": "get_weather",
+            "description": "Get weather",
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "location": {"type": "string"}
+              },
+              "required": ["location"]
+            }
+          }
+        ],
+        "tool_choice": "$choice",
+        "messages": [{"role": "user", "content": "Weather?"}]
+      },
+      "unsupported_param": "tool_choice"
+    },
+
+    // ==================== 思考模式测试 ====================
+    {
+      "name": "test_param_thinking",
+      "description": "测试 thinking 参数",
+      "params": {
+        "max_tokens": 2560,
+        "thinking": {
+          "type": "enabled",
+          "budget_tokens": 2048
+        },
+        "messages": [{"role": "user", "content": "Solve 25 * 17"}]
+      },
+      "unsupported_param": "thinking.type"
+    }
+
+  ]
+}

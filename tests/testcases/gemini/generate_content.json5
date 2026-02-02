@@ -1,0 +1,322 @@
+{
+  // Gemini Generate Content API 测试配置
+  "provider": "gemini",
+  "endpoint": "/v1beta/models/gemini-3-flash-preview:generateContent",
+
+  // Schema 引用
+  "schemas": {
+    "response": "gemini.GenerateContentResponse"
+  },
+
+  // 基线参数
+  "base_params": {
+    "contents": [{"parts": [{"text": "Hello"}]}]
+  },
+
+  // Gemini 特有：参数需要包装在 generationConfig 中
+  "param_wrapper": "generationConfig",
+
+  // 测试用例
+  "tests": [
+    // ==================== 基线测试 ====================
+    {
+      "name": "test_baseline",
+      "description": "测试基线：仅必需参数"
+    },
+
+    // ==================== 基础参数测试（自动包装到 generationConfig）====================
+    {
+      "name": "test_param_temperature",
+      "description": "测试 temperature 参数",
+      "params": {"temperature": 0.7},
+      "unsupported_param": "generationConfig.temperature"
+    },
+
+    {
+      "name": "test_param_max_output_tokens",
+      "description": "测试 maxOutputTokens 参数",
+      "params": {"maxOutputTokens": 100},
+      "unsupported_param": "generationConfig.maxOutputTokens"
+    },
+
+    {
+      "name": "test_param_top_p",
+      "description": "测试 topP 参数",
+      "params": {"topP": 0.9},
+      "unsupported_param": "generationConfig.topP"
+    },
+
+    {
+      "name": "test_param_top_k",
+      "description": "测试 topK 参数",
+      "params": {"topK": 40},
+      "unsupported_param": "generationConfig.topK"
+    },
+
+    {
+      "name": "test_param_candidate_count",
+      "description": "测试 candidateCount 参数",
+      "params": {"candidateCount": 2},
+      "unsupported_param": "generationConfig.candidateCount"
+    },
+
+    {
+      "name": "test_param_stop_sequences",
+      "description": "测试 stopSequences 参数",
+      "params": {"stopSequences": ["END", "STOP"]},
+      "unsupported_param": "generationConfig.stopSequences"
+    },
+
+    {
+      "name": "test_param_presence_penalty",
+      "description": "测试 presencePenalty 参数",
+      "params": {"presencePenalty": 0.5},
+      "unsupported_param": "generationConfig.presencePenalty"
+    },
+
+    {
+      "name": "test_param_frequency_penalty",
+      "description": "测试 frequencyPenalty 参数",
+      "params": {"frequencyPenalty": 0.5},
+      "unsupported_param": "generationConfig.frequencyPenalty"
+    },
+
+    {
+      "name": "test_param_seed",
+      "description": "测试 seed 参数",
+      "params": {"seed": 42},
+      "unsupported_param": "generationConfig.seed"
+    },
+
+    // ==================== 响应格式测试 ====================
+    {
+      "name": "test_response_format_json",
+      "description": "测试 JSON 响应格式",
+      "params": {"responseMimeType": "application/json"},
+      "unsupported_param": "generationConfig.responseMimeType"
+    },
+
+    {
+      "name": "test_response_format_json_with_schema",
+      "description": "测试带 schema 的 JSON 响应",
+      "override_base": true,
+      "no_wrapper": true,
+      "params": {
+        "contents": [{"parts": [{"text": "List 3 popular cookie recipes."}]}],
+        "generationConfig": {
+          "responseMimeType": "application/json",
+          "responseSchema": {
+            "type": "object",
+            "properties": {
+              "recipes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "unsupported_param": "generationConfig.responseSchema"
+    },
+
+    // ==================== 非 generationConfig 参数（使用 no_wrapper）====================
+    {
+      "name": "test_param_system_instruction",
+      "description": "测试 systemInstruction 参数",
+      "no_wrapper": true,
+      "params": {
+        "systemInstruction": {
+          "parts": [{"text": "You are a helpful assistant."}]
+        }
+      },
+      "unsupported_param": "systemInstruction"
+    },
+
+    {
+      "name": "test_param_safety_settings",
+      "description": "测试 safetySettings 参数",
+      "no_wrapper": true,
+      "params": {
+        "safetySettings": [
+          {
+            "category": "HARM_CATEGORY_HARASSMENT",
+            "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+          }
+        ]
+      },
+      "unsupported_param": "safetySettings"
+    },
+
+    // ==================== 安全阈值变体（参数化）====================
+    {
+      "name": "test_safety_threshold",
+      "description": "测试不同安全阈值",
+      "no_wrapper": true,
+      "parameterize": {
+        "threshold": [
+          "BLOCK_NONE",
+          "BLOCK_ONLY_HIGH",
+          "BLOCK_MEDIUM_AND_ABOVE",
+          "BLOCK_LOW_AND_ABOVE"
+        ]
+      },
+      "params": {
+        "safetySettings": [
+          {
+            "category": "HARM_CATEGORY_HARASSMENT",
+            "threshold": "$threshold"
+          }
+        ]
+      },
+      "unsupported_param": "safetySettings[].threshold"
+    },
+
+    // ==================== 工具调用测试 ====================
+    {
+      "name": "test_param_function_calling",
+      "description": "测试函数调用",
+      "override_base": true,
+      "no_wrapper": true,
+      "params": {
+        "contents": [{"parts": [{"text": "What's the weather in Tokyo?"}]}],
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "get_weather",
+                "description": "Get the current weather for a location",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string",
+                      "description": "The city name"
+                    }
+                  },
+                  "required": ["location"]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "unsupported_param": "tools"
+    },
+
+    {
+      "name": "test_param_code_execution",
+      "description": "测试代码执行",
+      "override_base": true,
+      "no_wrapper": true,
+      "params": {
+        "contents": [{"parts": [{"text": "What is the sum of the first 50 prime numbers?"}]}],
+        "tools": [{"codeExecution": {}}]
+      },
+      "unsupported_param": "tools[].codeExecution"
+    },
+
+    {
+      "name": "test_param_response_logprobs",
+      "description": "Test response_logprobs",
+      "params": {
+        "responseLogprobs": true
+      },
+      "unsupported_param": "generationConfig.responseLogprobs"
+    },
+
+    {
+      "name": "test_param_logprobs",
+      "description": "Test logprobs",
+      "params": {
+        "logprobs": 5
+      },
+      "unsupported_param": "generationConfig.logprobs"
+    },
+
+    {
+      "name": "test_param_audio_timestamp",
+      "description": "Test audio_timestamp",
+      "params": {
+        "audioTimestamp": true
+      },
+      "unsupported_param": "generationConfig.audioTimestamp"
+    },
+
+    {
+      "name": "test_param_media_resolution",
+      "description": "Test media resolution",
+      "params": {
+        "mediaResolution": "MEDIA_RESOLUTION_LOW"
+      },
+      "unsupported_param": "generationConfig.mediaResolution"
+    },
+
+    {
+      "name": "test_param_response_modalities",
+      "description": "Test response modalities",
+      "params": {
+        "responseModalities": ["TEXT", "AUDIO"]
+      },
+      "unsupported_param": "generationConfig.responseModalities"
+    },
+
+    {
+      "name": "test_param_speech_config",
+      "description": "Test speech config",
+      "override_base": true,
+      "no_wrapper": true,
+      "params": {
+        "contents": [{"parts": [{"text": "Hello"}]}],
+        "generationConfig": {
+          "responseModalities": ["AUDIO"],
+          "speechConfig": {
+            "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": "Aoide"}}
+          }
+        }
+      },
+      "unsupported_param": "generationConfig.speechConfig"
+    },
+
+    {
+      "name": "test_param_thinking_config",
+      "description": "Test thinking config",
+      "params": {
+        "thinkingConfig": {"includeThinking": true}
+      },
+      "unsupported_param": "generationConfig.thinkingConfig"
+    },
+
+    {
+      "name": "test_param_image_config",
+      "description": "Test image config",
+      "override_base": true,
+      "no_wrapper": true,
+      "params": {
+        "contents": [{"parts": [{"text": "Hello"}]}],
+        "generationConfig": {
+          "responseModalities": ["IMAGE"],
+          "imageConfig": {
+            "aspectRatio": "ASPECT_RATIO_16_9",
+            "imageSize": "IMAGE_SIZE_SMALL"
+          }
+        }
+      },
+      "unsupported_param": "generationConfig.imageConfig"
+    },
+
+    {
+      "name": "test_param_enable_enhanced_civic_answers",
+      "description": "Test enhanced civic answers",
+      "no_wrapper": true,
+      "params": {
+        "confidenceScoreConfig": {"enableEnhancedCivicAnswers": true}
+      },
+      "unsupported_param": "confidenceScoreConfig.enableEnhancedCivicAnswers"
+    }
+  ]
+}

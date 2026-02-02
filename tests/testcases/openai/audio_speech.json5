@@ -1,0 +1,75 @@
+{
+  "suite_name": "OpenAI Audio Speech",
+  "provider": "openai",
+  "endpoint": "/v1/audio/speech",
+  "method": "POST",
+  "base_params": {
+    "model": "gpt-4o-mini-tts",
+    "input": "Hello, world!",
+    "voice": "alloy"
+  },
+  "tests": [
+    {
+      "name": "test_baseline",
+      "description": "Baseline speech generation",
+      "params": {}
+    },
+    {
+      "name": "test_voice_variants",
+      "description": "Test voice variants",
+      "params": {
+        "voice": "$voice"
+      },
+      "parameterize": {
+        "voice": [
+            "alloy", "echo", "fable", "onyx", "nova", "shimmer",
+            "ash", "ballad", "coral", "sage", "verse", "marin", "cedar"
+        ]
+      },
+      "unsupported_param": "voice"
+    },
+    {
+      "name": "test_response_format_variants",
+      "description": "Test response_format variants",
+      "params": {
+        "response_format": "$format"
+      },
+      "parameterize": {
+        "format": ["mp3", "opus", "aac", "flac", "wav", "pcm"]
+      },
+      "unsupported_param": "response_format"
+    },
+    {
+      "name": "test_speed_variants",
+      "description": "Test speed variants",
+      "params": {
+        "speed": "$speed"
+      },
+      "parameterize": {
+        "speed": [0.25, 0.5, 1.0, 1.5, 2.0, 4.0]
+      },
+      "unsupported_param": "speed"
+    },
+
+    {
+      "name": "test_param_instructions",
+      "description": "Test instructions parameter",
+      "params": {
+        "instructions": "Speak slowly and clearly."
+      },
+      "unsupported_param": "instructions"
+    },
+
+    {
+      "name": "test_param_stream_format_variants",
+      "description": "Test stream_format variants",
+      "params": {
+        "stream_format": "$format"
+      },
+      "parameterize": {
+        "format": ["audio", "sse"]
+      },
+      "unsupported_param": "stream_format"
+    }
+  ]
+}
