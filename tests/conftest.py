@@ -34,7 +34,12 @@ def openai_client(config):
     http_client = HTTPClient(logger, default_timeout=provider_config.timeout)
 
     # 创建 OpenAI adapter
-    return OpenAIAdapter(provider_config, http_client)
+    adapter = OpenAIAdapter(provider_config, http_client)
+
+    yield adapter
+
+    # session 结束时关闭连接池
+    http_client.close()
 
 
 @pytest.fixture
@@ -54,7 +59,12 @@ def anthropic_client(config):
     provider_config = config.get_provider_config("anthropic")
     logger = RequestLogger(config.log)
     http_client = HTTPClient(logger, default_timeout=provider_config.timeout)
-    return AnthropicAdapter(provider_config, http_client)
+    adapter = AnthropicAdapter(provider_config, http_client)
+
+    yield adapter
+
+    # session 结束时关闭连接池
+    http_client.close()
 
 
 @pytest.fixture(scope="session")
@@ -63,7 +73,12 @@ def gemini_client(config):
     provider_config = config.get_provider_config("gemini")
     logger = RequestLogger(config.log)
     http_client = HTTPClient(logger, default_timeout=provider_config.timeout)
-    return GeminiAdapter(provider_config, http_client)
+    adapter = GeminiAdapter(provider_config, http_client)
+
+    yield adapter
+
+    # session 结束时关闭连接池
+    http_client.close()
 
 
 @pytest.fixture(scope="session")
@@ -72,7 +87,12 @@ def xai_client(config):
     provider_config = config.get_provider_config("xai")
     logger = RequestLogger(config.log)
     http_client = HTTPClient(logger, default_timeout=provider_config.timeout)
-    return XAIAdapter(provider_config, http_client)
+    adapter = XAIAdapter(provider_config, http_client)
+
+    yield adapter
+
+    # session 结束时关闭连接池
+    http_client.close()
 
 
 # 聚合报告跟踪
