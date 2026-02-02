@@ -1,29 +1,35 @@
 {
-  "suite_name": "OpenAI Audio Translations",
+  // OpenAI Audio Translations API 测试配置 - 严格对应 test_audio_translations.py
   "provider": "openai",
   "endpoint": "/v1/audio/translations",
-  "method": "POST",
   "base_params": {
     "model": "whisper-1"
   },
   "response_schema": "openai.AudioTranslationResponse",
   "tests": [
+    // 阶段 1: 基线
     {
       "name": "test_baseline",
-      "description": "Baseline translation",
-      "params": {},
+      "description": "测试基线：仅必需参数",
       "files": {
         "file": "test_assets/audio/hello_en.mp3"
       }
     },
+    // 阶段 2: 参数测试
     {
       "name": "test_response_format_variants",
-      "description": "Test response_format variants",
-      "params": {
-        "response_format": "$format"
-      },
+      "description": "测试 response_format 参数",
       "parameterize": {
-        "format": ["json", "text", "srt", "verbose_json", "vtt"]
+        "response_format": [
+          "json",
+          "text",
+          "srt",
+          "verbose_json",
+          "vtt"
+        ]
+      },
+      "params": {
+        "response_format": "$response_format"
       },
       "files": {
         "file": "test_assets/audio/hello_en.mp3"
@@ -32,25 +38,14 @@
     },
     {
       "name": "test_prompt",
-      "description": "Test prompt parameter",
+      "description": "测试 prompt 参数",
       "params": {
-        "prompt": "Please translate the audio politely into English."
+        "prompt": "Translate this into French."
       },
       "files": {
         "file": "test_assets/audio/hello_en.mp3"
       },
       "unsupported_param": "prompt"
-    },
-    {
-      "name": "test_temperature",
-      "description": "Test temperature parameter",
-      "params": {
-        "temperature": 0.5
-      },
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
-      },
-      "unsupported_param": "temperature"
     }
   ]
 }

@@ -1,6 +1,6 @@
 [project]
 name = "llm-spec"
-version = "0.1.0"
+version = "0.2.0"
 description = "A testing framework to validate LLM API responses against official specifications"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -43,9 +43,6 @@ yaml = ["pyyaml>=6.0.0"]
 all = [
     "llm-spec[dev,yaml]",
 ]
-
-[project.scripts]
-llm-spec = "llm_spec.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/liu/llm-spec"

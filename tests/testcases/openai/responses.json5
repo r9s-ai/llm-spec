@@ -1,4 +1,5 @@
 {
+  // OpenAI Responses API 测试配置 - 严格对应 test_responses.py
   "suite_name": "OpenAI Responses",
   "provider": "openai",
   "endpoint": "/v1/responses",
@@ -8,29 +9,49 @@
     "input": "Say hello"
   },
   "response_schema": "openai.ResponseObject",
+
+  // 测试用例列表 - 顺序与方法名完全一致
   "tests": [
+    // ------------------------------------------------------------------------
+    // 阶段 1: 基线测试
+    // ------------------------------------------------------------------------
     {
       "name": "test_baseline",
-      "description": "Baseline responses test",
-      "params": {}
+      "description": "测试基线:仅必需参数"
     },
+
+    // ------------------------------------------------------------------------
+    // 阶段 2: 输入格式测试
+    // ------------------------------------------------------------------------
     {
-      "name": "test_input_variants",
-      "description": "Test different input formats",
-      "parameterize": {
-        "input_val": [
-           "Hello, how are you?",
-           [{"type": "message", "role": "user", "content": "Say hello"}]
-        ]
-      },
+      "name": "test_input_string",
+      "description": "测试 input 参数(字符串形式)",
       "params": {
-        "input": "$input_val"
+        "input": "Hello, how are you?"
       },
       "unsupported_param": "input"
     },
     {
+      "name": "test_input_array_text",
+      "description": "测试 input 参数(数组形式,文本消息)",
+      "params": {
+        "input": [
+          {
+            "type": "message",
+            "role": "user",
+            "content": "Say hello"
+          }
+        ]
+      },
+      "unsupported_param": "input"
+    },
+
+    // ------------------------------------------------------------------------
+    // 阶段 3: 基础参数测试
+    // ------------------------------------------------------------------------
+    {
       "name": "test_param_instructions",
-      "description": "Test instructions parameter",
+      "description": "测试 instructions 参数",
       "params": {
         "instructions": "You are a helpful assistant."
       },
@@ -38,7 +59,7 @@
     },
     {
       "name": "test_param_temperature",
-      "description": "Test temperature parameter",
+      "description": "测试 temperature 参数",
       "params": {
         "temperature": 0.7
       },
@@ -46,7 +67,7 @@
     },
     {
       "name": "test_param_top_p",
-      "description": "Test top_p parameter",
+      "description": "测试 top_p 参数",
       "params": {
         "top_p": 0.9
       },
@@ -54,7 +75,7 @@
     },
     {
       "name": "test_param_max_output_tokens",
-      "description": "Test max_output_tokens parameter",
+      "description": "测试 max_output_tokens 参数",
       "params": {
         "max_output_tokens": 100
       },
@@ -62,89 +83,221 @@
     },
     {
       "name": "test_param_metadata",
-      "description": "Test metadata parameter",
+      "description": "测试 metadata 参数",
       "params": {
-        "metadata": {"session_id": "sess_123", "user_segment": "premium"}
+        "metadata": {
+          "user_id": "123",
+          "session": "abc"
+        }
       },
       "unsupported_param": "metadata"
     },
+
+    // ------------------------------------------------------------------------
+    // 阶段 4: 文本响应格式测试
+    // ------------------------------------------------------------------------
     {
-      "name": "test_response_format_json_object",
-      "description": "Test response_format with json_object",
+      "name": "test_text_format_text",
+      "description": "测试 text 参数(格式: text)",
       "params": {
-        "response_format": {"type": "json_object"}
+        "text": {
+          "format": {
+            "type": "text"
+          }
+        }
       },
-      "unsupported_param": "response_format.type"
+      "unsupported_param": "text.format.type"
     },
     {
-      "name": "test_response_format_json_schema",
-      "description": "Test response_format with json_schema",
+      "name": "test_text_format_json_object",
+      "description": "测试 text 参数(格式: json_object)",
       "params": {
-        "response_format": {
-          "type": "json_schema",
-          "json_schema": {
-            "name": "person",
+        "input": "Return JSON: {\"status\": \"ok\"}",
+        "text": {
+          "format": {
+            "type": "json_object"
+          }
+        }
+      },
+      "unsupported_param": "text.format.type"
+    },
+    {
+      "name": "test_text_format_json_schema",
+      "description": "测试 text 参数(格式: json_schema)",
+      "params": {
+        "input": "Generate a person's info",
+        "text": {
+          "format": {
+            "type": "json_schema",
             "schema": {
               "type": "object",
               "properties": {
-                "name": {"type": "string"},
-                "age": {"type": "number"}
+                "name": {
+                  "type": "string"
+                },
+                "age": {
+                  "type": "number"
+                }
               },
-              "required": ["name", "age"]
+              "required": [
+                "name",
+                "age"
+              ]
             }
           }
         }
       },
-      "unsupported_param": "response_format.type"
+      "unsupported_param": "text.format.type"
     },
+
+    // ------------------------------------------------------------------------
+    // 阶段 5: 工具调用测试
+    // ------------------------------------------------------------------------
     {
-      "name": "test_tools_variants",
-      "description": "Test various tool types",
-      "parameterize": {
-        "tool": [
-          {"type": "function", "function": {"name": "get_weather", "parameters": {"type": "object", "properties": {"location": {"type": "string"}}}}},
-          {"type": "file_search"},
-          {"type": "web_search", "web_search": {}},
-          {"type": "code_interpreter"}
+      "name": "test_tools_function",
+      "description": "测试 tools 参数(自定义函数)",
+      "params": {
+        "input": "What's the weather in Beijing?",
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "get_weather",
+              "description": "Get current weather",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "description": "City name"
+                  }
+                },
+                "required": [
+                  "location"
+                ]
+              }
+            }
+          }
         ]
       },
+      "unsupported_param": "tools"
+    },
+    {
+      "name": "test_tools_file_search",
+      "description": "测试 tools 参数(内置文件搜索工具)",
       "params": {
-        "tools": ["$tool"]
+        "input": "Search for documentation",
+        "tools": [
+          {
+            "type": "file_search"
+          }
+        ]
+      },
+      "unsupported_param": "tools"
+    },
+    {
+      "name": "test_tools_web_search",
+      "description": "测试 tools 参数(内置网络搜索工具)",
+      "params": {
+        "input": "Search the web for latest news",
+        "tools": [
+          {
+            "type": "web_search"
+          }
+        ]
+      },
+      "unsupported_param": "tools"
+    },
+    {
+      "name": "test_tools_code_interpreter",
+      "description": "测试 tools 参数(内置代码解释器工具)",
+      "params": {
+        "input": "Calculate 15 * 27",
+        "tools": [
+          {
+            "type": "code_interpreter"
+          }
+        ]
       },
       "unsupported_param": "tools"
     },
     {
       "name": "test_tool_choice_variants",
-      "description": "Test tool_choice variants",
-      "params": {
-         "tools": [{"type": "function", "function": {"name": "f", "parameters": {}}}],
-         "tool_choice": "$choice"
-      },
+      "description": "测试不同的 tool_choice 值",
       "parameterize": {
-        "choice": ["none", "auto", "required"]
+        "tool_choice": [
+          "none",
+          "auto",
+          "required"
+        ]
+      },
+      "params": {
+        "input": "What's the weather?",
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "get_weather",
+              "description": "Get weather",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "location": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "location"
+                ]
+              }
+            }
+          }
+        ],
+        "tool_choice": "$tool_choice"
       },
       "unsupported_param": "tool_choice"
     },
     {
       "name": "test_parallel_tool_calls",
-      "description": "Test parallel_tool_calls",
+      "description": "测试 parallel_tool_calls 参数",
       "params": {
-        "parallel_tool_calls": true,
-        "tools": [{"type": "function", "function": {"name": "f", "parameters": {}}}]
+        "input": "Call functions",
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "func1",
+              "description": "Function 1",
+              "parameters": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        ],
+        "parallel_tool_calls": true
       },
       "unsupported_param": "parallel_tool_calls"
     },
+
+    // ------------------------------------------------------------------------
+    // 阶段 6: 对话/状态管理测试
+    // ------------------------------------------------------------------------
     {
       "name": "test_param_store",
-      "description": "Test store parameter",
+      "description": "测试 store 参数",
       "params": {
-        "store": true
+        "store": false
       },
       "unsupported_param": "store"
     },
+
+    // ------------------------------------------------------------------------
+    // 阶段 7: 高级参数测试
+    // ------------------------------------------------------------------------
     {
       "name": "test_param_service_tier",
-      "description": "Test service_tier parameter",
+      "description": "测试 service_tier 参数",
       "params": {
         "service_tier": "auto"
       },
@@ -152,31 +305,41 @@
     },
     {
       "name": "test_param_safety_identifier",
-      "description": "Test safety_identifier parameter",
+      "description": "测试 safety_identifier 参数",
       "params": {
-        "safety_identifier": "test-safety-policy"
+        "safety_identifier": "user_hash_123"
       },
       "unsupported_param": "safety_identifier"
     },
     {
       "name": "test_param_max_tool_calls",
-      "description": "Test max_tool_calls parameter",
+      "description": "测试 max_tool_calls 参数",
       "params": {
+        "input": "Search for information",
+        "tools": [
+          {
+            "type": "web_search"
+          }
+        ],
         "max_tool_calls": 5
       },
       "unsupported_param": "max_tool_calls"
     },
     {
       "name": "test_param_truncation",
-      "description": "Test truncation strategy",
+      "description": "测试 truncation 参数",
       "params": {
-        "truncation_strategy": {"type": "last_messages", "last_messages": 10}
+        "truncation": "auto"
       },
-      "unsupported_param": "truncation_strategy"
+      "unsupported_param": "truncation"
     },
+
+    // ------------------------------------------------------------------------
+    // 阶段 8: 流式响应测试 (ConfigDrivenTestRunner 会自动处理 stream: true)
+    // ------------------------------------------------------------------------
     {
       "name": "test_streaming_basic",
-      "description": "Test streaming response",
+      "description": "测试基本流式响应",
       "params": {
         "stream": true
       },

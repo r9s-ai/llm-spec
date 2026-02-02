@@ -13,7 +13,7 @@
 
 ## 当前支持的厂商与路由
 
-项目内置了以下 provider 适配与测试用例（以 `tests/` 为准）：
+项目内置了以下 provider 适配与测试用例（配置文件位于 `tests/testcases/`）：
 
 ### OpenAI
 
@@ -122,25 +122,37 @@ timeout = 30.0
 
 ## 运行方式
 
-### 运行单个 endpoint 测试
+项目现在主要通过 **配置驱动** 的方式运行测试。所有测试用例定义在 `tests/testcases/` 目录下的 JSON5 文件中。
+
+### 运行全部配置驱动测试
 
 ```bash
-uv run pytest tests/openai/test_chat_completions.py -v
+uv run pytest tests/test_from_config.py -v
 ```
 
-### 运行某个厂商全部路由（会生成聚合报告）
+### 运行特定厂商的测试
 
 ```bash
-uv run pytest tests/openai/ -v
-uv run pytest tests/anthropic/ -v
-uv run pytest tests/gemini/ -v
-uv run pytest tests/xai/ -v
+# 运行 OpenAI 的所有配置测试
+uv run pytest tests/test_from_config.py -k "openai" -v
+
+# 运行 Gemini 的所有配置测试
+uv run pytest tests/test_from_config.py -k "gemini" -v
 ```
 
-### 运行全部测试
+### 运行特定路由的测试
 
 ```bash
-uv run pytest tests/ -v
+# 运行 OpenAI Chat Completions
+uv run pytest tests/test_from_config.py -k "openai/chat_completions" -v
+```
+
+### 调试记录
+
+如果你想查看具体的请求响应日志，可以结合 `--log-cli-level=INFO`：
+
+```bash
+uv run pytest tests/test_from_config.py -k "openai/chat_completions" --log-cli-level=INFO
 ```
 
 > 说明：pytest session 开始时会生成本次运行的 `run_id`（时间戳），所有报告会写到 `reports/<run_id>/...`，避免和历史报告混在一起。
@@ -181,10 +193,11 @@ cat reports/<run_id>/openai_v1_responses_*/report.json
 cat reports/<run_id>/openai_v1_responses_*/parameters.md
 ```
 
-## 文档
+## 文档 (Documentation)
 
-- `docs/ARCHITECTURE.md`：分层架构与组件职责
-- `docs/DATAFLOW.md`：从测试 -> provider -> http client -> validator -> report 的数据流
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)**: 项目分层架构、组件职责及设计原则。
+- **[DATAFLOW.md](docs/DATAFLOW.md)**: 从测试配置解析到 HTTP 请求与报告生成的全生命周期数据流。
+- **[CONFIG_DRIVEN_TESTING.md](docs/CONFIG_DRIVEN_TESTING.md)**: **核心指南**。详细讲解配置驱动的设计方案、JSON5 语法规范，以及如何添加新的测试套件。
 
 ## License
 

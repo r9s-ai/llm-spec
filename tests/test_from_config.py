@@ -32,15 +32,28 @@ if TYPE_CHECKING:
 # 测试配置目录
 TESTCASE_DIR = Path(__file__).parent / "testcases"
 
-# 缓存已加载的 suite
-_SUITE_CACHE: dict[Path, TestSuite] = {}
+# 缓存已加载的 suite 和 collector
+_SUITE_CACHE: dict[Path, SpecTestSuite] = {}
+_COLLECTORS: dict[Path, ReportCollector] = {}
 
 
-def _get_suite(config_path: Path) -> TestSuite:
+def _get_suite(config_path: Path) -> SpecTestSuite:
     """获取或加载 TestSuite（带缓存）"""
     if config_path not in _SUITE_CACHE:
         _SUITE_CACHE[config_path] = load_test_suite(config_path)
     return _SUITE_CACHE[config_path]
+
+
+def _get_collector(config_path: Path, client: Any) -> ReportCollector:
+    """获取或创建 ReportCollector（按配置路径缓存）"""
+    if config_path not in _COLLECTORS:
+        suite = _get_suite(config_path)
+        _COLLECTORS[config_path] = ReportCollector(
+            provider=suite.provider,
+            endpoint=suite.endpoint,
+            base_url=client.get_base_url(),
+        )
+    return _COLLECTORS[config_path]
 
 
 def discover_test_configs() -> list[tuple[Path, str, str]]:
@@ -99,12 +112,8 @@ def test_from_config(config_path: Path, test_name: str, request: pytest.FixtureR
         pytest.skip(f"Client fixture '{client_fixture_name}' not found")
         return
 
-    # 创建 ReportCollector
-    collector = ReportCollector(
-        provider=suite.provider,
-        endpoint=suite.endpoint,
-        base_url=client.get_base_url(),
-    )
+    # 获取共享的 ReportCollector
+    collector = _get_collector(config_path, client)
 
     # 查找要运行的测试用例
     test_case: SpecTestCase | None = None
@@ -145,3 +154,22 @@ class TestGeminiFromConfig:
     """Gemini 配置驱动测试"""
 
     pass
+
+
+@pytest.fixture(scope="session", autouse=True)
+def finalize_config_reports(request: pytest.FixtureRequest):
+    """Session 结束时生成所有报告"""
+    yield
+    
+    output_dir = getattr(request.config, "run_reports_dir", "./reports")
+    
+    if not _COLLECTORS:
+        return
+
+    print(f"\n生成配置驱动测试报告 (至 {output_dir})...")
+    for collector in _COLLECTORS.values():
+        try:
+            report_path = collector.finalize(output_dir)
+            print(f"✅ 报告已生成: {report_path}")
+        except Exception as e:
+            print(f"Warning: Failed to finalize report for {collector.endpoint}: {e}")

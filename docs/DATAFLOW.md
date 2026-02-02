@@ -2,16 +2,25 @@
 
 ## 整体数据流
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        测试层 (tests/)                          │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  TestChatCompletions                                     │  │
-│  │    - ENDPOINT = "/v1/chat/completions"                   │  │
-│  │    - BASE_PARAMS = {...}                                 │  │
-│  │    - test_baseline()                                     │  │
-│  │    - test_param_temperature()                            │  │
-│  │    - test_model_variants()                               │  │
+│  │  test_from_config.py (Entry)                             │  │
+│  │    - 加载 tests/testcases/*.json5                        │  │
+│  │    - 触发 ConfigDrivenTestRunner                         │  │
+│  └─────────────────────┬────────────────────────────────────┘  │
+└────────────────────────┼───────────────────────────────────────┘
+                         │ 
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    执行核心 (tests/runners/)                     │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  ConfigDrivenTestRunner                                  │  │
+│  │    - schema_registry: 加载对应厂商 Schema                 │  │
+│  │    - Build params (合并 base + current + parameterize)    │  │
+│  │    - 处理文件上传 (files 字段)                            │  │
+│  │    + run_suite() / run_test()                            │  │
 │  └─────────────────────┬────────────────────────────────────┘  │
 └────────────────────────┼───────────────────────────────────────┘
                          │ 调用
@@ -86,14 +95,25 @@
 
 ## 组件职责
 
-### 1. 测试层 (Tests)
-**职责**：定义测试用例和参数
+### 1. 测试用例层 (tests/testcases/)
+**职责**：以声明式方式定义测试套件和用例
+```json5
+- 定义 endpoint, provider, method
+- 定义 base_params (所有用例共享)
+- 定义 schemas (响应校验)
+- 定义具体 tests (控制变量测试参数)
+- 使用 parameterize 进行批量测试
+```
+
+### 1.1 测试执行层 (tests/runners/)
+**职责**：解析配置并驱动测试执行
 ```python
-- 显式定义 ENDPOINT 和 BASE_PARAMS
-- 使用控制变量法测试参数
-- 调用 Provider Adapter 发起请求
-- 调用 ResponseValidator 验证响应
-- 调用 ReportCollector 记录结果
+- 加载 JSON5 并在 Pytest 中参数化
+- 自动合并 base_params 与用例 params
+- 自动根据 Provider 结构包装参数 (param_wrapper)
+- 处理文件上传逻辑
+- 调用 Provider 适配器发起请求
+- 协调验证层与报告层
 ```
 
 ### 2. Provider 适配层 (Providers)
@@ -182,100 +202,32 @@ class AnthropicAdapter:
 ### 完整的测试执行流程
 
 ```
-1. 测试开始
-   ├─ test_baseline() 执行
-   │  └─ params = {"model": "gpt-3.5-turbo", "messages": [...]}
-   │
-2. 调用 Provider Adapter
-   ├─ openai_client.request(endpoint="/v1/chat/completions", params)
-   │  ├─ url = base_url + endpoint
-   │  │     = "https://api.openai.com" + "/v1/chat/completions"
-   │  └─ headers = prepare_headers()
-   │           = {"Authorization": "Bearer sk-xxx", "Content-Type": "application/json"}
-   │
-3. 委托给 HTTP Client
-   ├─ http_client.request(method="POST", url, headers, json=params)
-   │  ├─ request_id = generate_request_id() = "abc-123"
-   │  ├─ logger.log_request(request_id, method, url, headers, params)
-   │  ├─ response = httpx.post(url, headers, json=params)
-   │  └─ logger.log_response(request_id, status_code, headers, body)
-   │
-4. 返回响应
-   ├─ (status_code, headers, response_body)
-   │  └─ (200, {...}, {"id": "chatcmpl-xxx", "choices": [...]})
-   │
-5. 验证响应
-   ├─ ResponseValidator.validate(response_body, ChatCompletionResponse)
-   │  ├─ 尝试解析为 Pydantic 模型
-   │  ├─ 检查所有必需字段
-   │  └─ 返回: (is_valid=True, error_msg=None, missing_fields=[])
-   │
-6. 记录测试结果
-   ├─ report_collector.record_test(
-   │      test_name="test_baseline",
-   │      params=params,
-   │      status_code=200,
-   │      response_body=response_body,
-   │      error=None
-   │  )
-   │  ├─ total_tests += 1
-   │  ├─ passed_tests += 1
-   │  └─ tested_params.add("model", "messages")
-   │
-7. 测试完成
-   └─ report_collector.finalize()
-      ├─ 构建 JSON 报告
-      └─ 写入文件: reports/openai_v1_chat_completions_20260127.json
+1. 测试开始 (test_from_config.py)
+   ├─ 加载 chat_completions.json5
+   └─ 发现 test_param_temperature 用例
+
+2. 构建参数 (ConfigDrivenTestRunner)
+   ├─ 合并 base_params: {"model": "gpt-4o-mini"}
+   ├─ 合并用例 params: {"temperature": 0.7}
+   └─ 自动包装: {"model": "gpt-4o-mini", "temperature": 0.7}
+
+3. 调用适配器 (OpenAIAdapter.request)
+   ├─ 准备 Headers (sk-xxx)
+   └─ 委托给 http_client.request()
+
+4. 发起请求 (HTTPClient)
+   ├─ 记录日志 (request_id)
+   └─ httpx.post(url, json=params)
+
+5. 验证响应 (ResponseValidator)
+   ├─ 从 schema_registry 获取 openai.ChatCompletionResponse
+   └─ 校验 JSON 结构
+
+6. 记录与汇总 (ReportCollector)
+   └─ 记录参数覆盖率、耗时、状态
 ```
 
-## 扩展点
+### 维护与扩展
 
-### 添加新 Endpoint 的扩展点
-
-1. **Validation Schemas** ([llm_spec/validation/schemas/](llm_spec/validation/schemas/))
-   - 添加新的 Pydantic 模型
-
-2. **Test Files** ([tests/providers/](tests/providers/))
-   - 创建新的测试类
-   - 定义 ENDPOINT 和 BASE_PARAMS
-   - 复用现有的 Provider Adapter
-
-### 添加新 Provider 的扩展点
-
-1. **Provider Adapter** ([llm_spec/providers/](llm_spec/providers/))
-   - 继承 `ProviderAdapter`
-   - 实现 `prepare_headers()`
-
-2. **Config File** ([llm-spec.toml](llm-spec.toml))
-   - 添加新的 `[provider_name]` 配置段
-
-3. **Pytest Fixture** ([tests/conftest.py](tests/conftest.py))
-   - 创建新的 `{provider}_client` fixture
-
-## 配置流
-
-```
-llm-spec.toml
-      │
-      ├─ [log] ──────────► LogConfig
-      │                        │
-      │                        └──► RequestLogger
-      │
-      ├─ [report] ───────► ReportConfig
-      │                        │
-      │                        └──► report.output_dir/<run_id>/
-      │                              │
-      │                              └──► ReportCollector / AggregatedReportCollector
-      │
-      └─ [openai] ───────► ProviderConfig
-                               │
-                               └──► OpenAIAdapter
-                                       │
-                                       └─ http_client: HTTPClient
-                                             │
-                                             └─ logger: RequestLogger
-```
-
-所有配置从单一来源（`llm-spec.toml`）加载，通过 Pydantic 验证，然后注入到各个组件中。
-
-注：为避免多次运行互相覆盖，报告实际输出路径为 `report.output_dir/<run_id>/...`。
+详细的配置语法和添加测试的手册请参阅：
+👉 **[配置驱动测试指南 (CONFIG_DRIVEN_TESTING.md)](CONFIG_DRIVEN_TESTING.md)**

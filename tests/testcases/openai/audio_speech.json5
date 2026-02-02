@@ -1,73 +1,104 @@
 {
-  "suite_name": "OpenAI Audio Speech",
+  // OpenAI Audio Speech API 测试配置 - 严格对应 test_audio_speech.py
   "provider": "openai",
   "endpoint": "/v1/audio/speech",
-  "method": "POST",
   "base_params": {
     "model": "gpt-4o-mini-tts",
     "input": "Hello, world!",
     "voice": "alloy"
   },
   "tests": [
+    // 阶段 1: 基线测试
     {
       "name": "test_baseline",
-      "description": "Baseline speech generation",
-      "params": {}
+      "description": "测试基线：仅必需参数"
     },
+    // 阶段 2: 声音变体测试
     {
       "name": "test_voice_variants",
-      "description": "Test voice variants",
+      "description": "测试不同的 voice 变体",
+      "parameterize": {
+        "voice": [
+          "alloy",
+          "echo",
+          "fable",
+          "onyx",
+          "nova",
+          "shimmer",
+          "ash",
+          "ballad",
+          "coral",
+          "sage",
+          "verse",
+          "marin",
+          "cedar"
+        ]
+      },
       "params": {
         "voice": "$voice"
       },
-      "parameterize": {
-        "voice": [
-            "alloy", "echo", "fable", "onyx", "nova", "shimmer",
-            "ash", "ballad", "coral", "sage", "verse", "marin", "cedar"
-        ]
-      },
       "unsupported_param": "voice"
     },
+    // 阶段 3: 响应格式变体测试
     {
       "name": "test_response_format_variants",
-      "description": "Test response_format variants",
-      "params": {
-        "response_format": "$format"
-      },
+      "description": "测试不同的 response_format 变体",
       "parameterize": {
-        "format": ["mp3", "opus", "aac", "flac", "wav", "pcm"]
+        "response_format": [
+          "mp3",
+          "opus",
+          "aac",
+          "flac",
+          "wav",
+          "pcm"
+        ]
+      },
+      "params": {
+        "response_format": "$response_format"
       },
       "unsupported_param": "response_format"
     },
+    // 阶段 4: 速度变体测试
     {
       "name": "test_speed_variants",
-      "description": "Test speed variants",
+      "description": "测试不同的 speed 变体",
+      "parameterize": {
+        "speed": [
+          0.25,
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          4.0
+        ]
+      },
       "params": {
         "speed": "$speed"
       },
-      "parameterize": {
-        "speed": [0.25, 0.5, 1.0, 1.5, 2.0, 4.0]
-      },
       "unsupported_param": "speed"
     },
-
+    // 阶段 5: 高级参数测试
     {
       "name": "test_param_instructions",
-      "description": "Test instructions parameter",
+      "description": "测试 instructions 参数",
       "params": {
-        "instructions": "Speak slowly and clearly."
+        "instructions": "Speak in a cheerful and energetic tone."
       },
       "unsupported_param": "instructions"
     },
-
     {
-      "name": "test_param_stream_format_variants",
-      "description": "Test stream_format variants",
+      "name": "test_param_stream_format_audio",
+      "description": "测试 stream_format 参数(audio 格式)",
       "params": {
-        "stream_format": "$format"
+        "stream_format": "audio"
       },
-      "parameterize": {
-        "format": ["audio", "sse"]
+      "unsupported_param": "stream_format"
+    },
+    {
+      "name": "test_param_stream_format_sse",
+      "description": "测试 stream_format 参数(sse 格式)",
+      "params": {
+        "stream_format": "sse"
       },
       "unsupported_param": "stream_format"
     }

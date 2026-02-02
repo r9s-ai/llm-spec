@@ -35,6 +35,7 @@ def _init_registry() -> None:
     from llm_spec.validation.schemas.openai.responses import ResponseObject
     from llm_spec.validation.schemas.openai.embeddings import EmbeddingResponse as OpenAIEmbeddingResponse
     from llm_spec.validation.schemas.openai.audio import AudioTranscriptionResponse, AudioTranslationResponse
+    from llm_spec.validation.schemas.openai.images import ImageResponse
     from llm_spec.validation.schemas.gemini import GenerateContentResponse, EmbedContentResponse, BatchCreateResponse, CountTokensResponse
 
     # 注册 OpenAI schemas
