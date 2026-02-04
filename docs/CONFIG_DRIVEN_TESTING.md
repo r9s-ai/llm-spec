@@ -48,22 +48,62 @@ graph TD
 - `parameterize`: (可选) 动态生成子用例。如 `{"model": ["gpt-4o", "o1-mini"]}`。
 - `files`: (可选) 上传文件。格式为 `{"字段名": "文件相对于根目录的路径"}`。
 - `stream`: (可选) 设为 `true` 以启动流式解析校验。
-- `unsupported_param`: (可选) 指定一个参数路径作为统计不支持项的特征键。
+- `test_param`: (可选) 指定要测试的参数，格式为 `{"name": "参数路径", "value": "参数值"}`。用于记录参数支持情况。
+- `is_baseline`: (可选) 设为 `true` 表示基线测试，会记录所有参数的支持情况。
 - `no_wrapper`: (可选) 设为 `true` 以在该用例中跳过 `param_wrapper` 的包装。
 
 ---
 
 ## 模式示例 (Test Patterns)
 
-### 1. 基础测试 (Baseline)
+### 1. 基线测试 (Baseline)
+基线测试用于测试 API 的基本功能，并记录所有参数的支持情况。
 ```javascript
 {
   name: "test_baseline",
-  params: {} // 仅使用 base_params
+  description: "测试基线：仅必需参数",
+  is_baseline: true
 }
 ```
 
-### 2. 参数化测试 (Parameterize)
+### 2. 普通参数测试
+测试单个参数的支持情况，使用 `test_param` 指定参数名和值：
+```javascript
+{
+  name: "test_param_temperature",
+  description: "测试 temperature 参数",
+  params: {
+    temperature: 0.7
+  },
+  test_param: {
+    name: "temperature",
+    value: 0.7
+  }
+}
+```
+
+对于嵌套参数（如 `response_format.type`）：
+```javascript
+{
+  name: "test_response_format_json_schema",
+  description: "测试 response_format 为 json_schema",
+  params: {
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "person",
+        schema: { ... }
+      }
+    }
+  },
+  test_param: {
+    name: "response_format.type",
+    value: "json_schema"
+  }
+}
+```
+
+### 3. 参数化测试 (Parameterize)
 一次性对多个模型或选项进行交叉测试：
 ```javascript
 {
@@ -71,18 +111,26 @@ graph TD
   parameterize: {
     model: ["gpt-4o-mini", "o1-preview", "gpt-4o"]
   },
-  params: { model: "$model" } // 使用 $ 符号引用变量
+  params: { model: "$model" },  // 使用 $ 符号引用变量
+  test_param: {
+    name: "model",
+    value: "$model"  // 同样使用 $ 符号引用变量
+  }
 }
 ```
 
-### 3. 文件上传测试 (Multipart)
+### 4. 文件上传测试 (Multipart)
 ```javascript
 {
   name: "test_transcription",
   files: {
     file: "test_assets/audio/hello.mp3"
   },
-  params: { model: "whisper-1" }
+  params: { model: "whisper-1" },
+  test_param: {
+    name: "file",
+    value: "hello.mp3"
+  }
 }
 ```
 
@@ -118,4 +166,7 @@ uv run pytest tests/test_from_config.py -v --log-cli-level=INFO
 
 1. **绝对路径 vs 相对路径**：JSON5 中的文件路径应相对于项目根目录。
 2. **深度合并**：`params` 会递归地合并到 `base_params` 中，允许覆盖或添加子字段。
-3. **不支持项记录**：如果某个参数确定不支持，请务必填写 `unsupported_param` 字段，这将作为生成“参数支持表格”的核心依据。
+3. **参数支持记录**：
+   - 基线测试（`is_baseline: true`）会自动记录所有参数的支持情况
+   - 普通测试需要通过 `test_param` 手动指定要记录的参数名和值
+   - 只有被明确记录的参数才会显示在报告中

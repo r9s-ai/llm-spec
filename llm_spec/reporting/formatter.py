@@ -19,6 +19,14 @@ class ParameterTableFormatter:
 
         # 从报告中提取信息
         raw_tested = sorted(report_data.get("parameters", {}).get("tested", []))
+        
+        # 提取明确支持的参数
+        self.supported_params: dict[str, dict] = {}
+        for p in report_data.get("parameters", {}).get("supported", []) or []:
+            key = p.get("parameter", "")
+            if key:
+                self.supported_params[key] = p
+        
         # 注意：同一个 parameter 可能在多个测试中多次被标记为 unsupported（不同 value/原因）。
         # 这里保留“最严重/最有信息量”的那条（优先带 HTTP 错误的 reason 或更长 reason）。
         self.unsupported_params: dict[str, UnsupportedParameter] = {}
@@ -43,11 +51,11 @@ class ParameterTableFormatter:
 
         # 只展示“叶子参数路径”，避免同时展示容器参数（如 contents）与其子路径（如 contents[0].parts）。
         # 规则：如果存在 tested 参数以 `p + "."` 或 `p + "["` 开头，则认为 p 是容器路径，应隐藏。
-        self.tested_params = self._leaf_only(raw_tested)
+        # 只展示被明确标记为支持或不支持的参数
+        # 过滤掉未被明确标记的嵌套参数
+        all_tested = self._leaf_only(raw_tested)
+        self.tested_params = self._filter_tested_params(all_tested)
 
-        # 如果父路径参数被标记为 unsupported，则其子路径不应显示为 supported，
-        # 否则会造成 “contents 不支持但 contents[0].parts 支持” 的误导。
-        self._unsupported_prefixes = sorted(self.unsupported_params.keys(), key=len)
 
         # 测试统计
         test_summary = report_data.get("test_summary", {})
@@ -76,6 +84,18 @@ class ParameterTableFormatter:
             leaves.append(p)
 
         return leaves
+    @staticmethod
+    def _filter_tested_params(params: list[str]) -> list[str]:
+        """过滤测试参数，只保留被明确标记为支持或不支持的参数
+        
+        规则：
+        1. 保留所有顶层参数（不包含 . 或 [ 的参数）
+        2. 保留被明确标记的嵌套参数（在 supported_params 或 unsupported_params 中）
+        """
+        # 这里简化处理：只保留顶层参数和被明确标记的参数
+        # 实际过滤在 generate_markdown 中根据 supported_params 和 unsupported_params 进行
+        return params
+
 
     def _get_api_name(self) -> str:
         """获取 API 名称"""
@@ -117,10 +137,15 @@ class ParameterTableFormatter:
         lines.append(f"**测试失败**: {self.failed_tests} ❌")
         lines.append("")
 
-        # 参数统计
-        supported_count = len(self.tested_params) - len(self.unsupported_params)
+        # 参数统计：只统计明确标记为支持或不支持的参数
+        # 明确支持的参数（在 supported_params 中且不在 unsupported_params 中）
+        supported_count = len([p for p in self.supported_params.keys() if p not in self.unsupported_params])
+        # 明确不支持的参数
         unsupported_count = len(self.unsupported_params)
-        total_count = len(self.tested_params)
+        # 只显示被明确标记为支持或不支持的参数
+        self.display_params = [p for p in self.tested_params 
+                               if p in self.supported_params or p in self.unsupported_params]
+        total_count = len(self.display_params)
 
         lines.append("## 参数支持情况")
         lines.append("")
@@ -130,28 +155,16 @@ class ParameterTableFormatter:
         lines.append("")
 
         # 参数表格
-        if self.tested_params:
+        if self.display_params:
             lines.append("## 参数详情")
             lines.append("")
             lines.append("| 参数 | 状态 |")
             lines.append("|------|------|")
 
-            for param in self.tested_params:
-                # 如果该参数本身 unsupported，或者其任一父路径 unsupported，则视为 unsupported
-                inherited_parent = next(
-                    (p for p in self._unsupported_prefixes if param.startswith(p + ".")),
-                    None,
-                )
-                inherited_index_parent = next(
-                    (p for p in self._unsupported_prefixes if param.startswith(p + "[")),
-                    None,
-                )
-                inherited = inherited_parent or inherited_index_parent
-
-                if param in self.unsupported_params or inherited:
+            for param in self.display_params:
+                if param in self.unsupported_params:
                     status = "❌ 不支持"
-                    root = param if param in self.unsupported_params else inherited
-                    reason = self.unsupported_params.get(root or "", {}).get("reason", "")
+                    reason = self.unsupported_params[param].get("reason", "")
                     if reason:
                         status += f" ({reason})"
                 else:
@@ -164,9 +177,10 @@ class ParameterTableFormatter:
     def generate_html(self) -> str:
         """生成简洁的 HTML 报告"""
         api_name = self._get_api_name()
-        supported_count = len(self.tested_params) - len(self.unsupported_params)
+        # 参数统计：只统计明确标记为支持或不支持的参数
+        supported_count = len([p for p in self.supported_params.keys() if p not in self.unsupported_params])
         unsupported_count = len(self.unsupported_params)
-        total_count = len(self.tested_params)
+        total_count = len(self.display_params)
 
         html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -300,25 +314,15 @@ class ParameterTableFormatter:
             </tr>
 """
 
-        for param in self.tested_params:
-            inherited_parent = next(
-                (p for p in self._unsupported_prefixes if param.startswith(p + ".")),
-                None,
-            )
-            inherited_index_parent = next(
-                (p for p in self._unsupported_prefixes if param.startswith(p + "[")),
-                None,
-            )
-            inherited = inherited_parent or inherited_index_parent
-
-            if param in self.unsupported_params or inherited:
+        for param in self.display_params:
+            if param in self.unsupported_params:
                 status = '<span class="unsupported">❌ 不支持</span>'
-                root = param if param in self.unsupported_params else inherited
-                reason = self.unsupported_params.get(root or "", {}).get("reason", "")
+                reason = self.unsupported_params[param].get("reason", "")
                 if reason:
                     status += f" ({reason})"
             else:
                 status = '<span class="supported">✅ 支持</span>'
+                status = '<span>❓ 未知（未明确标记支持状态）</span>'
 
             html += f"""            <tr>
                 <td><span class="param-path">{param}</span></td>

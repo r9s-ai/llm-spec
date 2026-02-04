@@ -89,7 +89,7 @@ def _extract_param_paths(params: dict[str, Any], prefix: str = "", max_depth: in
     """
 ```
 
-这确保了报告中的 `parameters.tested` 字段包含所有实际使用的参数路径，而不仅仅是顶级键。
+这确保了报告中的 `parameters.tested` 字段包含所有被明确记录的参数路径。
 
 **ParameterTableFormatter 核心功能**：
 ```python
@@ -97,7 +97,7 @@ class ParameterTableFormatter:
     """参数支持情况格式化器
 
     直接从 JSON 报告的 tested_params 生成表格：
-    - 无需手动定义参数列表
+    - 只显示被明确记录的参数（通过 test_param 或 is_baseline）
     - 自动检测支持/不支持状态
     - 支持 Markdown 和 HTML 两种输出格式
     """
@@ -105,6 +105,7 @@ class ParameterTableFormatter:
     def __init__(self, report_data: dict):
         # 从报告中提取：
         # - tested_params: 已测试的参数列表
+        # - supported_params: 支持的参数列表
         # - unsupported_params: 不支持的参数及原因
         # - test_summary: 测试统计（总数、通过、失败）
 

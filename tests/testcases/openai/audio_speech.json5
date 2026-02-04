@@ -1,24 +1,22 @@
 {
-  // OpenAI Audio Speech API 测试配置 - 严格对应 test_audio_speech.py
-  "provider": "openai",
-  "endpoint": "/v1/audio/speech",
-  "base_params": {
-    "model": "gpt-4o-mini-tts",
-    "input": "Hello, world!",
-    "voice": "alloy"
+  provider: "openai",
+  endpoint: "/v1/audio/speech",
+  base_params: {
+    model: "gpt-4o-mini-tts",
+    input: "Hello, world!",
+    voice: "alloy",
   },
-  "tests": [
-    // 阶段 1: 基线测试
+  tests: [
     {
-      "name": "test_baseline",
-      "description": "测试基线：仅必需参数"
+      name: "test_baseline",
+      description: "测试基线：仅必需参数",
+      is_baseline: true,
     },
-    // 阶段 2: 声音变体测试
     {
-      "name": "test_voice_variants",
-      "description": "测试不同的 voice 变体",
-      "parameterize": {
-        "voice": [
+      name: "test_voice_variants",
+      description: "测试不同的 voice 变体",
+      parameterize: {
+        voice: [
           "alloy",
           "echo",
           "fable",
@@ -31,76 +29,91 @@
           "sage",
           "verse",
           "marin",
-          "cedar"
-        ]
+          "cedar",
+        ],
       },
-      "params": {
-        "voice": "$voice"
+      params: {
+        voice: "$voice",
       },
-      "unsupported_param": "voice"
+      test_param: {
+        name: "voice",
+        value: "$voice",
+      },
     },
-    // 阶段 3: 响应格式变体测试
     {
-      "name": "test_response_format_variants",
-      "description": "测试不同的 response_format 变体",
-      "parameterize": {
-        "response_format": [
+      name: "test_response_format_variants",
+      description: "测试不同的 response_format 变体",
+      parameterize: {
+        response_format: [
           "mp3",
           "opus",
           "aac",
           "flac",
           "wav",
-          "pcm"
-        ]
+          "pcm",
+        ],
       },
-      "params": {
-        "response_format": "$response_format"
+      params: {
+        response_format: "$response_format",
       },
-      "unsupported_param": "response_format"
+      test_param: {
+        name: "response_format",
+        value: "$response_format",
+      },
     },
-    // 阶段 4: 速度变体测试
     {
-      "name": "test_speed_variants",
-      "description": "测试不同的 speed 变体",
-      "parameterize": {
-        "speed": [
+      name: "test_speed_variants",
+      description: "测试不同的 speed 变体",
+      parameterize: {
+        speed: [
           0.25,
           0.5,
           1.0,
           1.5,
           2.0,
-          4.0
-        ]
+          4.0,
+        ],
       },
-      "params": {
-        "speed": "$speed"
+      params: {
+        speed: "$speed",
       },
-      "unsupported_param": "speed"
-    },
-    // 阶段 5: 高级参数测试
-    {
-      "name": "test_param_instructions",
-      "description": "测试 instructions 参数",
-      "params": {
-        "instructions": "Speak in a cheerful and energetic tone."
+      test_param: {
+        name: "speed",
+        value: "$speed",
       },
-      "unsupported_param": "instructions"
     },
     {
-      "name": "test_param_stream_format_audio",
-      "description": "测试 stream_format 参数(audio 格式)",
-      "params": {
-        "stream_format": "audio"
+      name: "test_param_instructions",
+      description: "测试 instructions 参数",
+      params: {
+        instructions: "Speak in a cheerful and energetic tone.",
       },
-      "unsupported_param": "stream_format"
+      test_param: {
+        name: "instructions",
+        value: "Speak in a cheerful and energetic tone.",
+      },
     },
     {
-      "name": "test_param_stream_format_sse",
-      "description": "测试 stream_format 参数(sse 格式)",
-      "params": {
-        "stream_format": "sse"
+      name: "test_param_stream_format_audio",
+      description: "测试 stream_format 参数(audio 格式)",
+      params: {
+        stream_format: "audio",
       },
-      "unsupported_param": "stream_format"
-    }
-  ]
+      test_param: {
+        name: "stream_format",
+        value: "audio",
+      },
+    },
+    {
+      name: "test_param_stream_format_sse",
+      description: "测试 stream_format 参数(sse 格式)",
+      params: {
+        stream_format: "sse",
+      },
+      test_param: {
+        name: "stream_format",
+        value: "sse",
+      },
+    },
+  ],
 }

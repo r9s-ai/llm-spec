@@ -109,15 +109,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("size", "1024x1024"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="size",
-                param_value="1024x1024",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -145,15 +138,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("size", size),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="size",
-                param_value=size,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -181,15 +167,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("size", size),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="size",
-                param_value=size,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -220,15 +199,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("quality", quality),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="quality",
-                param_value=quality,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -259,15 +231,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("response_format", response_format),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="response_format",
-                param_value=response_format,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -295,15 +260,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("style", style),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="style",
-                param_value=style,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -333,15 +291,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("n", 2),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="n",
-                param_value=2,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -368,15 +319,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("user", "user-123"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="user",
-                param_value="user-123",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -411,15 +355,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("background", "transparent"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="background",
-                param_value="transparent",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
             self.collector.add_unsupported_param(
                 param_name="output_format",
                 param_value="png",
@@ -457,15 +394,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("output_format", output_format),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="output_format",
-                param_value=output_format,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -497,15 +427,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("output_format", "webp"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="output_format",
-                param_value="webp",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
             self.collector.add_unsupported_param(
                 param_name="output_compression",
                 param_value=80,
@@ -543,15 +466,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("output_format", "jpeg"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="output_format",
-                param_value="jpeg",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
             self.collector.add_unsupported_param(
                 param_name="output_compression",
                 param_value=80,
@@ -590,15 +506,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("background", background),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="background",
-                param_value=background,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -629,15 +538,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("moderation", "low"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="moderation",
-                param_value="low",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -668,15 +570,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("moderation", "auto"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="moderation",
-                param_value="auto",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -707,15 +602,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("quality", "high"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="quality",
-                param_value="high",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -747,15 +635,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("quality", quality),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="quality",
-                param_value=quality,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -782,15 +663,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("n", 2),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="n",
-                param_value=2,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -818,15 +692,8 @@ class TestImagesGenerations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("size", size),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="size",
-                param_value=size,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid

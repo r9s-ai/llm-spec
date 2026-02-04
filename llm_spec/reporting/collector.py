@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from llm_spec.reporting.types import ReportData, UnsupportedParameter
+from llm_spec.reporting.types import ReportData, SupportedParameter, UnsupportedParameter
 from llm_spec.types import JSONValue
 
 
@@ -34,6 +34,7 @@ class ReportCollector:
 
         # 参数跟踪
         self.tested_params: set[str] = set()
+        self.supported_params: list[SupportedParameter] = []
         self.unsupported_params: list[UnsupportedParameter] = []
 
         # 响应字段跟踪
@@ -45,7 +46,10 @@ class ReportCollector:
 
     @staticmethod
     def _extract_param_paths(
-        params: dict[str, Any], prefix: str = "", max_depth: int = 10
+        params: dict[str, Any], 
+        prefix: str = "", 
+        max_depth: int = 10,
+        target_param: str = "",
     ) -> set[str]:
         """递归提取参数路径（支持嵌套结构）
 
@@ -53,6 +57,7 @@ class ReportCollector:
             params: 参数字典
             prefix: 路径前缀
             max_depth: 最大递归深度（防止无限递归）
+            target_param: 目标参数路径，如果指定，则只解析到该路径为止
 
         Returns:
             参数路径集合
@@ -81,10 +86,14 @@ class ReportCollector:
             current_path = f"{prefix}.{key}" if prefix else key
             paths.add(current_path)
 
+            # 如果指定了 target_param 且当前路径已经匹配，不再继续解析
+            if target_param and current_path == target_param:
+                continue
+
             # 如果值是字典，递归提取
             if isinstance(value, dict) and value:  # 跳过空字典
                 nested_paths = ReportCollector._extract_param_paths(
-                    value, current_path, max_depth - 1
+                    value, current_path, max_depth - 1, target_param
                 )
                 paths.update(nested_paths)
 
@@ -93,11 +102,23 @@ class ReportCollector:
                 for i, item in enumerate(value):
                     if isinstance(item, dict):
                         nested_paths = ReportCollector._extract_param_paths(
-                            item, f"{current_path}[{i}]", max_depth - 1
+                            item, f"{current_path}[{i}]", max_depth - 1, target_param
                         )
                         paths.update(nested_paths)
 
         return paths
+
+    @staticmethod
+    def _extract_toplevel_params(params: dict[str, Any]) -> set[str]:
+        """只提取顶层参数路径
+
+        Args:
+            params: 参数字典
+
+        Returns:
+            顶层参数路径集合
+        """
+        return set(params.keys())
 
     def record_test(
         self,
@@ -108,8 +129,10 @@ class ReportCollector:
         error: str | None = None,
         missing_fields: list[str] | None = None,
         expected_fields: list[str] | None = None,
+        tested_param: tuple[str, Any] | None = None,
+        is_baseline: bool = False,
     ) -> None:
-        """记录单个测试结果
+        """记录单个测试结果并自动处理参数支持情况
 
         Args:
             test_name: 测试名称
@@ -119,12 +142,21 @@ class ReportCollector:
             error: 错误消息（如果有）
             missing_fields: 缺失的响应字段
             expected_fields: 期望的响应字段（从 schema 提取）
+            tested_param: 本次测试的目标参数 (param_name, param_value)。
+                         对于 baseline 测试，设为 None。
+            is_baseline: 是否为 baseline 测试。
+                        如果是，会处理 params 中的所有参数。
         """
         self.total_tests += 1
 
-        # 记录测试的参数（支持嵌套结构）
-        param_paths = self._extract_param_paths(params)
-        self.tested_params.update(param_paths)
+        # 记录测试的参数
+        if is_baseline:
+            # 基线测试：解析所有嵌套参数
+            param_paths = self._extract_param_paths(params)
+            self.tested_params.update(param_paths)
+        elif tested_param:
+            # 非基线测试：只记录 test_param 中指定的参数
+            self.tested_params.add(tested_param[0])
 
         # 记录期望字段
         if expected_fields:
@@ -168,6 +200,71 @@ class ReportCollector:
                         "reason": "Field missing in response",
                     }
                 )
+
+        # 自动处理参数支持情况
+        if is_baseline:
+            # baseline 测试：处理所有参数
+            all_param_paths = self._extract_param_paths(params)
+            if is_success:
+                # 成功：记录所有参数支持
+                for param_path in all_param_paths:
+                    self.add_supported_param(param_path)
+            else:
+                # 失败：记录所有参数不支持
+                for param_path in all_param_paths:
+                    param_value = self._get_nested_value(params, param_path)
+                    self.add_unsupported_param(
+                        param_name=param_path,
+                        param_value=param_value,
+                        test_name=test_name,
+                        reason=f"HTTP {status_code}: {response_body}",
+                    )
+        elif tested_param:
+            # 普通参数测试：只处理目标参数
+            param_name, param_value = tested_param
+            if is_success:
+                self.add_supported_param(param_name)
+            else:
+                self.add_unsupported_param(
+                    param_name=param_name,
+                    param_value=param_value,
+                    test_name=test_name,
+                    reason=f"HTTP {status_code}: {response_body}",
+                )
+
+    def _get_nested_value(self, params: dict[str, Any], path: str) -> Any:
+        """根据路径获取嵌套参数的值
+
+        Args:
+            params: 参数字典
+            path: 参数路径（如 "model" 或 "response_format.type"）
+
+        Returns:
+            参数值，不存在则返回 None
+        """
+        parts = path.split(".")
+        current = params
+
+        for part in parts:
+            # 处理数组索引，如 "messages[0]"
+            import re
+            match = re.match(r"(\w+)\[(\d+)\]", part)
+            if match:
+                key, idx = match.groups()
+                if isinstance(current, dict) and key in current:
+                    current = current[key]
+                    if isinstance(current, list) and int(idx) < len(current):
+                        current = current[int(idx)]
+                    else:
+                        return None
+                else:
+                    return None
+            elif isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                return None
+
+        return current
 
     @staticmethod
     def response_body_from_httpx(response: "object") -> JSONValue | str:
@@ -238,6 +335,16 @@ class ReportCollector:
             )
         )
 
+    def add_supported_param(self, param_name: str) -> None:
+        """添加支持的参数
+
+        Args:
+            param_name: 参数名
+        """
+        # 去重：检查是否已经记录过该参数
+        if not any(p["parameter"] == param_name for p in self.supported_params):
+            self.supported_params.append(SupportedParameter(parameter=param_name))
+
     def finalize(self, output_dir: str = "./reports") -> str:
         """生成最终报告
 
@@ -270,6 +377,7 @@ class ReportCollector:
             "parameters": {
                 "tested": sorted(list(self.tested_params)),
                 "untested": [],  # TODO: 需要从spec定义中计算
+                "supported": self.supported_params,
                 "unsupported": self.unsupported_params,
             },
             "response_fields": {

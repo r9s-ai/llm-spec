@@ -78,10 +78,10 @@
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │  ReportCollector                                         │  │
 │  │    - tested_params: set                                  │  │
+│  │    - supported_params: list                              │  │
 │  │    - unsupported_params: list                            │  │
 │  │    - errors: list                                        │  │
-│  │    + record_test(test_name, params, status, error)       │  │
-│  │    + add_unsupported_param(name, value, reason)          │  │
+│  │    + record_test(test_name, params, status, tested_param)│  │
 │  │    + finalize() → 生成JSON报告                           │  │
 │  └─────────────────────┬────────────────────────────────────┘  │
 └────────────────────────┼───────────────────────────────────────┘
@@ -205,11 +205,12 @@ class AnthropicAdapter:
 1. 测试开始 (test_from_config.py)
    ├─ 加载 chat_completions.json5
    └─ 发现 test_param_temperature 用例
+      └─ 读取 test_param: {"name": "temperature", "value": 0.7}
 
 2. 构建参数 (ConfigDrivenTestRunner)
    ├─ 合并 base_params: {"model": "gpt-4o-mini"}
    ├─ 合并用例 params: {"temperature": 0.7}
-   └─ 自动包装: {"model": "gpt-4o-mini", "temperature": 0.7}
+   └─ 最终参数: {"model": "gpt-4o-mini", "temperature": 0.7}
 
 3. 调用适配器 (OpenAIAdapter.request)
    ├─ 准备 Headers (sk-xxx)
@@ -224,7 +225,8 @@ class AnthropicAdapter:
    └─ 校验 JSON 结构
 
 6. 记录与汇总 (ReportCollector)
-   └─ 记录参数覆盖率、耗时、状态
+   ├─ 根据 test_param 记录参数支持情况
+   └─ 生成报告 (report.json, parameters.md)
 ```
 
 ### 维护与扩展

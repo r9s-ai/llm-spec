@@ -1,69 +1,91 @@
 {
-  // OpenAI Embeddings API 测试配置 - 严格对应 test_embeddings.py
-  "provider": "openai",
-  "endpoint": "/v1/embeddings",
-  "base_params": {
-    "model": "text-embedding-3-small",
-    "input": "Hello, world!"
+  provider: "openai",
+  endpoint: "/v1/embeddings",
+  base_params: {
+    model: "text-embedding-3-small",
+    input: "Hello, world!",
   },
-  "response_schema": "openai.EmbeddingResponse",
-  "tests": [
-    // 基线测试
+  response_schema: "openai.EmbeddingResponse",
+  tests: [
     {
-      "name": "test_baseline",
-      "description": "测试基线：仅必需参数"
+      name: "test_baseline",
+      description: "测试基线：仅必需参数",
+      is_baseline: true,
     },
-    // 输入变体
     {
-      "name": "test_param_input_array",
-      "description": "测试 input 参数（字符串数组）",
-      "params": {
-        "input": [
+      name: "test_param_input_array",
+      description: "测试 input 参数（字符串数组）",
+      params: {
+        input: [
           "Hello",
-          "World"
-        ]
+          "World",
+        ],
       },
-      "unsupported_param": "input"
+      test_param: {
+        name: "input",
+        value: [
+          "Hello",
+          "World",
+        ],
+      },
     },
     {
-      "name": "test_param_input_tokens",
-      "description": "测试 input 参数（token 数组）",
-      "params": {
-        "input": [
+      name: "test_param_input_tokens",
+      description: "测试 input 参数（token 数组）",
+      params: {
+        input: [
           [
             11,
             12,
             13,
-            14
-          ]
-        ]
+            14,
+          ],
+        ],
       },
-      "unsupported_param": "input"
-    },
-    // 参数变体
-    {
-      "name": "test_param_encoding_format",
-      "description": "测试 encoding_format 参数（base64）",
-      "params": {
-        "encoding_format": "base64"
+      test_param: {
+        name: "input",
+        value: [
+          [
+            11,
+            12,
+            13,
+            14,
+          ],
+        ],
       },
-      "unsupported_param": "encoding_format"
-    },
-    {
-      "name": "test_param_user",
-      "description": "测试 user 参数（用户标识）",
-      "params": {
-        "user": "user-123"
-      },
-      "unsupported_param": "user"
     },
     {
-      "name": "test_param_dimensions",
-      "description": "测试 dimensions 参数 (仅 V3 模型支持)",
-      "params": {
-        "dimensions": 512
+      name: "test_param_encoding_format",
+      description: "测试 encoding_format 参数（base64）",
+      params: {
+        encoding_format: "base64",
       },
-      "unsupported_param": "dimensions"
-    }
-  ]
+      test_param: {
+        name: "encoding_format",
+        value: "base64",
+      },
+    },
+    {
+      name: "test_param_user",
+      description: "测试 user 参数（用户标识）",
+      params: {
+        user: "user-123",
+      },
+      test_param: {
+        name: "user",
+        value: "user-123",
+      },
+    },
+    {
+      name: "test_param_dimensions",
+      description: "测试 dimensions 参数 (仅 V3 模型支持)",
+      params: {
+        dimensions: 512,
+      },
+      test_param: {
+        name: "dimensions",
+        value: 512,
+      },
+    },
+  ],
 }

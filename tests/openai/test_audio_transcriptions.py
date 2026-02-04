@@ -140,15 +140,8 @@ class TestAudioTranscriptions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("language", "en"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="language",
-                param_value="en",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -171,15 +164,8 @@ class TestAudioTranscriptions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("temperature", 0.0),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="temperature",
-                param_value=0.0,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -255,15 +241,8 @@ class TestAudioTranscriptions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("response_format", response_format),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="response_format",
-                param_value=response_format,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -293,15 +272,8 @@ class TestAudioTranscriptions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("prompt", params["prompt"]),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="prompt",
-                param_value=params["prompt"],
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -331,15 +303,8 @@ class TestAudioTranscriptions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("chunking_strategy", "auto"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="chunking_strategy",
-                param_value="auto",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -369,15 +334,8 @@ class TestAudioTranscriptions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("chunking_strategy", params["chunking_strategy"]),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="chunking_strategy",
-                param_value=params["chunking_strategy"],
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -408,15 +366,8 @@ class TestAudioTranscriptions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("include", params["include"]),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="include",
-                param_value=params["include"],
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
             # timestamp granularity / include 相关能力依赖 verbose_json
             self.collector.add_unsupported_param(
                 param_name="response_format",
@@ -461,15 +412,8 @@ class TestAudioTranscriptions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("known_speaker_names", names),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="known_speaker_names",
-                param_value=names,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
             self.collector.add_unsupported_param(
                 param_name="known_speaker_references",
                 param_value="[data URLs omitted]",
@@ -506,15 +450,8 @@ class TestAudioTranscriptions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("timestamp_granularities", params["timestamp_granularities"]),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="timestamp_granularities",
-                param_value=params["timestamp_granularities"],
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
             self.collector.add_unsupported_param(
                 param_name="response_format",
                 param_value=params.get("response_format"),
@@ -550,15 +487,8 @@ class TestAudioTranscriptions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("stream", True),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="stream",
-                param_value=True,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid

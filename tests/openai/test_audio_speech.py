@@ -70,17 +70,9 @@ class TestAudioSpeech:
             error=None
             if 200 <= status_code < 300
             else f"HTTP {status_code}: {response_body}",
+            is_baseline=True,
         )
 
-        # baseline 失败也需要记录：把必需参数标为不支持（无对照基线可用）
-        if not (200 <= status_code < 300):
-            for k in ("model", "input", "voice"):
-                self.collector.add_unsupported_param(
-                    param_name=k,
-                    param_value=self.BASE_PARAMS.get(k),
-                    test_name=test_name,
-                    reason=f"HTTP {status_code}: {response_body}",
-                )
         assert 200 <= status_code < 300, f"HTTP {status_code}"
 
     # ========================================================================
@@ -128,15 +120,8 @@ class TestAudioSpeech:
             error=None
             if 200 <= status_code < 300
             else f"HTTP {status_code}: {response_body}",
+            tested_param=("voice", voice),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="voice",
-                param_value=voice,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
 
@@ -176,15 +161,8 @@ class TestAudioSpeech:
             error=None
             if 200 <= status_code < 300
             else f"HTTP {status_code}: {response_body}",
+            tested_param=("response_format", response_format),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="response_format",
-                param_value=response_format,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
 
@@ -224,15 +202,8 @@ class TestAudioSpeech:
             error=None
             if 200 <= status_code < 300
             else f"HTTP {status_code}: {response_body}",
+            tested_param=("speed", speed),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="speed",
-                param_value=speed,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
 
@@ -264,15 +235,8 @@ class TestAudioSpeech:
             error=None
             if 200 <= status_code < 300
             else f"HTTP {status_code}: {response_body}",
+            tested_param=("instructions", "Speak in a cheerful and energetic tone."),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="instructions",
-                param_value="Speak in a cheerful and energetic tone.",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
 
@@ -297,15 +261,8 @@ class TestAudioSpeech:
             error=None
             if 200 <= status_code < 300
             else f"HTTP {status_code}: {response_body}",
+            tested_param=("stream_format", "audio"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="stream_format",
-                param_value="audio",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
 
@@ -332,14 +289,7 @@ class TestAudioSpeech:
             error=None
             if 200 <= status_code < 300
             else f"HTTP {status_code}: {response_body}",
+            tested_param=("stream_format", "sse"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="stream_format",
-                param_value="sse",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300

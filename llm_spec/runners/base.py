@@ -33,8 +33,11 @@ class SpecTestCase:
     params: dict[str, Any] = field(default_factory=dict)
     """测试参数（会与 base_params 合并）"""
 
-    unsupported_param: str = ""
-    """失败时标记为不支持的参数路径（最小粒度）"""
+    test_param: dict[str, Any] | None = None
+    """本次测试的目标参数，格式为 {"name": "param.name", "value": "param_value"}"""
+
+    is_baseline: bool = False
+    """是否为 baseline 测试（会处理 params 中的所有参数）"""
 
     stream: bool = False
     """是否是流式测试"""
@@ -123,7 +126,8 @@ def _expand_parameterized_test(test_config: dict[str, Any]) -> Iterator[SpecTest
             name=variant_name,
             description=test_config.get("description", ""),
             params=params,
-            unsupported_param=test_config.get("unsupported_param", ""),
+            test_param=test_config.get("test_param"),
+            is_baseline=test_config.get("is_baseline", False),
             stream=test_config.get("stream", False),
             stream_validation=test_config.get("stream_validation"),
             override_base=test_config.get("override_base", False),
@@ -173,7 +177,8 @@ def load_test_suite(config_path: Path) -> SpecTestSuite:
                     name=t["name"],
                     description=t.get("description", ""),
                     params=t.get("params", {}),
-                    unsupported_param=t.get("unsupported_param", ""),
+                    test_param=t.get("test_param"),
+                    is_baseline=t.get("is_baseline", False),
                     stream=t.get("stream", False),
                     stream_validation=t.get("stream_validation"),
                     override_base=t.get("override_base", False),
@@ -353,7 +358,15 @@ class ConfigDrivenTestRunner:
                 },
             )()
 
-        # 记录测试结果
+        # 构建 tested_param 参数（如果配置了 test_param）
+        tested_param = None
+        if test.test_param:
+            # 新的格式：test_param 是 {"name": "param.name", "value": "param_value"}
+            param_name = test.test_param.get("name")
+            param_value = test.test_param.get("value")
+            tested_param = (param_name, param_value)
+
+        # 记录测试结果（自动处理参数支持情况）
         self.collector.record_test(
             test_name=test.name,
             params=params,
@@ -362,21 +375,14 @@ class ConfigDrivenTestRunner:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=tested_param,
+            is_baseline=test.is_baseline,
         )
-
-        # 如果失败，记录不支持的参数（只记录最小粒度路径）
-        if not (200 <= status_code < 300) and test.unsupported_param:
-            self.collector.add_unsupported_param(
-                param_name=test.unsupported_param,
-                param_value=_get_nested(params, test.unsupported_param),
-                test_name=test.name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         return 200 <= status_code < 300 and result.is_valid
 
     def _run_stream_test(
-        self, test: TestCase, endpoint: str, params: dict[str, Any]
+        self, test: SpecTestCase, endpoint: str, params: dict[str, Any]
     ) -> bool:
         """运行流式请求测试"""
         parser = StreamParser(self.suite.provider, self.chunk_schema)
@@ -392,6 +398,14 @@ class ConfigDrivenTestRunner:
             # 获取完整内容
             content = parser.get_complete_content()
 
+            # 构建 tested_param 参数（如果配置了 test_param）
+            tested_param = None
+            if test.test_param:
+                # 新的格式：test_param 是 {"name": "param.name", "value": "param_value"}
+                param_name = test.test_param.get("name")
+                param_value = test.test_param.get("value")
+                tested_param = (param_name, param_value)
+
             # 记录成功
             self.collector.record_test(
                 test_name=test.name,
@@ -402,6 +416,8 @@ class ConfigDrivenTestRunner:
                     "content_length": len(content),
                 },
                 error=None,
+                tested_param=tested_param,
+                is_baseline=test.is_baseline,
             )
 
             # 基本验证：至少有一个 chunk 和一些内容
@@ -411,6 +427,14 @@ class ConfigDrivenTestRunner:
             return True
 
         except Exception as e:
+            # 构建 tested_param 参数（如果配置了 test_param）
+            tested_param = None
+            if test.test_param:
+                # 新的格式：test_param 是 {"name": "param.name", "value": "param_value"}
+                param_name = test.test_param.get("name")
+                param_value = test.test_param.get("value")
+                tested_param = (param_name, param_value)
+
             # 记录失败
             self.collector.record_test(
                 test_name=test.name,
@@ -418,16 +442,9 @@ class ConfigDrivenTestRunner:
                 status_code=500,
                 response_body=None,
                 error=str(e),
+                tested_param=tested_param,
+                is_baseline=test.is_baseline,
             )
-
-            # 记录不支持的参数
-            if test.unsupported_param:
-                self.collector.add_unsupported_param(
-                    param_name=test.unsupported_param,
-                    param_value=_get_nested(params, test.unsupported_param),
-                    test_name=test.name,
-                    reason=f"Stream error: {e}",
-                )
 
             return False
 

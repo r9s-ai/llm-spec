@@ -1,51 +1,55 @@
 {
-  // OpenAI Audio Translations API 测试配置 - 严格对应 test_audio_translations.py
-  "provider": "openai",
-  "endpoint": "/v1/audio/translations",
-  "base_params": {
-    "model": "whisper-1"
+  provider: "openai",
+  endpoint: "/v1/audio/translations",
+  base_params: {
+    model: "whisper-1",
   },
-  "response_schema": "openai.AudioTranslationResponse",
-  "tests": [
-    // 阶段 1: 基线
+  response_schema: "openai.AudioTranslationResponse",
+  tests: [
     {
-      "name": "test_baseline",
-      "description": "测试基线：仅必需参数",
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
-      }
+      name: "test_baseline",
+      description: "测试基线：仅必需参数",
+      files: {
+        file: "test_assets/audio/hello_en.mp3",
+      },
+      is_baseline: true,
     },
-    // 阶段 2: 参数测试
     {
-      "name": "test_response_format_variants",
-      "description": "测试 response_format 参数",
-      "parameterize": {
-        "response_format": [
+      name: "test_response_format_variants",
+      description: "测试 response_format 参数",
+      parameterize: {
+        response_format: [
           "json",
           "text",
           "srt",
           "verbose_json",
-          "vtt"
-        ]
+          "vtt",
+        ],
       },
-      "params": {
-        "response_format": "$response_format"
+      params: {
+        response_format: "$response_format",
       },
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
+      files: {
+        file: "test_assets/audio/hello_en.mp3",
       },
-      "unsupported_param": "response_format"
+      test_param: {
+        name: "response_format",
+        value: "$response_format",
+      },
     },
     {
-      "name": "test_prompt",
-      "description": "测试 prompt 参数",
-      "params": {
-        "prompt": "Translate this into French."
+      name: "test_prompt",
+      description: "测试 prompt 参数",
+      params: {
+        prompt: "Translate this into French.",
       },
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
+      files: {
+        file: "test_assets/audio/hello_en.mp3",
       },
-      "unsupported_param": "prompt"
-    }
-  ]
+      test_param: {
+        name: "prompt",
+        value: "Translate this into French.",
+      },
+    },
+  ],
 }

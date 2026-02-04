@@ -1,59 +1,78 @@
 {
-  "suite_name": "Gemini Embed Content",
-  "provider": "gemini",
-  "endpoint": "/v1beta/models/text-embedding-005:embedContent",
-  "method": "POST",
-  "base_params": {
-    "content": {"parts": [{"text": "Hello, world!"}]}
+  suite_name: "Gemini Embed Content",
+  provider: "gemini",
+  endpoint: "/v1beta/models/text-embedding-005:embedContent",
+  method: "POST",
+  base_params: {
+    content: {
+      parts: [
+        {
+          text: "Hello, world!",
+        },
+      ],
+    },
   },
-  "response_schema": "gemini.EmbedContentResponse",
-  "tests": [
+  response_schema: "gemini.EmbedContentResponse",
+  tests: [
     {
-      "name": "test_baseline",
-      "description": "Baseline embed content test",
-      "params": {}
+      name: "test_baseline",
+      description: "Baseline embed content test",
+      params: {},
+      is_baseline: true,
     },
     {
-      "name": "test_param_task_type_retrieval_query",
-      "description": "Test taskType RETRIEVAL_QUERY",
-      "params": {
-        "taskType": "RETRIEVAL_QUERY"
+      name: "test_param_task_type_retrieval_query",
+      description: "Test taskType RETRIEVAL_QUERY",
+      params: {
+        taskType: "RETRIEVAL_QUERY",
       },
-      "unsupported_param": "taskType"
+      test_param: {
+        name: "taskType",
+        value: "RETRIEVAL_QUERY",
+      },
     },
     {
-      "name": "test_param_task_type_retrieval_document",
-      "description": "Test taskType RETRIEVAL_DOCUMENT",
-      "params": {
-        "taskType": "RETRIEVAL_DOCUMENT",
-        "title": "Sample document title"
+      name: "test_param_task_type_retrieval_document",
+      description: "Test taskType RETRIEVAL_DOCUMENT",
+      params: {
+        taskType: "RETRIEVAL_DOCUMENT",
+        title: "Sample document title",
       },
-      "unsupported_param": "taskType"
+      test_param: {
+        name: "taskType",
+        value: "RETRIEVAL_DOCUMENT",
+      },
     },
     {
-      "name": "test_task_type_variants",
-      "description": "Test various task types",
-      "params": {
-        "taskType": "$taskType"
+      name: "test_task_type_variants",
+      description: "Test various task types",
+      params: {
+        taskType: "$taskType",
       },
-      "parameterize": {
-        "taskType": [
-            "SEMANTIC_SIMILARITY",
-            "CLASSIFICATION",
-            "CLUSTERING",
-            "QUESTION_ANSWERING",
-            "FACT_VERIFICATION"
-        ]
+      parameterize: {
+        taskType: [
+          "SEMANTIC_SIMILARITY",
+          "CLASSIFICATION",
+          "CLUSTERING",
+          "QUESTION_ANSWERING",
+          "FACT_VERIFICATION",
+        ],
       },
-      "unsupported_param": "taskType"
+      test_param: {
+        name: "taskType",
+        value: "$taskType",
+      },
     },
     {
-      "name": "test_param_output_dimensionality",
-      "description": "Test outputDimensionality parameter",
-      "params": {
-        "outputDimensionality": 256
+      name: "test_param_output_dimensionality",
+      description: "Test outputDimensionality parameter",
+      params: {
+        outputDimensionality: 256,
       },
-      "unsupported_param": "outputDimensionality"
-    }
-  ]
+      test_param: {
+        name: "outputDimensionality",
+        value: 256,
+      },
+    },
+  ],
 }

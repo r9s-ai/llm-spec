@@ -12,9 +12,14 @@ class UnsupportedParameter(TypedDict, total=False):
     value: Any
 
 
+class SupportedParameter(TypedDict):
+    parameter: str
+
+
 class ReportParameters(TypedDict, total=False):
     tested: list[str]
     untested: list[str]
+    supported: list[SupportedParameter]
     unsupported: list[UnsupportedParameter]
 
 

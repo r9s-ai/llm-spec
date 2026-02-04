@@ -142,15 +142,8 @@ class TestAudioTranslations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("response_format", response_format),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="response_format",
-                param_value=response_format,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -177,15 +170,8 @@ class TestAudioTranslations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("prompt", params["prompt"]),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="prompt",
-                param_value=params["prompt"],
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid
@@ -209,15 +195,8 @@ class TestAudioTranslations:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("temperature", 0.5),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="temperature",
-                param_value=0.5,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300
         assert result.is_valid

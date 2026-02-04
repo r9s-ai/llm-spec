@@ -1,63 +1,161 @@
 {
-  "suite_name": "Gemini Count Tokens",
-  "provider": "gemini",
-  "endpoint": "/v1beta/models/gemini-3-flash-preview:countTokens",
-  "method": "POST",
-  "base_params": {
-    "contents": [{"parts": [{"text": "Hello, world!"}]}]
+  suite_name: "Gemini Count Tokens",
+  provider: "gemini",
+  endpoint: "/v1beta/models/gemini-3-flash-preview:countTokens",
+  method: "POST",
+  base_params: {
+    contents: [
+      {
+        parts: [
+          {
+            text: "Hello, world!",
+          },
+        ],
+      },
+    ],
   },
-  "response_schema": "gemini.CountTokensResponse",
-  "tests": [
+  response_schema: "gemini.CountTokensResponse",
+  tests: [
     {
-      "name": "test_baseline",
-      "description": "Baseline token count",
-      "params": {}
+      name: "test_baseline",
+      description: "Baseline token count",
+      params: {},
+      is_baseline: true,
     },
     {
-      "name": "test_multi_turn_conversation",
-      "description": "Multi-turn token count",
-      "params": {
-        "contents": [
-            {"role": "user", "parts": [{"text": "Hello"}]},
-            {"role": "model", "parts": [{"text": "Hi there! How can I help you?"}]},
-            {"role": "user", "parts": [{"text": "Tell me about Gemini API"}]}
-        ]
+      name: "test_multi_turn_conversation",
+      description: "Multi-turn token count",
+      params: {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: "Hello",
+              },
+            ],
+          },
+          {
+            role: "model",
+            parts: [
+              {
+                text: "Hi there! How can I help you?",
+              },
+            ],
+          },
+          {
+            role: "user",
+            parts: [
+              {
+                text: "Tell me about Gemini API",
+              },
+            ],
+          },
+        ],
       },
-      "unsupported_param": "contents"
-    },
-    {
-      "name": "test_with_system_instruction",
-      "description": "System instruction token count",
-      "params": {
-        "systemInstruction": {
-            "parts": [{"text": "You are a helpful assistant."}]
-        }
+      test_param: {
+        name: "contents",
+        value: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: "Hello",
+              },
+            ],
+          },
+          {
+            role: "model",
+            parts: [
+              {
+                text: "Hi there! How can I help you?",
+              },
+            ],
+          },
+          {
+            role: "user",
+            parts: [
+              {
+                text: "Tell me about Gemini API",
+              },
+            ],
+          },
+        ],
       },
-      "unsupported_param": "systemInstruction"
     },
     {
-      "name": "test_with_tools",
-      "description": "Tools token count",
-      "params": {
-        "tools": [
+      name: "test_with_system_instruction",
+      description: "System instruction token count",
+      params: {
+        systemInstruction: {
+          parts: [
             {
-                "functionDeclarations": [
-                    {
-                        "name": "get_weather",
-                        "description": "Get weather",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "location": {"type": "string"}
-                            },
-                            "required": ["location"]
-                        }
-                    }
-                ]
-            }
-        ]
+              text: "You are a helpful assistant.",
+            },
+          ],
+        },
       },
-      "unsupported_param": "tools"
-    }
-  ]
+      test_param: {
+        name: "systemInstruction",
+        value: {
+          parts: [
+            {
+              text: "You are a helpful assistant.",
+            },
+          ],
+        },
+      },
+    },
+    {
+      name: "test_with_tools",
+      description: "Tools token count",
+      params: {
+        tools: [
+          {
+            functionDeclarations: [
+              {
+                name: "get_weather",
+                description: "Get weather",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    location: {
+                      type: "string",
+                    },
+                  },
+                  required: [
+                    "location",
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+      test_param: {
+        name: "tools",
+        value: [
+          {
+            functionDeclarations: [
+              {
+                name: "get_weather",
+                description: "Get weather",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    location: {
+                      type: "string",
+                    },
+                  },
+                  required: [
+                    "location",
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
 }

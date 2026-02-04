@@ -59,7 +59,7 @@ class TestChatCompletions:
         # 验证响应
         result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
-        # 记录测试结果
+        # 记录测试结果（自动处理参数支持情况）
         self.collector.record_test(
             test_name=test_name,
             params=self.BASE_PARAMS,
@@ -68,17 +68,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            is_baseline=True,  # 标记为 baseline 测试
         )
-
-        # baseline 失败也需要记录：把必需参数标为不支持（无对照基线可用）
-        if not (200 <= status_code < 300):
-            for k in ("model", "messages"):
-                self.collector.add_unsupported_param(
-                    param_name=k,
-                    param_value=self.BASE_PARAMS.get(k),
-                    test_name=test_name,
-                    reason=f"HTTP {status_code}: {response_body}",
-                )
 
         # 断言：测试应该通过
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
@@ -100,7 +91,7 @@ class TestChatCompletions:
         # 验证响应
         result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
-        # 记录测试结果
+        # 记录测试结果（自动处理参数支持情况）
         self.collector.record_test(
             test_name=test_name,
             params=params,
@@ -109,16 +100,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("temperature", 0.7),  # 指定测试的参数
         )
-
-        # 如果失败，记录不支持的参数
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="temperature",
-                param_value=0.7,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         # 断言
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
@@ -140,7 +123,7 @@ class TestChatCompletions:
         # 验证响应
         result = ResponseValidator.validate_response(response, ChatCompletionResponse)
 
-        # 记录测试结果
+        # 记录测试结果（自动处理参数支持情况）
         self.collector.record_test(
             test_name=test_name,
             params=params,
@@ -149,16 +132,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("max_tokens", 100),
         )
-
-        # 如果失败，记录不支持的参数
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="max_tokens",
-                param_value=100,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         # 断言
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
@@ -229,15 +204,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("top_p", 0.9),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="top_p",
-                param_value=0.9,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -264,15 +232,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("n", 2),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="n",
-                param_value=2,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -299,15 +260,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("stop", "\n"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="stop",
-                param_value="\n",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -334,15 +288,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("stop", ["\n", "END"]),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="stop",
-                param_value=["\n", "END"],
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -369,15 +316,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("frequency_penalty", 0.5),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="frequency_penalty",
-                param_value=0.5,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -404,15 +344,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("presence_penalty", 0.5),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="presence_penalty",
-                param_value=0.5,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -439,15 +372,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("seed", 12345),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="seed",
-                param_value=12345,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -474,15 +400,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("max_completion_tokens", 100),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="max_completion_tokens",
-                param_value=100,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -509,15 +428,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("user", "user-123"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="user",
-                param_value="user-123",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -548,15 +460,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("response_format", {"type": "text"}),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="response_format",
-                param_value={"type": "text"},
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -587,15 +492,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("response_format", {"type": "json_object"}),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="response_format",
-                param_value={"type": "json_object"},
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -639,15 +537,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("response_format", {"type": "json_schema"}),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="response_format",
-                param_value={"type": "json_schema"},
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -697,15 +588,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("tools", "function_call"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="tools",
-                param_value="function_call",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -751,22 +635,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("tool_choice", tool_choice),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="tool_choice",
-                param_value=tool_choice,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
-            # tool_choice 测试依赖 tools
-            self.collector.add_unsupported_param(
-                param_name="tools",
-                param_value="function_call",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -807,22 +677,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("parallel_tool_calls", True),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="parallel_tool_calls",
-                param_value=True,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
-            # parallel_tool_calls 测试依赖 tools
-            self.collector.add_unsupported_param(
-                param_name="tools",
-                param_value="function_call",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -853,15 +709,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("logprobs", True),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="logprobs",
-                param_value=True,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -889,22 +738,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("top_logprobs", top_logprobs),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="top_logprobs",
-                param_value=top_logprobs,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
-            # top_logprobs 依赖 logprobs 开关
-            self.collector.add_unsupported_param(
-                param_name="logprobs",
-                param_value=True,
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -1165,15 +1000,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("logit_bias", {"31373": -100}),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="logit_bias",
-                param_value={"31373": 100},
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"
@@ -1200,15 +1028,8 @@ class TestChatCompletions:
             error=result.error_message if not result.is_valid else None,
             missing_fields=result.missing_fields,
             expected_fields=result.expected_fields,
+            tested_param=("service_tier", "auto"),
         )
-
-        if not (200 <= status_code < 300):
-            self.collector.add_unsupported_param(
-                param_name="service_tier",
-                param_value="auto",
-                test_name=test_name,
-                reason=f"HTTP {status_code}: {response_body}",
-            )
 
         assert 200 <= status_code < 300, f"HTTP {status_code}: {response_body}"
         assert result.is_valid, f"响应验证失败: {result.error_message}"

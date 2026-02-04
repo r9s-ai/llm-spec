@@ -1,160 +1,198 @@
 {
-  // OpenAI Audio Transcriptions API 测试配置 - 严格对应 test_audio_transcriptions.py
-  "provider": "openai",
-  "endpoint": "/v1/audio/transcriptions",
-  "base_params": {
-    "model": "whisper-1"
+  provider: "openai",
+  endpoint: "/v1/audio/transcriptions",
+  base_params: {
+    model: "whisper-1",
   },
-  "response_schema": "openai.AudioTranscriptionResponse",
-  "tests": [
-    // 阶段 1: 基线
+  response_schema: "openai.AudioTranscriptionResponse",
+  tests: [
     {
-      "name": "test_baseline",
-      "description": "测试基线：仅必需参数",
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
-      }
-    },
-    // 阶段 2: 参数测试
-    {
-      "name": "test_param_language",
-      "description": "测试 language 参数",
-      "params": {
-        "language": "en"
+      name: "test_baseline",
+      description: "测试基线：仅必需参数",
+      files: {
+        file: "test_assets/audio/hello_en.mp3",
       },
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
-      },
-      "unsupported_param": "language"
+      is_baseline: true,
     },
     {
-      "name": "test_param_temperature",
-      "description": "测试 temperature 参数",
-      "params": {
-        "temperature": 0.0
+      name: "test_param_language",
+      description: "测试 language 参数",
+      params: {
+        language: "en",
       },
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
+      files: {
+        file: "test_assets/audio/hello_en.mp3",
       },
-      "unsupported_param": "temperature"
+      test_param: {
+        name: "language",
+        value: "en",
+      },
     },
     {
-      "name": "test_response_format_variants",
-      "description": "测试 response_format 参数（常见格式）",
-      "parameterize": {
-        "response_format": [
+      name: "test_param_temperature",
+      description: "测试 temperature 参数",
+      params: {
+        temperature: 0.0,
+      },
+      files: {
+        file: "test_assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "temperature",
+        value: 0.0,
+      },
+    },
+    {
+      name: "test_response_format_variants",
+      description: "测试 response_format 参数（常见格式）",
+      parameterize: {
+        response_format: [
           "json",
-          "text"
-        ]
-      },
-      "params": {
-        "model": "gpt-4o-mini-transcribe",
-        "response_format": "$response_format"
-      },
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
-      },
-      "unsupported_param": "response_format"
-    },
-    {
-      "name": "test_prompt",
-      "description": "测试 prompt 参数",
-      "params": {
-        "model": "gpt-4o-mini-transcribe",
-        "prompt": "Please transcribe in a friendly style."
-      },
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
-      },
-      "unsupported_param": "prompt"
-    },
-    {
-      "name": "test_chunking_strategy_auto",
-      "description": "测试 chunking_strategy = auto",
-      "params": {
-        "model": "gpt-4o-mini-transcribe",
-        "chunking_strategy": "auto"
-      },
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
-      },
-      "unsupported_param": "chunking_strategy"
-    },
-    {
-      "name": "test_chunking_strategy_server_vad",
-      "description": "测试 chunking_strategy = server_vad 对象",
-      "params": {
-        "model": "gpt-4o-mini-transcribe",
-        "chunking_strategy": {
-          "type": "server_vad"
-        }
-      },
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
-      },
-      "unsupported_param": "chunking_strategy"
-    },
-    {
-      "name": "test_include_logprobs",
-      "description": "测试 include=logprobs",
-      "params": {
-        "model": "gpt-4o-mini-transcribe",
-        "include": [
-          "logprobs"
+          "text",
         ],
-        "response_format": "json"
       },
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        response_format: "$response_format",
       },
-      "unsupported_param": "include"
+      files: {
+        file: "test_assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "response_format",
+        value: "$response_format",
+      },
     },
     {
-      "name": "test_known_speakers",
-      "description": "测试 known_speaker_names + known_speaker_references",
-      "params": {
-        "model": "gpt-4o-mini-transcribe",
-        "known_speaker_names": [
+      name: "test_prompt",
+      description: "测试 prompt 参数",
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        prompt: "Please transcribe in a friendly style.",
+      },
+      files: {
+        file: "test_assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "prompt",
+        value: "Please transcribe in a friendly style.",
+      },
+    },
+    {
+      name: "test_chunking_strategy_auto",
+      description: "测试 chunking_strategy = auto",
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        chunking_strategy: "auto",
+      },
+      files: {
+        file: "test_assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "chunking_strategy",
+        value: "auto",
+      },
+    },
+    {
+      name: "test_chunking_strategy_server_vad",
+      description: "测试 chunking_strategy = server_vad 对象",
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        chunking_strategy: {
+          type: "server_vad",
+        },
+      },
+      files: {
+        file: "test_assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "chunking_strategy",
+        value: {
+          type: "server_vad",
+        },
+      },
+    },
+    {
+      name: "test_include_logprobs",
+      description: "测试 include=logprobs",
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        include: [
+          "logprobs",
+        ],
+        response_format: "json",
+      },
+      files: {
+        file: "test_assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "include",
+        value: [
+          "logprobs",
+        ],
+      },
+    },
+    {
+      name: "test_known_speakers",
+      description: "测试 known_speaker_names + known_speaker_references",
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        known_speaker_names: [
           "speaker_a",
-          "speaker_b"
+          "speaker_b",
         ],
-        "known_speaker_references": [
+        known_speaker_references: [
           "data:audio/mpeg;base64,...",
-          "data:audio/mpeg;base64,..."
-        ]
+          "data:audio/mpeg;base64,...",
+        ],
       },
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
+      files: {
+        file: "test_assets/audio/hello_en.mp3",
       },
-      "unsupported_param": "known_speaker_names"
+      test_param: {
+        name: "known_speaker_names",
+        value: [
+          "speaker_a",
+          "speaker_b",
+        ],
+      },
     },
     {
-      "name": "test_timestamp_granularities",
-      "description": "测试 timestamp_granularities",
-      "params": {
-        "model": "gpt-4o-mini-transcribe",
-        "response_format": "verbose_json",
-        "timestamp_granularities": [
+      name: "test_timestamp_granularities",
+      description: "测试 timestamp_granularities",
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        response_format: "verbose_json",
+        timestamp_granularities: [
           "word",
-          "segment"
-        ]
+          "segment",
+        ],
       },
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
+      files: {
+        file: "test_assets/audio/hello_en.mp3",
       },
-      "unsupported_param": "timestamp_granularities"
+      test_param: {
+        name: "timestamp_granularities",
+        value: [
+          "word",
+          "segment",
+        ],
+      },
     },
     {
-      "name": "test_stream_flag",
-      "description": "测试 stream=true",
-      "params": {
-        "model": "gpt-4o-mini-transcribe",
-        "stream": true
+      name: "test_stream_flag",
+      description: "测试 stream=true",
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        stream: true,
       },
-      "files": {
-        "file": "test_assets/audio/hello_en.mp3"
+      files: {
+        file: "test_assets/audio/hello_en.mp3",
       },
-      "unsupported_param": "stream"
-    }
-  ]
+      test_param: {
+        name: "stream",
+        value: true,
+      },
+    },
+  ],
 }
