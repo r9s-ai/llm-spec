@@ -1,0 +1,57 @@
+# Pre-commit hooks for llm-spec
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  # Ruff - Python linter and formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.0
+    hooks:
+      # Run the linter
+      - id: ruff
+        args: [--fix]
+      # Run the formatter
+      - id: ruff-format
+
+  # Pyright - Python type checker
+  - repo: https://github.com/RobertCraigie/pyright-python
+    rev: v1.1.408
+    hooks:
+      - id: pyright
+        additional_dependencies: [
+          httpx,
+          pydantic,
+          pydantic-settings,
+          rich,
+          pillow,
+          json5,
+          pytest,
+        ]
+
+  # Local hooks for project-specific checks
+  - repo: local
+    hooks:
+      # Check that llm-spec.toml.example exists and is valid
+      - id: check-example-config
+        name: Check example config exists
+        entry: bash -c '[ -f llm-spec.example.toml ] || exit 1'
+        language: system
+        pass_filenames: false
+        always_run: true

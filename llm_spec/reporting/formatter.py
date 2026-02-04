@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from llm_spec.reporting.types import ReportData, UnsupportedParameter
+from llm_spec.reporting.types import ReportData, SupportedParameter, UnsupportedParameter
 
 
 class ParameterTableFormatter:
@@ -19,14 +19,14 @@ class ParameterTableFormatter:
 
         # 从报告中提取信息
         raw_tested = sorted(report_data.get("parameters", {}).get("tested", []))
-        
+
         # 提取明确支持的参数
-        self.supported_params: dict[str, dict] = {}
+        self.supported_params: dict[str, SupportedParameter] = {}
         for p in report_data.get("parameters", {}).get("supported", []) or []:
             key = p.get("parameter", "")
             if key:
                 self.supported_params[key] = p
-        
+
         # 注意：同一个 parameter 可能在多个测试中多次被标记为 unsupported（不同 value/原因）。
         # 这里保留“最严重/最有信息量”的那条（优先带 HTTP 错误的 reason 或更长 reason）。
         self.unsupported_params: dict[str, UnsupportedParameter] = {}
@@ -56,7 +56,6 @@ class ParameterTableFormatter:
         all_tested = self._leaf_only(raw_tested)
         self.tested_params = self._filter_tested_params(all_tested)
 
-
         # 测试统计
         test_summary = report_data.get("test_summary", {})
         self.total_tests = test_summary.get("total_tests", 0)
@@ -84,10 +83,11 @@ class ParameterTableFormatter:
             leaves.append(p)
 
         return leaves
+
     @staticmethod
     def _filter_tested_params(params: list[str]) -> list[str]:
         """过滤测试参数，只保留被明确标记为支持或不支持的参数
-        
+
         规则：
         1. 保留所有顶层参数（不包含 . 或 [ 的参数）
         2. 保留被明确标记的嵌套参数（在 supported_params 或 unsupported_params 中）
@@ -96,11 +96,11 @@ class ParameterTableFormatter:
         # 实际过滤在 generate_markdown 中根据 supported_params 和 unsupported_params 进行
         return params
 
-
     def _get_api_name(self) -> str:
         """获取 API 名称"""
         try:
             from llm_spec.reporting.api_registry import find_api_config
+
             endpoint = self.report.get("endpoint", "")
             config = find_api_config(endpoint)
             if config:
@@ -139,12 +139,17 @@ class ParameterTableFormatter:
 
         # 参数统计：只统计明确标记为支持或不支持的参数
         # 明确支持的参数（在 supported_params 中且不在 unsupported_params 中）
-        supported_count = len([p for p in self.supported_params.keys() if p not in self.unsupported_params])
+        supported_count = len(
+            [p for p in self.supported_params if p not in self.unsupported_params]
+        )
         # 明确不支持的参数
         unsupported_count = len(self.unsupported_params)
         # 只显示被明确标记为支持或不支持的参数
-        self.display_params = [p for p in self.tested_params 
-                               if p in self.supported_params or p in self.unsupported_params]
+        self.display_params = [
+            p
+            for p in self.tested_params
+            if p in self.supported_params or p in self.unsupported_params
+        ]
         total_count = len(self.display_params)
 
         lines.append("## 参数支持情况")
@@ -178,7 +183,9 @@ class ParameterTableFormatter:
         """生成简洁的 HTML 报告"""
         api_name = self._get_api_name()
         # 参数统计：只统计明确标记为支持或不支持的参数
-        supported_count = len([p for p in self.supported_params.keys() if p not in self.unsupported_params])
+        supported_count = len(
+            [p for p in self.supported_params if p not in self.unsupported_params]
+        )
         unsupported_count = len(self.unsupported_params)
         total_count = len(self.display_params)
 
@@ -285,7 +292,7 @@ class ParameterTableFormatter:
                     <div class="stat-label">失败 ❌</div>
                 </div>
             </div>
-            <p><strong>报告时间</strong>: {self.report.get('test_time', 'N/A')}</p>
+            <p><strong>报告时间</strong>: {self.report.get("test_time", "N/A")}</p>
         </div>
 
         <div class="summary">
@@ -322,7 +329,7 @@ class ParameterTableFormatter:
                     status += f" ({reason})"
             else:
                 status = '<span class="supported">✅ 支持</span>'
-                status = '<span>❓ 未知（未明确标记支持状态）</span>'
+                status = "<span>❓ 未知（未明确标记支持状态）</span>"
 
             html += f"""            <tr>
                 <td><span class="param-path">{param}</span></td>
@@ -345,7 +352,7 @@ class ParameterTableFormatter:
         """保存 Markdown 报告"""
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-        filename = f"{output_dir}/parameters.md"
+        filename = f"{output_dir}/report.md"
 
         with open(filename, "w", encoding="utf-8") as f:
             f.write(self.generate_markdown())

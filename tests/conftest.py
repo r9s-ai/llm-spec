@@ -1,19 +1,20 @@
 """Pytest fixtures for testing"""
 
-import pytest
-from pathlib import Path
 import json
 from datetime import datetime
+from pathlib import Path
 
+import pytest
+
+from llm_spec.adapters.anthropic import AnthropicAdapter
+from llm_spec.adapters.gemini import GeminiAdapter
+from llm_spec.adapters.openai import OpenAIAdapter
+from llm_spec.adapters.xai import XAIAdapter
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.client.logger import RequestLogger
 from llm_spec.config.loader import load_config
-from llm_spec.providers.anthropic import AnthropicAdapter
-from llm_spec.providers.gemini import GeminiAdapter
-from llm_spec.providers.openai import OpenAIAdapter
-from llm_spec.providers.xai import XAIAdapter
-from llm_spec.reporting.collector import ReportCollector
 from llm_spec.reporting.aggregator import AggregatedReportCollector
+from llm_spec.reporting.collector import ReportCollector
 
 
 @pytest.fixture(scope="session")
@@ -158,15 +159,15 @@ def pytest_sessionfinish(session, exitstatus):
             continue
 
         try:
-            with open(report_json, 'r', encoding='utf-8') as f:
+            with open(report_json, encoding="utf-8") as f:
                 report_data = json.load(f)
-                provider = report_data.get('provider', 'unknown')
+                provider = report_data.get("provider", "unknown")
 
                 if provider not in provider_reports:
                     provider_reports[provider] = []
 
                 provider_reports[provider].append(report_json)
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             continue
 
     # 处理每个 provider 的报告
@@ -192,23 +193,23 @@ def pytest_sessionfinish(session, exitstatus):
 def _print_single_report_info(report_json: Path) -> None:
     """打印单个报告信息"""
     try:
-        with open(report_json, 'r', encoding='utf-8') as f:
+        with open(report_json, encoding="utf-8") as f:
             report = json.load(f)
 
-        endpoint = report.get('endpoint', 'unknown')
-        provider = report.get('provider', 'unknown')
-        summary = report.get('test_summary', {})
+        endpoint = report.get("endpoint", "unknown")
+        provider = report.get("provider", "unknown")
+        summary = report.get("test_summary", {})
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"✅ {provider.upper()} - {endpoint} 报告已生成:")
         print(f"  - 总测试数: {summary.get('total_tests', 0)}")
         print(f"  - 通过: {summary.get('passed', 0)} ✅")
         print(f"  - 失败: {summary.get('failed', 0)} ❌")
         print(f"  - 报告路径: {report_json.parent.name}/")
-        print(f"    - JSON:     report.json")
-        print(f"    - Markdown: parameters.md")
-        print(f"    - HTML:     report.html")
-        print(f"{'='*60}\n")
+        print("    - JSON:     report.json")
+        print("    - Markdown: report.md")
+        print("    - HTML:     report.html")
+        print(f"{'=' * 60}\n")
     except Exception as e:
         print(f"⚠️  读取报告失败: {e}")
 
@@ -216,36 +217,36 @@ def _print_single_report_info(report_json: Path) -> None:
 def _print_aggregated_report_info(provider: str, report_files: list, output_paths: dict) -> None:
     """打印聚合报告信息"""
     try:
-        with open(output_paths['json'], 'r', encoding='utf-8') as f:
+        with open(output_paths["json"], encoding="utf-8") as f:
             aggregated = json.load(f)
 
-        summary = aggregated.get('summary', {})
+        summary = aggregated.get("summary", {})
 
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print(f"📊 {provider.upper()} 聚合报告已生成 (汇总 {len(report_files)} 个 endpoint)")
-        print(f"{'='*70}")
-        print(f"")
-        print(f"📈 统计摘要:")
+        print(f"{'=' * 70}")
+        print("")
+        print("📈 统计摘要:")
         print(f"  - 总测试数: {summary.get('test_summary', {}).get('total_tests', 0)}")
         print(f"  - 通过: {summary.get('test_summary', {}).get('passed', 0)} ✅")
         print(f"  - 失败: {summary.get('test_summary', {}).get('failed', 0)} ❌")
         print(f"  - 通过率: {summary.get('test_summary', {}).get('pass_rate', 'N/A')}")
-        print(f"")
+        print("")
         print(f"🔗 Endpoint ({len(report_files)}):")
-        for endpoint in summary.get('endpoints', []):
+        for endpoint in summary.get("endpoints", []):
             print(f"  - {endpoint}")
-        print(f"")
-        print(f"📋 参数统计:")
-        params = summary.get('parameters', {})
+        print("")
+        print("📋 参数统计:")
+        params = summary.get("parameters", {})
         print(f"  - 总参数数: {params.get('total_unique', 0)}")
         print(f"  - 完全支持: {params.get('fully_supported', 0)}")
         print(f"  - 部分支持: {params.get('partially_supported', 0)}")
         print(f"  - 完全不支持: {params.get('unsupported', 0)}")
-        print(f"")
-        print(f"📄 生成的文件:")
+        print("")
+        print("📄 生成的文件:")
         print(f"  - JSON:     {output_paths['json']}")
         print(f"  - Markdown: {output_paths['markdown']}")
         print(f"  - HTML:     {output_paths['html']}")
-        print(f"{'='*70}\n")
+        print(f"{'=' * 70}\n")
     except Exception as e:
         print(f"⚠️  打印聚合报告信息失败: {e}")

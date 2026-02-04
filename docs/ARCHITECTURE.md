@@ -9,30 +9,50 @@ LLM-Spec 是一个规范驱动的 LLM API 厂商兼容性测试工具，用于�
 ```
 llm-spec/
 ├── llm_spec/                      # 核心代码
-│   ├── ...                        # (省略 client, providers, validation, reporting)
+│   ├── client/                    # HTTP 客户端层
+│   │   ├── base_client.py         # HTTP 客户端抽象接口
+│   │   ├── http_client.py         # httpx 实现
+│   │   └── logger.py              # 请求日志记录器
+│   ├── config/                    # 配置管理
+│   │   └── loader.py              # llm-spec.toml 加载器
+│   ├── adapters/                  # Provider 适配器层
+│   │   ├── base.py                # Adapter 基类
+│   │   ├── openai.py              # OpenAI 适配器
+│   │   ├── anthropic.py           # Anthropic 适配器
+│   │   ├── gemini.py              # Gemini 适配器
+│   │   └── xai.py                 # xAI 适配器
+│   ├── runners/                   # 测试执行核心逻辑
+│   │   ├── base.py                # ConfigDrivenTestRunner (核心逻辑)
+│   │   ├── parsers.py             # 响应解析器
+│   │   └── schema_registry.py     # Schema 注册中心
+│   ├── validation/                # 响应验证层
+│   │   ├── validator.py           # Pydantic 响应验证器
+│   │   └── schemas/               # 各厂商响应 Schema
+│   │       ├── openai/
+│   │       ├── anthropic/
+│   │       ├── gemini/
+│   │       └── xai/
+│   └── reporting/                 # 报告生成层
+│       ├── collector.py           # 测试结果收集器
+│       ├── formatter.py           # 参数表格格式化器
+│       ├── aggregator.py          # 聚合报告生成器
+│       └── types.py               # 报告数据类型
 ├── tests/                         # 测试系统
 │   ├── test_from_config.py        # 统一测试入口（配置驱动）
 │   ├── conftest.py                # Pytest 全局 fixtures
-│   ├── runners/                   # 测试执行核心逻辑
-│   │   ├── base.py                # ConfigDrivenTestRunner (核心逻辑)
-│   │   └── schema_registry.py     # Schema 注册中心
 │   ├── testcases/                 # 测试用例配置 (JSON5)
 │   │   ├── openai/                # OpenAI 系列配置
 │   │   ├── gemini/                # Gemini 系列配置
 │   │   ├── anthropic/             # Anthropic 系列配置
 │   │   └── xai/                   # xAI 系列配置
-│   ├── legacy/                    # 旧版纯 Python 测试 (保留参考)
-│   │   ├── openai/
-│   │   └── gemini/
-├── test_assets/                   # 测试资源文件 (音频, 图片)
+│   └── test_assets/               # 测试资源文件 (音频, 图片)
 ├── reports/                       # 生成的报告目录
-```
-├── temp/                          # 临时文件（按时间戳分目录）
-├── reports/                       # 生成的报告目录
-│   └── {provider}_{endpoint}_{timestamp}/  # 每个测试一个子目录
-│       ├── report.json            # JSON 格式报告
-│       ├── parameters.md          # Markdown 参数表格
-│       └── report.html            # HTML 格式报告
+│   └── {run_id}/                  # 按运行时间分目录
+│       ├── {provider}_{endpoint}_{timestamp}/
+│       │   ├── report.json        # JSON 格式报告
+│       │   ├── report.md          # Markdown 参数表格
+│       │   └── report.html        # HTML 格式报告
+│       └── {provider}_aggregated_{timestamp}/  # 聚合报告
 ├── logs/                          # 应用日志
 ├── llm-spec.toml                  # 配置文件
 └── pyproject.toml                 # 项目元数据
@@ -121,7 +141,7 @@ class ParameterTableFormatter:
 reports/
 └── openai_v1_chat_completions_20260129_191805/  # provider_endpoint_timestamp
     ├── report.json              # JSON 格式（原始数据）
-    ├── parameters.md            # Markdown 格式（参数表格）
+    ├── report.md                # Markdown 格式（参数表格）
     └── report.html              # HTML 格式（美观展示）
 ```
 
@@ -154,17 +174,14 @@ reports/
 
 👉 **[配置驱动测试指南 (CONFIG_DRIVEN_TESTING.md)](CONFIG_DRIVEN_TESTING.md)**
 
-### 旧版测试 (Legacy)
-原有的部分手写 Python 测试已移至 `tests/legacy/` 目录，仅供逻辑参考，不再作为主要的测试维护手段。
 
----
 
 ## 报告格式说明
 
 生成的报告包含三种格式，详细记录了参数覆盖率和厂商兼容性：
 
 1. **JSON 报告 (report.json)**：包含所有原始数据。
-2. **Markdown 概览 (parameters.md)**：直观的参数支持状态表格。
+2. **Markdown 概览 (report.md)**：直观的参数支持状态表格。
 3. **HTML 报告 (report.html)**：美观的交互式展现。
 
 ---
@@ -181,4 +198,3 @@ MIT
 - [ ] 实现Web UI查看报告
 
 ---
-

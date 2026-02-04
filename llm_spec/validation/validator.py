@@ -6,10 +6,9 @@ Validator 负责从 httpx.Response 解析 JSON，并基于 Pydantic schema 做�
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Type, Union, get_args, get_origin
+from typing import Any, Union, get_args, get_origin
 
 import httpx
-
 from pydantic import BaseModel, ValidationError
 
 from llm_spec.types import JSONValue
@@ -28,9 +27,9 @@ class ResponseValidator:
 
     @staticmethod
     def _extract_all_fields(
-        schema_class: Type[BaseModel],
+        schema_class: type[BaseModel],
         prefix: str = "",
-        visited: set[Type[BaseModel]] | None = None,
+        visited: set[type[BaseModel]] | None = None,
     ) -> list[str]:
         """递归提取 Pydantic schema 的所有字段路径
 
@@ -64,11 +63,11 @@ class ResponseValidator:
             # 处理 Optional[T] / T | None -> 提取 T
             # 在 Python 3.10+, T | None 创建 types.UnionType
             # get_origin() 会返回 types.UnionType 或 Union
-            if origin is Union or (origin is not None and str(origin) == "<class 'types.UnionType'>"):
+            if origin is Union or (
+                origin is not None and str(origin) == "<class 'types.UnionType'>"
+            ):
                 # 过滤掉 NoneType，获取实际类型
-                actual_types = [
-                    t for t in get_args(field_type) if t is not type(None)
-                ]
+                actual_types = [t for t in get_args(field_type) if t is not type(None)]
                 if actual_types:
                     field_type = actual_types[0]
                     origin = get_origin(field_type)  # 重新获取 origin
@@ -94,7 +93,7 @@ class ResponseValidator:
         return fields
 
     @staticmethod
-    def validate_json(data: JSONValue, schema_class: Type[BaseModel]) -> ValidationResult:
+    def validate_json(data: JSONValue, schema_class: type[BaseModel]) -> ValidationResult:
         """验证响应数据
 
         Args:
@@ -134,7 +133,9 @@ class ResponseValidator:
             return ValidationResult(False, error_message, missing_fields, expected_fields)
 
     @staticmethod
-    def validate_response(response: httpx.Response, schema_class: Type[BaseModel]) -> ValidationResult:
+    def validate_response(
+        response: httpx.Response, schema_class: type[BaseModel]
+    ) -> ValidationResult:
         """从 httpx.Response 解析 JSON 并校验。"""
         try:
             data: JSONValue = response.json()
@@ -151,6 +152,8 @@ class ResponseValidator:
 
     # Backward-compatible API (older call sites pass already-parsed dict)
     @staticmethod
-    def validate(data: dict[str, Any], schema_class: Type[BaseModel]) -> tuple[bool, str | None, list[str], list[str]]:
+    def validate(
+        data: dict[str, Any], schema_class: type[BaseModel]
+    ) -> tuple[bool, str | None, list[str], list[str]]:
         result = ResponseValidator.validate_json(data, schema_class)
         return result.is_valid, result.error_message, result.missing_fields, result.expected_fields

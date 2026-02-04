@@ -7,4 +7,3 @@
   "include": ["llm_spec", "tests"],
   "exclude": ["**/__pycache__", "temp", "logs", "reports", ".venv"]
 }
-

@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 # 导入 Content 类型（embedContent 使用相同的 Content 结构）
 from llm_spec.validation.schemas.gemini.generate_content import Content
 
-
 TaskType = Literal[
     "TASK_TYPE_UNSPECIFIED",
     "RETRIEVAL_QUERY",

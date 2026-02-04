@@ -2,8 +2,7 @@
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel
 
 # ============================================================================
 # 工具调用相关模型 (Tool Calls)

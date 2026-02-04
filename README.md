@@ -7,13 +7,13 @@
 - **参数支持情况探测**：在基线请求成功的前提下，逐个引入参数/参数值，定位“不支持”的精确原因（通常是 HTTP 4xx/5xx 或响应校验失败）。
 - **响应格式验证**：为不同厂商/路由提供响应 schema，输出缺失字段列表与字段级错误定位。
 - **报告输出**：
-  - 单 endpoint：`report.json` / `parameters.md` / `report.html`
+  - 单 endpoint：`report.json` / `report.md` / `report.html`
   - 多 endpoint（同一厂商目录）：自动生成 `*_aggregated_*` 聚合报告（JSON/MD/HTML）
 - **结构化请求日志**：可选记录请求/响应（支持截断，避免巨大 body）。
 
 ## 当前支持的厂商与路由
 
-项目内置了以下 provider 适配与测试用例（配置文件位于 `tests/testcases/`）：
+项目内置了以下 provider 适配（测试用例配置位于 `tests/testcases/`）：
 
 ### OpenAI
 
@@ -122,7 +122,7 @@ timeout = 30.0
 
 ## 运行方式
 
-项目现在主要通过 **配置驱动** 的方式运行测试。所有测试用例定义在 `tests/testcases/` 目录下的 JSON5 文件中。
+项目采用 **配置驱动** 的方式运行测试。所有测试用例定义在 `tests/testcases/` 目录下的 JSON5 文件中，无需编写 Python 测试代码。
 
 ### 运行全部配置驱动测试
 
@@ -171,7 +171,7 @@ ls -lt reports | head
 reports/20260130_141530/
   openai_v1_chat_completions_20260130_141531/
     report.json
-    parameters.md
+    report.md
     report.html
   openai_aggregated_20260130_141620/
     report.json
@@ -190,7 +190,7 @@ reports/20260130_141530/
 
 ```bash
 cat reports/<run_id>/openai_v1_responses_*/report.json
-cat reports/<run_id>/openai_v1_responses_*/parameters.md
+cat reports/<run_id>/openai_v1_responses_*/report.md
 ```
 
 ## 文档 (Documentation)

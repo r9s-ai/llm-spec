@@ -66,8 +66,4 @@ def find_api_config(endpoint: str) -> dict | None:
 
 def get_all_enabled_apis() -> list[str]:
     """获取所有已启用的 API"""
-    return [
-        key
-        for key, config in API_PARAMETER_CONFIGS.items()
-        if config.get("enabled", False)
-    ]
+    return [key for key, config in API_PARAMETER_CONFIGS.items() if config.get("enabled", False)]

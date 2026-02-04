@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Type
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
 # 延迟导入，避免循环依赖
-_REGISTRY: dict[str, Type["BaseModel"]] = {}
+_REGISTRY: dict[str, type[BaseModel]] = {}
 _INITIALIZED = False
 
 
@@ -19,24 +19,31 @@ def _init_registry() -> None:
         return
 
     # 导入所有 schema
-    from llm_spec.validation.schemas.openai.chat import (
-        ChatCompletionResponse,
-        ChatCompletionChunkResponse,
-    )
-    from llm_spec.validation.schemas.gemini import (
-        GenerateContentResponse,
-    )
     from llm_spec.validation.schemas.anthropic import (
         MessagesResponse,
     )
+    from llm_spec.validation.schemas.gemini import (
+        BatchCreateResponse,
+        CountTokensResponse,
+        EmbedContentResponse,
+        GenerateContentResponse,
+    )
+    from llm_spec.validation.schemas.openai.audio import (
+        AudioTranscriptionResponse,
+        AudioTranslationResponse,
+    )
+    from llm_spec.validation.schemas.openai.chat import (
+        ChatCompletionChunkResponse,
+        ChatCompletionResponse,
+    )
+    from llm_spec.validation.schemas.openai.embeddings import (
+        EmbeddingResponse as OpenAIEmbeddingResponse,
+    )
+    from llm_spec.validation.schemas.openai.images import ImageResponse
+    from llm_spec.validation.schemas.openai.responses import ResponseObject
     from llm_spec.validation.schemas.xai import (
         ChatCompletionResponse as XAIChatResponse,
     )
-    from llm_spec.validation.schemas.openai.responses import ResponseObject
-    from llm_spec.validation.schemas.openai.embeddings import EmbeddingResponse as OpenAIEmbeddingResponse
-    from llm_spec.validation.schemas.openai.audio import AudioTranscriptionResponse, AudioTranslationResponse
-    from llm_spec.validation.schemas.openai.images import ImageResponse
-    from llm_spec.validation.schemas.gemini import GenerateContentResponse, EmbedContentResponse, BatchCreateResponse, CountTokensResponse
 
     # 注册 OpenAI schemas
     _REGISTRY["openai.ChatCompletionResponse"] = ChatCompletionResponse
@@ -60,11 +67,10 @@ def _init_registry() -> None:
     # 注册 xAI schemas
     _REGISTRY["xai.ChatCompletionResponse"] = XAIChatResponse
 
-
     _INITIALIZED = True
 
 
-def get_schema(name: str | None) -> Type["BaseModel"] | None:
+def get_schema(name: str | None) -> type[BaseModel] | None:
     """获取 schema 类
 
     Args:
@@ -80,7 +86,7 @@ def get_schema(name: str | None) -> Type["BaseModel"] | None:
     return _REGISTRY.get(name)
 
 
-def register_schema(name: str, schema_class: Type["BaseModel"]) -> None:
+def register_schema(name: str, schema_class: type[BaseModel]) -> None:
     """注册新的 schema
 
     Args:

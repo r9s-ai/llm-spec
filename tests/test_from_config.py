@@ -17,12 +17,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from llm_spec.reporting.collector import ReportCollector
-
 from llm_spec.runners import ConfigDrivenTestRunner, SpecTestCase, SpecTestSuite, load_test_suite
 
 if TYPE_CHECKING:
@@ -160,9 +159,9 @@ class TestGeminiFromConfig:
 def finalize_config_reports(request: pytest.FixtureRequest):
     """Session 结束时生成所有报告"""
     yield
-    
+
     output_dir = getattr(request.config, "run_reports_dir", "./reports")
-    
+
     if not _COLLECTORS:
         return
 

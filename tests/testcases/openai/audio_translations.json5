@@ -10,7 +10,7 @@
       name: "test_baseline",
       description: "测试基线：仅必需参数",
       files: {
-        file: "test_assets/audio/hello_en.mp3",
+        file: "tests/test_assets/audio/hello_en.mp3",
       },
       is_baseline: true,
     },
@@ -30,7 +30,7 @@
         response_format: "$response_format",
       },
       files: {
-        file: "test_assets/audio/hello_en.mp3",
+        file: "tests/test_assets/audio/hello_en.mp3",
       },
       test_param: {
         name: "response_format",
@@ -44,7 +44,7 @@
         prompt: "Translate this into French.",
       },
       files: {
-        file: "test_assets/audio/hello_en.mp3",
+        file: "tests/test_assets/audio/hello_en.mp3",
       },
       test_param: {
         name: "prompt",

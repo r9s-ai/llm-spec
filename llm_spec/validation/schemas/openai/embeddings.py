@@ -1,15 +1,11 @@
 """OpenAI Embeddings 响应 Pydantic schemas"""
 
-from typing import Annotated, Union
+from typing import Annotated
 
 from pydantic import BaseModel, Field
 
-
 # 允许原始浮点数组或 base64 字符串（编码格式通过 encoding_format 控制）
-EmbeddingValue = Union[
-    list[float],
-    Annotated[str, Field(pattern=r"^[A-Za-z0-9+/]+={0,2}$")],
-]
+EmbeddingValue = list[float] | Annotated[str, Field(pattern=r"^[A-Za-z0-9+/]+={0,2}$")]
 
 
 class EmbeddingData(BaseModel):

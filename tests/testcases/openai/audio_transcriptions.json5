@@ -10,7 +10,7 @@
       name: "test_baseline",
       description: "测试基线：仅必需参数",
       files: {
-        file: "test_assets/audio/hello_en.mp3",
+        file: "tests/test_assets/audio/hello_en.mp3",
       },
       is_baseline: true,
     },
@@ -21,7 +21,7 @@
         language: "en",
       },
       files: {
-        file: "test_assets/audio/hello_en.mp3",
+        file: "tests/test_assets/audio/hello_en.mp3",
       },
       test_param: {
         name: "language",
@@ -35,7 +35,7 @@
         temperature: 0.0,
       },
       files: {
-        file: "test_assets/audio/hello_en.mp3",
+        file: "tests/test_assets/audio/hello_en.mp3",
       },
       test_param: {
         name: "temperature",
@@ -56,7 +56,7 @@
         response_format: "$response_format",
       },
       files: {
-        file: "test_assets/audio/hello_en.mp3",
+        file: "tests/test_assets/audio/hello_en.mp3",
       },
       test_param: {
         name: "response_format",
@@ -71,7 +71,7 @@
         prompt: "Please transcribe in a friendly style.",
       },
       files: {
-        file: "test_assets/audio/hello_en.mp3",
+        file: "tests/test_assets/audio/hello_en.mp3",
       },
       test_param: {
         name: "prompt",
@@ -86,7 +86,7 @@
         chunking_strategy: "auto",
       },
       files: {
-        file: "test_assets/audio/hello_en.mp3",
+        file: "tests/test_assets/audio/hello_en.mp3",
       },
       test_param: {
         name: "chunking_strategy",
@@ -103,7 +103,7 @@
         },
       },
       files: {
-        file: "test_assets/audio/hello_en.mp3",
+        file: "tests/test_assets/audio/hello_en.mp3",
       },
       test_param: {
         name: "chunking_strategy",
@@ -123,7 +123,7 @@
         response_format: "json",
       },
       files: {
-        file: "test_assets/audio/hello_en.mp3",
+        file: "tests/test_assets/audio/hello_en.mp3",
       },
       test_param: {
         name: "include",
@@ -147,7 +147,7 @@
         ],
       },
       files: {
-        file: "test_assets/audio/hello_en.mp3",
+        file: "tests/test_assets/audio/hello_en.mp3",
       },
       test_param: {
         name: "known_speaker_names",
@@ -169,7 +169,7 @@
         ],
       },
       files: {
-        file: "test_assets/audio/hello_en.mp3",
+        file: "tests/test_assets/audio/hello_en.mp3",
       },
       test_param: {
         name: "timestamp_granularities",
@@ -187,7 +187,7 @@
         stream: true,
       },
       files: {
-        file: "test_assets/audio/hello_en.mp3",
+        file: "tests/test_assets/audio/hello_en.mp3",
       },
       test_param: {
         name: "stream",

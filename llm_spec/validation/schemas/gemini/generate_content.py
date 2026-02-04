@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
 # ==================== Request Related Schemas ====================
 
 
@@ -59,9 +58,7 @@ class Part(BaseModel):
     function_call: FunctionCall | None = Field(None, alias="functionCall")
     function_response: FunctionResponse | None = Field(None, alias="functionResponse")
     executable_code: ExecutableCode | None = Field(None, alias="executableCode")
-    code_execution_result: CodeExecutionResult | None = Field(
-        None, alias="codeExecutionResult"
-    )
+    code_execution_result: CodeExecutionResult | None = Field(None, alias="codeExecutionResult")
 
 
 class Content(BaseModel):
@@ -156,9 +153,7 @@ class SystemInstruction(BaseModel):
 # ==================== Response Related Schemas ====================
 
 
-HarmProbability = Literal[
-    "HARM_PROBABILITY_UNSPECIFIED", "NEGLIGIBLE", "LOW", "MEDIUM", "HIGH"
-]
+HarmProbability = Literal["HARM_PROBABILITY_UNSPECIFIED", "NEGLIGIBLE", "LOW", "MEDIUM", "HIGH"]
 
 
 class SafetyRating(BaseModel):
@@ -237,9 +232,7 @@ class UsageMetadata(BaseModel):
     prompt_token_count: int = Field(..., alias="promptTokenCount")
     candidates_token_count: int | None = Field(None, alias="candidatesTokenCount")
     total_token_count: int = Field(..., alias="totalTokenCount")
-    cached_content_token_count: int | None = Field(
-        None, alias="cachedContentTokenCount"
-    )
+    cached_content_token_count: int | None = Field(None, alias="cachedContentTokenCount")
 
 
 ModelStage = Literal["MODEL_STAGE_UNSPECIFIED", "STABLE", "LATEST"]

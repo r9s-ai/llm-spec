@@ -114,7 +114,9 @@ class RequestLogger:
 
         if headers:
             # 隐藏敏感信息
-            safe_headers = {k: v if k.lower() != "authorization" else "***" for k, v in headers.items()}
+            safe_headers = {
+                k: v if k.lower() != "authorization" else "***" for k, v in headers.items()
+            }
             log_data["headers"] = safe_headers
 
         if self.config.log_request_body and body is not None:

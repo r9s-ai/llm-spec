@@ -1,16 +1,16 @@
-"""OpenAI Provider 适配器"""
+"""Google Gemini Provider Adapter"""
 
 from __future__ import annotations
 
-from llm_spec.providers.base import ProviderAdapter
+from llm_spec.adapters.base import ProviderAdapter
 from llm_spec.types import Headers
 
 
-class OpenAIAdapter(ProviderAdapter):
-    """OpenAI API 适配器"""
+class GeminiAdapter(ProviderAdapter):
+    """Google Gemini API 适配器"""
 
     def prepare_headers(self, additional_headers: Headers | None = None) -> dict[str, str]:
-        """准备 OpenAI 请求头
+        """准备 Gemini 请求头
 
         Args:
             additional_headers: 额外的请求头
@@ -19,11 +19,15 @@ class OpenAIAdapter(ProviderAdapter):
             包含认证的完整请求头
         """
         headers = {
-            "Authorization": f"Bearer {self.config.api_key}",
             "Content-Type": "application/json",
+            "x-goog-api-key": self.config.api_key,
+            # "x-onr-provider":"gemini"
         }
 
         if additional_headers:
             headers.update(additional_headers)
 
         return headers
+
+    # Note: Gemini does not need a custom request() override; ProviderAdapter.request already
+    # supports header-based auth. Keep ProviderAdapter.request signature.

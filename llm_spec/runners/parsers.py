@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, Type
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -26,7 +26,7 @@ class StreamParser:
                 # 处理每个解析出的 chunk
     """
 
-    def __init__(self, provider: str, chunk_schema: Type["BaseModel"] | None = None):
+    def __init__(self, provider: str, chunk_schema: type[BaseModel] | None = None):
         """初始化解析器
 
         Args:
@@ -215,7 +215,6 @@ class StreamParser:
                 delta = chunk.get("delta", {})
                 if delta.get("type") == "text_delta" and "text" in delta:
                     content_parts.append(delta["text"])
-
 
         return "".join(content_parts)
 

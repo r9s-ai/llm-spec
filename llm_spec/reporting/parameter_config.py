@@ -23,7 +23,6 @@ BATCH_GENERATE_CONTENT_PARAMS = {
         "category": "core",
         "description": "文本内容",
     },
-
     # 生成配置参数
     "requests[].generationConfig": {
         "type": "可选",
@@ -55,7 +54,6 @@ BATCH_GENERATE_CONTENT_PARAMS = {
         "category": "generation",
         "description": "响应格式，如 application/json",
     },
-
     # 内容参数 - 多模态
     "requests[].contents[].parts[].inlineData": {
         "type": "可选",
@@ -72,7 +70,6 @@ BATCH_GENERATE_CONTENT_PARAMS = {
         "category": "content",
         "description": "Base64 编码的数据",
     },
-
     # 安全参数
     "requests[].safetySettings": {
         "type": "可选",
@@ -89,14 +86,12 @@ BATCH_GENERATE_CONTENT_PARAMS = {
         "category": "safety",
         "description": "阈值，如 BLOCK_MEDIUM_AND_ABOVE",
     },
-
     # 系统指令
     "requests[].systemInstruction": {
         "type": "可选",
         "category": "instruction",
         "description": "系统指令/系统提示词",
     },
-
     # 工具参数
     "requests[].tools": {
         "type": "可选",
@@ -108,7 +103,6 @@ BATCH_GENERATE_CONTENT_PARAMS = {
         "category": "tools",
         "description": "函数声明",
     },
-
     # 批处理配置
     "config": {
         "type": "可选",

@@ -141,7 +141,7 @@ class HTTPClient(BaseHTTPClient):
             return response
 
         except Exception as error:
-            raise self._handle_error(request_id, error)
+            raise self._handle_error(request_id, error) from error
 
     async def request_async(
         self,
@@ -194,7 +194,7 @@ class HTTPClient(BaseHTTPClient):
             return response
 
         except Exception as error:
-            raise self._handle_error(request_id, error)
+            raise self._handle_error(request_id, error) from error
 
     def stream(
         self,
@@ -239,11 +239,10 @@ class HTTPClient(BaseHTTPClient):
                 )
 
                 # 流式返回数据
-                for chunk in response.iter_bytes():
-                    yield chunk
+                yield from response.iter_bytes()
 
         except Exception as error:
-            raise self._handle_error(request_id, error)
+            raise self._handle_error(request_id, error) from error
 
     async def stream_async(
         self,
@@ -292,4 +291,4 @@ class HTTPClient(BaseHTTPClient):
                     yield chunk
 
         except Exception as error:
-            raise self._handle_error(request_id, error)
+            raise self._handle_error(request_id, error) from error

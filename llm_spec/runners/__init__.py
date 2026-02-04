@@ -1,8 +1,8 @@
 """配置驱动的测试运行器"""
 
-from .base import load_test_suite, ConfigDrivenTestRunner, SpecTestCase, SpecTestSuite
-from .schema_registry import get_schema, register_schema
+from .base import ConfigDrivenTestRunner, SpecTestCase, SpecTestSuite, load_test_suite
 from .parsers import StreamParser
+from .schema_registry import get_schema, register_schema
 
 __all__ = [
     "load_test_suite",
@@ -13,4 +13,3 @@ __all__ = [
     "register_schema",
     "StreamParser",
 ]
-

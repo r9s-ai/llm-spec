@@ -124,7 +124,7 @@ graph TD
 {
   name: "test_transcription",
   files: {
-    file: "test_assets/audio/hello.mp3"
+    file: "tests/test_assets/audio/hello.mp3"
   },
   params: { model: "whisper-1" },
   test_param: {
@@ -142,7 +142,7 @@ graph TD
 在 `llm_spec/validation/schemas/` 目录下确保有对应的 Pydantic 模型。
 
 ### 第二步：注册 Schema
-在 `tests/runners/schema_registry.py` 中导入并注册该模型：
+在 `llm_spec/runners/schema_registry.py` 中导入并注册该模型：
 ```python
 from llm_spec.validation.schemas.openai.audio import AudioTranscriptionResponse
 _REGISTRY["openai.AudioTranscription"] = AudioTranscriptionResponse

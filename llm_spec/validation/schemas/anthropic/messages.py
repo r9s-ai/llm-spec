@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
 # ==================== Request Related Schemas ====================
 
 
@@ -136,9 +135,7 @@ class Usage(BaseModel):
 
     input_tokens: int
     output_tokens: int
-    cache_creation_input_tokens: int | None = Field(
-        None, alias="cache_creation_input_tokens"
-    )
+    cache_creation_input_tokens: int | None = Field(None, alias="cache_creation_input_tokens")
     cache_read_input_tokens: int | None = Field(None, alias="cache_read_input_tokens")
 
 

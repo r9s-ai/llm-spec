@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import copy
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterator, Type
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
 import json5
 
 from llm_spec.reporting.collector import ReportCollector
-from llm_spec.validation.validator import ResponseValidator
+from llm_spec.validation.validator import ResponseValidator, ValidationResult
 
 from .parsers import StreamParser
 from .schema_registry import get_schema
@@ -110,10 +111,7 @@ def _expand_parameterized_test(test_config: dict[str, Any]) -> Iterator[SpecTest
 
     for value in param_values:
         # 生成测试名称后缀
-        if isinstance(value, list):
-            suffix = ",".join(str(v) for v in value)
-        else:
-            suffix = str(value)
+        suffix = ",".join(str(v) for v in value) if isinstance(value, list) else str(value)
 
         # 替换 params 中的 $param_name 引用
         params = copy.deepcopy(test_config.get("params", {}))
@@ -162,7 +160,7 @@ def load_test_suite(config_path: Path) -> SpecTestSuite:
     Returns:
         解析后的 TestSuite 对象
     """
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8") as f:
         data = json5.load(f)
 
     tests: list[SpecTestCase] = []
@@ -261,12 +259,8 @@ class ConfigDrivenTestRunner:
         self.collector = collector
 
         # 获取 schema 类
-        self.response_schema: Type["BaseModel"] | None = get_schema(
-            suite.schemas.get("response")
-        )
-        self.chunk_schema: Type["BaseModel"] | None = get_schema(
-            suite.schemas.get("stream_chunk")
-        )
+        self.response_schema: type[BaseModel] | None = get_schema(suite.schemas.get("response"))
+        self.chunk_schema: type[BaseModel] | None = get_schema(suite.schemas.get("stream_chunk"))
 
     def build_params(self, test: SpecTestCase) -> dict[str, Any]:
         """构建完整请求参数
@@ -278,10 +272,7 @@ class ConfigDrivenTestRunner:
             合并后的请求参数
         """
         # 如果 override_base，不使用基线参数
-        if test.override_base:
-            base = {}
-        else:
-            base = copy.deepcopy(self.suite.base_params)
+        base = {} if test.override_base else copy.deepcopy(self.suite.base_params)
 
         test_params = copy.deepcopy(test.params)
 
@@ -312,27 +303,25 @@ class ConfigDrivenTestRunner:
         else:
             return self._run_normal_test(test, endpoint, params)
 
-    def _run_normal_test(
-        self, test: SpecTestCase, endpoint: str, params: dict[str, Any]
-    ) -> bool:
+    def _run_normal_test(self, test: SpecTestCase, endpoint: str, params: dict[str, Any]) -> bool:
         """运行普通（非流式）请求测试"""
         files = None
         opened_files = []
 
-        try:
-            # 准备文件上传
-            if test.files:
-                files = {}
-                for param_name, file_path_str in test.files.items():
-                    path = Path(file_path_str)
-                    if not path.exists():
-                        raise FileNotFoundError(f"Test file not found: {path}")
-                    f = open(path, "rb")
-                    opened_files.append(f)
-                    # Use path.name as filename, but ensure MIME type if needed.
-                    # Simple (filename, file) tuple for now.
-                    files[param_name] = (path.name, f)
+        # 准备文件上传
+        if test.files:
+            files = {}
+            for param_name, file_path_str in test.files.items():
+                path = Path(file_path_str)
+                if not path.exists():
+                    raise FileNotFoundError(f"Test file not found: {path}")
+                # 先打开所有文件，添加到列表
+                f = open(path, "rb")  # noqa: SIM115
+                opened_files.append(f)
+                # Simple (filename, file) tuple for now.
+                files[param_name] = (path.name, f)
 
+        try:
             response = self.client.request(endpoint=endpoint, params=params, files=files)
         finally:
             # 确保关闭文件
@@ -347,24 +336,21 @@ class ConfigDrivenTestRunner:
             result = ResponseValidator.validate_response(response, self.response_schema)
         else:
             # 没有 schema 时只检查 HTTP 状态
-            result = type(
-                "ValidationResult",
-                (),
-                {
-                    "is_valid": 200 <= status_code < 300,
-                    "error_message": None,
-                    "missing_fields": [],
-                    "expected_fields": [],
-                },
-            )()
+            result = ValidationResult(
+                is_valid=200 <= status_code < 300,
+                error_message=None,
+                missing_fields=[],
+                expected_fields=[],
+            )
 
         # 构建 tested_param 参数（如果配置了 test_param）
-        tested_param = None
+        tested_param: tuple[str, Any] | None = None
         if test.test_param:
             # 新的格式：test_param 是 {"name": "param.name", "value": "param_value"}
             param_name = test.test_param.get("name")
             param_value = test.test_param.get("value")
-            tested_param = (param_name, param_value)
+            if param_name is not None:
+                tested_param = (param_name, param_value)
 
         # 记录测试结果（自动处理参数支持情况）
         self.collector.record_test(
@@ -381,9 +367,7 @@ class ConfigDrivenTestRunner:
 
         return 200 <= status_code < 300 and result.is_valid
 
-    def _run_stream_test(
-        self, test: SpecTestCase, endpoint: str, params: dict[str, Any]
-    ) -> bool:
+    def _run_stream_test(self, test: SpecTestCase, endpoint: str, params: dict[str, Any]) -> bool:
         """运行流式请求测试"""
         parser = StreamParser(self.suite.provider, self.chunk_schema)
 
@@ -399,12 +383,13 @@ class ConfigDrivenTestRunner:
             content = parser.get_complete_content()
 
             # 构建 tested_param 参数（如果配置了 test_param）
-            tested_param = None
+            tested_param: tuple[str, Any] | None = None
             if test.test_param:
                 # 新的格式：test_param 是 {"name": "param.name", "value": "param_value"}
                 param_name = test.test_param.get("name")
                 param_value = test.test_param.get("value")
-                tested_param = (param_name, param_value)
+                if param_name is not None:
+                    tested_param = (param_name, param_value)
 
             # 记录成功
             self.collector.record_test(
@@ -428,12 +413,13 @@ class ConfigDrivenTestRunner:
 
         except Exception as e:
             # 构建 tested_param 参数（如果配置了 test_param）
-            tested_param = None
+            tested_param: tuple[str, Any] | None = None
             if test.test_param:
                 # 新的格式：test_param 是 {"name": "param.name", "value": "param_value"}
                 param_name = test.test_param.get("name")
                 param_value = test.test_param.get("value")
-                tested_param = (param_name, param_value)
+                if param_name is not None:
+                    tested_param = (param_name, param_value)
 
             # 记录失败
             self.collector.record_test(

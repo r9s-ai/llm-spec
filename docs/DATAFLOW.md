@@ -11,10 +11,10 @@
 │  │    - 触发 ConfigDrivenTestRunner                         │  │
 │  └─────────────────────┬────────────────────────────────────┘  │
 └────────────────────────┼───────────────────────────────────────┘
-                         │ 
+                         │
                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    执行核心 (tests/runners/)                     │
+│                  执行核心 (llm_spec/runners/)                    │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │  ConfigDrivenTestRunner                                  │  │
 │  │    - schema_registry: 加载对应厂商 Schema                 │  │
@@ -26,7 +26,7 @@
                          │ 调用
                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                  Provider 适配层 (providers/)                   │
+│                   Provider 适配层 (adapters/)                    │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │  OpenAIAdapter (组合模式)                                │  │
 │  │    - config: ProviderConfig                              │  │
@@ -105,7 +105,7 @@
 - 使用 parameterize 进行批量测试
 ```
 
-### 1.1 测试执行层 (tests/runners/)
+### 1.1 测试执行层 (llm_spec/runners/)
 **职责**：解析配置并驱动测试执行
 ```python
 - 加载 JSON5 并在 Pytest 中参数化
@@ -226,7 +226,7 @@ class AnthropicAdapter:
 
 6. 记录与汇总 (ReportCollector)
    ├─ 根据 test_param 记录参数支持情况
-   └─ 生成报告 (report.json, parameters.md)
+   └─ 生成报告 (report.json, report.md)
 ```
 
 ### 维护与扩展

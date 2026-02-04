@@ -4,6 +4,31 @@
 """
 
 # GenerateContent schemas
+# Batch Generate Content schemas
+from llm_spec.validation.schemas.gemini.batch_generate_content import (
+    BatchCancelRequest,
+    BatchCancelResponse,
+    BatchCreateRequest,
+    BatchCreateResponse,
+    BatchGetResponse,
+    BatchJobState,
+    BatchListItem,
+    BatchListResponse,
+    BatchRequestConfig,
+    BatchResult,
+    BatchResultsResponse,
+    BatchStats,
+    GenerateContentRequest,
+)
+
+# Embeddings schemas
+from llm_spec.validation.schemas.gemini.embeddings import (
+    BatchEmbedContentsResponse,
+    EmbedContentRequest,
+    EmbedContentResponse,
+    Embedding,
+    TaskType,
+)
 from llm_spec.validation.schemas.gemini.generate_content import (
     BlockReason,
     Candidate,
@@ -38,36 +63,10 @@ from llm_spec.validation.schemas.gemini.generate_content import (
     UsageMetadata,
 )
 
-# Embeddings schemas
-from llm_spec.validation.schemas.gemini.embeddings import (
-    BatchEmbedContentsResponse,
-    EmbedContentRequest,
-    EmbedContentResponse,
-    Embedding,
-    TaskType,
-)
-
 # Tokens schemas
 from llm_spec.validation.schemas.gemini.tokens import (
     CountTokensResponse,
     ModalityTokenDetails,
-)
-
-# Batch Generate Content schemas
-from llm_spec.validation.schemas.gemini.batch_generate_content import (
-    BatchCancelRequest,
-    BatchCancelResponse,
-    BatchCreateRequest,
-    BatchCreateResponse,
-    BatchGetResponse,
-    BatchJobState,
-    BatchListItem,
-    BatchListResponse,
-    BatchRequestConfig,
-    BatchResult,
-    BatchResultsResponse,
-    BatchStats,
-    GenerateContentRequest,
 )
 
 __all__ = [

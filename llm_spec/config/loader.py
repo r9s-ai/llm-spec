@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import tomllib
 from pathlib import Path
-from typing import ClassVar
 
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -51,7 +50,7 @@ class AppConfig(BaseSettings):
     provider_configs: dict[str, ProviderConfig] = Field(default_factory=dict, exclude=True)
 
     @classmethod
-    def from_toml(cls, config_path: Path | str = "llm-spec.toml") -> "AppConfig":
+    def from_toml(cls, config_path: Path | str = "llm-spec.toml") -> AppConfig:
         """从 TOML 文件加载配置
 
         Args:

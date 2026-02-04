@@ -46,8 +46,8 @@ class ReportCollector:
 
     @staticmethod
     def _extract_param_paths(
-        params: dict[str, Any], 
-        prefix: str = "", 
+        params: dict[str, Any],
+        prefix: str = "",
         max_depth: int = 10,
         target_param: str = "",
     ) -> set[str]:
@@ -248,6 +248,7 @@ class ReportCollector:
         for part in parts:
             # 处理数组索引，如 "messages[0]"
             import re
+
             match = re.match(r"(\w+)\[(\d+)\]", part)
             if match:
                 key, idx = match.groups()
@@ -267,7 +268,7 @@ class ReportCollector:
         return current
 
     @staticmethod
-    def response_body_from_httpx(response: "object") -> JSONValue | str:
+    def response_body_from_httpx(response: object) -> JSONValue | str:
         """Best-effort extract response body for reporting.
 
         Preference order:
@@ -375,13 +376,13 @@ class ReportCollector:
                 "failed": self.failed_tests,
             },
             "parameters": {
-                "tested": sorted(list(self.tested_params)),
+                "tested": sorted(self.tested_params),
                 "untested": [],  # TODO: 需要从spec定义中计算
                 "supported": self.supported_params,
                 "unsupported": self.unsupported_params,
             },
             "response_fields": {
-                "expected": sorted(list(self.expected_fields)),
+                "expected": sorted(self.expected_fields),
                 "unsupported": self.unsupported_fields,
             },
             "errors": self.errors,

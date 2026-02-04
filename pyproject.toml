@@ -1,6 +1,6 @@
 [project]
 name = "llm-spec"
-version = "0.2.0"
+version = "0.3.0"
 description = "A testing framework to validate LLM API responses against official specifications"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -22,8 +22,6 @@ dependencies = [
     "httpx>=0.27.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
-    "rich>=13.0.0",
-    "pillow>=10.0.0",
     "json5>=0.13.0",
 ]
 
@@ -32,7 +30,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=4.0.0",
-    "pytest-xdist>=3.5.0",    
+    "pytest-xdist>=3.5.0",
     "ruff>=0.8.0",
     "mypy>=1.0.0",
     "pyright>=1.1.350",
@@ -45,9 +43,9 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/liu/llm-spec"
-Repository = "https://github.com/liu/llm-spec"
-Documentation = "https://github.com/liu/llm-spec#readme"
+Homepage = "https://github.com/r9s-ai/llm-spec"
+Repository = "https://github.com/r9s-ai/llm-spec"
+Documentation = "https://github.com/r9s-ai/llm-spec#readme"
 
 [build-system]
 requires = ["hatchling"]

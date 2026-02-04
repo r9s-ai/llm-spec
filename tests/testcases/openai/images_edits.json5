@@ -11,7 +11,7 @@
       name: "test_baseline",
       description: "测试基线：gpt-image-1.5 单图 + prompt",
       files: {
-        image: "test_assets/images/test_base.png",
+        image: "tests/test_assets/images/test_base.png",
       },
       is_baseline: true,
     },
@@ -23,7 +23,7 @@
         response_format: "url",
       },
       files: {
-        image: "test_assets/images/test_base.png",
+        image: "tests/test_assets/images/test_base.png",
       },
       test_param: {
         name: "response_format",
@@ -37,7 +37,7 @@
         background: "transparent",
       },
       files: {
-        image: "test_assets/images/test_base.png",
+        image: "tests/test_assets/images/test_base.png",
       },
       test_param: {
         name: "background",
@@ -51,7 +51,7 @@
         output_format: "webp",
       },
       files: {
-        image: "test_assets/images/test_base.png",
+        image: "tests/test_assets/images/test_base.png",
       },
       test_param: {
         name: "output_format",
@@ -66,7 +66,7 @@
         output_compression: 80,
       },
       files: {
-        image: "test_assets/images/test_base.png",
+        image: "tests/test_assets/images/test_base.png",
       },
       test_param: {
         name: "output_compression",
@@ -80,7 +80,7 @@
         size: "1536x1024",
       },
       files: {
-        image: "test_assets/images/test_base.png",
+        image: "tests/test_assets/images/test_base.png",
       },
       test_param: {
         name: "size",
@@ -94,7 +94,7 @@
         n: 2,
       },
       files: {
-        image: "test_assets/images/test_base.png",
+        image: "tests/test_assets/images/test_base.png",
       },
       test_param: {
         name: "n",
@@ -108,7 +108,7 @@
         input_fidelity: "high",
       },
       files: {
-        image: "test_assets/images/test_base.png",
+        image: "tests/test_assets/images/test_base.png",
       },
       test_param: {
         name: "input_fidelity",
@@ -119,8 +119,8 @@
       name: "test_param_mask_png",
       description: "带 mask 的编辑",
       files: {
-        image: "test_assets/images/test_base.png",
-        mask: "test_assets/images/test_base.png",
+        image: "tests/test_assets/images/test_base.png",
+        mask: "tests/test_assets/images/test_base.png",
       },
       test_param: {
         name: "mask",
@@ -134,7 +134,7 @@
         user: "user-123",
       },
       files: {
-        image: "test_assets/images/test_base.png",
+        image: "tests/test_assets/images/test_base.png",
       },
       test_param: {
         name: "user",
