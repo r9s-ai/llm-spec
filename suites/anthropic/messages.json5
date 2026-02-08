@@ -1,0 +1,324 @@
+{
+  provider: "anthropic",
+  endpoint: "/v1/messages",
+  schemas: {
+    response: "anthropic.MessagesResponse",
+    stream_chunk: "anthropic.AnthropicStreamChunk",
+  },
+  base_params: {
+    model: "claude-haiku-4.5",
+    max_tokens: 256,
+    messages: [
+      {
+        role: "user",
+        content: "Hello",
+      },
+    ],
+  },
+  stream_rules: {
+    // Anthropic streaming events are strongly typed; missing any of these is almost certainly a server bug.
+    min_observations: 1,
+    checks: [
+      {
+        type: "required_sequence",
+        values: [
+          "message_start",
+          "content_block_start",
+          "content_block_delta",
+          "content_block_stop",
+          "message_delta",
+          "message_stop",
+        ],
+      },
+      {
+        type: "required_terminal",
+        value: "message_stop",
+      },
+    ],
+  },
+  tests: [
+    {
+      name: "test_baseline",
+      description: "测试基线",
+      is_baseline: true,
+    },
+    {
+      name: "test_param_temperature",
+      description: "测试 temperature 参数",
+      params: {
+        temperature: 0.7,
+      },
+      test_param: {
+        name: "temperature",
+        value: 0.7,
+      },
+    },
+    {
+      name: "test_param_top_p",
+      description: "测试 top_p 参数",
+      params: {
+        top_p: 0.9,
+      },
+      test_param: {
+        name: "top_p",
+        value: 0.9,
+      },
+    },
+    {
+      name: "test_param_top_k",
+      description: "测试 top_k 参数",
+      params: {
+        top_k: 40,
+      },
+      test_param: {
+        name: "top_k",
+        value: 40,
+      },
+    },
+    {
+      name: "test_param_stop_sequences",
+      description: "测试 stop_sequences 参数",
+      params: {
+        stop_sequences: [
+          "StopHere",
+          "EndProcess",
+        ],
+      },
+      test_param: {
+        name: "stop_sequences",
+        value: [
+          "StopHere",
+          "EndProcess",
+        ],
+      },
+    },
+    {
+      name: "test_param_system",
+      description: "测试 system 参数",
+      params: {
+        system: "You are a helpful assistant.",
+      },
+      test_param: {
+        name: "system",
+        value: "You are a helpful assistant.",
+      },
+    },
+    {
+      name: "test_param_metadata",
+      description: "测试 metadata 参数",
+      params: {
+        metadata: {
+          user_id: "test-user-123",
+        },
+      },
+      test_param: {
+        name: "metadata",
+        value: {
+          user_id: "test-user-123",
+        },
+      },
+    },
+    {
+      name: "test_param_stream",
+      description: "测试 stream 参数",
+      params: {
+        stream: true,
+      },
+      stream: true,
+      test_param: {
+        name: "stream",
+        value: true,
+      },
+    },
+    {
+      name: "test_param_image_base64",
+      description: "测试 base64 图片输入",
+      override_base: true,
+      params: {
+        model: "claude-haiku-4.5",
+        max_tokens: 256,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: "image/png",
+                  data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                },
+              },
+              {
+                type: "text",
+                text: "What do you see?",
+              },
+            ],
+          },
+        ],
+      },
+      test_param: {
+        name: "image.source.data",
+        value: null,
+      },
+    },
+    {
+      name: "test_image_media_type",
+      description: "测试不同图片 media_type",
+      parameterize: {
+        media_type: [
+          "image/jpeg",
+          "image/png",
+          "image/gif",
+          "image/webp",
+        ],
+      },
+      override_base: true,
+      params: {
+        model: "claude-haiku-4.5",
+        max_tokens: 256,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: "$media_type",
+                  data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                },
+              },
+              {
+                type: "text",
+                text: "Describe usage.",
+              },
+            ],
+          },
+        ],
+      },
+      test_param: {
+        name: "image.source.media_type",
+        value: null,
+      },
+    },
+    {
+      name: "test_param_tools",
+      description: "测试 tools 参数",
+      params: {
+        tools: [
+          {
+            name: "get_weather",
+            description: "Get weather",
+            input_schema: {
+              type: "object",
+              properties: {
+                location: {
+                  type: "string",
+                },
+              },
+              required: [
+                "location",
+              ],
+            },
+          },
+        ],
+        messages: [
+          {
+            role: "user",
+            content: "Weather in SF?",
+          },
+        ],
+      },
+      test_param: {
+        name: "tools",
+        value: [
+          {
+            name: "get_weather",
+            description: "Get weather",
+            input_schema: {
+              type: "object",
+              properties: {
+                location: {
+                  type: "string",
+                },
+              },
+              required: [
+                "location",
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      name: "test_tool_choice_variants",
+      description: "测试 tool_choice 变体",
+      parameterize: {
+        choice: [
+          {
+            type: "auto",
+          },
+          {
+            type: "any",
+          },
+          {
+            type: "tool",
+            name: "get_weather",
+          },
+        ],
+      },
+      params: {
+        tools: [
+          {
+            name: "get_weather",
+            description: "Get weather",
+            input_schema: {
+              type: "object",
+              properties: {
+                location: {
+                  type: "string",
+                },
+              },
+              required: [
+                "location",
+              ],
+            },
+          },
+        ],
+        tool_choice: "$choice",
+        messages: [
+          {
+            role: "user",
+            content: "Weather?",
+          },
+        ],
+      },
+      test_param: {
+        name: "tool_choice",
+        value: "$choice",
+      },
+    },
+    {
+      name: "test_param_thinking",
+      description: "测试 thinking 参数",
+      params: {
+        max_tokens: 2560,
+        thinking: {
+          type: "enabled",
+          budget_tokens: 2048,
+        },
+        messages: [
+          {
+            role: "user",
+            content: "Solve 25 * 17",
+          },
+        ],
+      },
+      test_param: {
+        name: "thinking.type",
+        value: "enabled",
+      },
+    },
+  ],
+}

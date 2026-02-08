@@ -1,0 +1,9 @@
+{
+  "pythonVersion": "3.11",
+  "venvPath": ".",
+  "venv": ".venv",
+  "typeCheckingMode": "standard",
+  "reportMissingTypeStubs": "none",
+  "include": ["llm_spec", "tests"],
+  "exclude": ["**/__pycache__", "temp", "logs", "reports", ".venv"]
+}

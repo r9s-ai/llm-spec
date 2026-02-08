@@ -1,0 +1,148 @@
+{
+  provider: "openai",
+  endpoint: "/v1/images/edits",
+  schemas: {
+    response: "openai.ImageResponse",
+    stream_chunk: "openai.ImageStreamEvent",
+  },
+  base_params: {
+    model: "gpt-image-1.5",
+    prompt: "Replace the background with a blue sky.",
+  },
+  tests: [
+    {
+      name: "test_baseline",
+      description: "测试基线：gpt-image-1.5 单图 + prompt",
+      files: {
+        image: "assets/images/test_base.png",
+      },
+      is_baseline: true,
+    },
+    {
+      name: "test_param_response_format_url_dalle2",
+      description: "dall-e-2 支持 response_format=url",
+      params: {
+        model: "dall-e-2",
+        response_format: "url",
+      },
+      files: {
+        image: "assets/images/test_base.png",
+      },
+      test_param: {
+        name: "response_format",
+        value: "url",
+      },
+    },
+    {
+      name: "test_param_background_transparent",
+      description: "GPT image 支持 background 透明",
+      params: {
+        background: "transparent",
+      },
+      files: {
+        image: "assets/images/test_base.png",
+      },
+      test_param: {
+        name: "background",
+        value: "transparent",
+      },
+    },
+    {
+      name: "test_param_output_format_webp",
+      description: "GPT image 支持 output_format=webp",
+      params: {
+        output_format: "webp",
+      },
+      files: {
+        image: "assets/images/test_base.png",
+      },
+      test_param: {
+        name: "output_format",
+        value: "webp",
+      },
+    },
+    {
+      name: "test_param_output_compression",
+      description: "GPT image 支持 output_compression (webp/jpeg)",
+      params: {
+        output_format: "webp",
+        output_compression: 80,
+      },
+      files: {
+        image: "assets/images/test_base.png",
+      },
+      test_param: {
+        name: "output_compression",
+        value: 80,
+      },
+    },
+    {
+      name: "test_param_size_gpt_landscape",
+      description: "GPT image 尺寸横版",
+      params: {
+        size: "1536x1024",
+      },
+      files: {
+        image: "assets/images/test_base.png",
+      },
+      test_param: {
+        name: "size",
+        value: "1536x1024",
+      },
+    },
+    {
+      name: "test_param_n_multiple",
+      description: "生成多张图片 (n=2)",
+      params: {
+        n: 2,
+      },
+      files: {
+        image: "assets/images/test_base.png",
+      },
+      test_param: {
+        name: "n",
+        value: 2,
+      },
+    },
+    {
+      name: "test_param_input_fidelity_high",
+      description: "输入忠实度（仅 GPT image 模型）",
+      params: {
+        input_fidelity: "high",
+      },
+      files: {
+        image: "assets/images/test_base.png",
+      },
+      test_param: {
+        name: "input_fidelity",
+        value: "high",
+      },
+    },
+    {
+      name: "test_param_mask_png",
+      description: "带 mask 的编辑",
+      files: {
+        image: "assets/images/test_base.png",
+        mask: "assets/images/test_base.png",
+      },
+      test_param: {
+        name: "mask",
+        value: null,
+      },
+    },
+    {
+      name: "test_param_user",
+      description: "用户标识 user",
+      params: {
+        user: "user-123",
+      },
+      files: {
+        image: "assets/images/test_base.png",
+      },
+      test_param: {
+        name: "user",
+        value: "user-123",
+      },
+    },
+  ],
+}

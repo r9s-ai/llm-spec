@@ -1,0 +1,444 @@
+{
+  provider: "openai",
+  endpoint: "/v1/chat/completions",
+  schemas: {
+    response: "openai.ChatCompletionResponse",
+    stream_chunk: "openai.ChatCompletionChunkResponse",
+  },
+  base_params: {
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "user",
+        content: "Say hello",
+      },
+    ],
+  },
+  stream_rules: {
+    // OpenAI chat.completions streaming ends with "data: [DONE]" (parser maps it to "[DONE]").
+    min_observations: 1,
+    checks: [
+      {
+        type: "required_terminal",
+        value: "[DONE]",
+      },
+    ],
+  },
+  tests: [
+    {
+      name: "test_baseline",
+      description: "测试基线：仅必需参数",
+      is_baseline: true,
+    },
+    {
+      name: "test_param_temperature",
+      description: "测试 temperature 参数",
+      params: {
+        temperature: 0.7,
+      },
+      test_param: {
+        name: "temperature",
+        value: 0.7,
+      },
+    },
+    {
+      name: "test_param_max_tokens",
+      description: "测试 max_tokens 参数",
+      params: {
+        max_tokens: 100,
+      },
+      test_param: {
+        name: "max_tokens",
+        value: 100,
+      },
+    },
+    {
+      name: "test_param_top_p",
+      description: "测试 top_p 参数",
+      params: {
+        top_p: 0.9,
+      },
+      test_param: {
+        name: "top_p",
+        value: 0.9,
+      },
+    },
+    {
+      name: "test_param_n",
+      description: "测试 n 参数（生成多个响应）",
+      params: {
+        n: 2,
+      },
+      test_param: {
+        name: "n",
+        value: 2,
+      },
+    },
+    {
+      name: "test_param_stop_string",
+      description: "测试 stop 参数（字符串形式）",
+      params: {
+        stop: "\n",
+      },
+      test_param: {
+        name: "stop",
+        value: "\n",
+      },
+    },
+    {
+      name: "test_param_stop_array",
+      description: "测试 stop 参数（数组形式）",
+      params: {
+        stop: [
+          "\n",
+          "END",
+        ],
+      },
+      test_param: {
+        name: "stop",
+        value: [
+          "\n",
+          "END",
+        ],
+      },
+    },
+    {
+      name: "test_param_frequency_penalty",
+      description: "测试 frequency_penalty 参数",
+      params: {
+        frequency_penalty: 0.5,
+      },
+      test_param: {
+        name: "frequency_penalty",
+        value: 0.5,
+      },
+    },
+    {
+      name: "test_param_presence_penalty",
+      description: "测试 presence_penalty 参数",
+      params: {
+        presence_penalty: 0.5,
+      },
+      test_param: {
+        name: "presence_penalty",
+        value: 0.5,
+      },
+    },
+    {
+      name: "test_param_seed",
+      description: "测试 seed 参数（确定性输出）",
+      params: {
+        seed: 12345,
+      },
+      test_param: {
+        name: "seed",
+        value: 12345,
+      },
+    },
+    {
+      name: "test_param_max_completion_tokens",
+      description: "测试 max_completion_tokens 参数（新参数）",
+      params: {
+        max_completion_tokens: 100,
+      },
+      test_param: {
+        name: "max_completion_tokens",
+        value: 100,
+      },
+    },
+    {
+      name: "test_param_user",
+      description: "测试 user 参数（用户标识）",
+      params: {
+        user: "user-123",
+      },
+      test_param: {
+        name: "user",
+        value: "user-123",
+      },
+    },
+    {
+      name: "test_response_format_text",
+      description: "测试 response_format 为 text（默认）",
+      params: {
+        response_format: {
+          type: "text",
+        },
+      },
+      test_param: {
+        name: "response_format.type",
+        value: "text",
+      },
+    },
+    {
+      name: "test_response_format_json_object",
+      description: "测试 response_format 为 json_object",
+      params: {
+        messages: [
+          {
+            role: "user",
+            content: "Return JSON: {\"status\": \"ok\"}",
+          },
+        ],
+        response_format: {
+          type: "json_object",
+        },
+      },
+      test_param: {
+        name: "response_format.type",
+        value: "json_object",
+      },
+    },
+    {
+      name: "test_response_format_json_schema",
+      description: "测试 response_format 为 json_schema",
+      params: {
+        messages: [
+          {
+            role: "user",
+            content: "Generate a person's info",
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "person",
+            schema: {
+              type: "object",
+              properties: {
+                name: {
+                  type: "string",
+                },
+                age: {
+                  type: "number",
+                },
+              },
+              required: [
+                "name",
+                "age",
+              ],
+            },
+          },
+        },
+      },
+      test_param: {
+        name: "response_format.type",
+        value: "json_schema",
+      },
+    },
+    {
+      name: "test_param_tools",
+      description: "测试 tools 参数（函数调用）",
+      params: {
+        messages: [
+          {
+            role: "user",
+            content: "What's the weather in Beijing?",
+          },
+        ],
+        tools: [
+          {
+            type: "function",
+            "function": {
+              name: "get_weather",
+              description: "Get current weather",
+              parameters: {
+                type: "object",
+                properties: {
+                  location: {
+                    type: "string",
+                    description: "City name",
+                  },
+                },
+                required: [
+                  "location",
+                ],
+              },
+            },
+          },
+        ],
+      },
+      test_param: {
+        name: "tools",
+        value: [
+          {
+            type: "function",
+            "function": {
+              name: "get_weather",
+              description: "Get current weather",
+              parameters: {
+                type: "object",
+                properties: {
+                  location: {
+                    type: "string",
+                    description: "City name",
+                  },
+                },
+                required: [
+                  "location",
+                ],
+              },
+            },
+          },
+        ],
+      },
+    },
+    {
+      name: "test_tool_choice_variants",
+      description: "测试不同的 tool_choice 值",
+      parameterize: {
+        tool_choice: [
+          "none",
+          "auto",
+          "required",
+        ],
+      },
+      params: {
+        messages: [
+          {
+            role: "user",
+            content: "What's the weather?",
+          },
+        ],
+        tools: [
+          {
+            type: "function",
+            "function": {
+              name: "get_weather",
+              description: "Get weather",
+              parameters: {
+                type: "object",
+                properties: {
+                  location: {
+                    type: "string",
+                  },
+                },
+                required: [
+                  "location",
+                ],
+              },
+            },
+          },
+        ],
+        tool_choice: "$tool_choice",
+      },
+      test_param: {
+        name: "tool_choice",
+        value: "$tool_choice",
+      },
+    },
+    {
+      name: "test_parallel_tool_calls",
+      description: "测试 parallel_tool_calls 参数",
+      params: {
+        messages: [
+          {
+            role: "user",
+            content: "Call functions",
+          },
+        ],
+        tools: [
+          {
+            type: "function",
+            "function": {
+              name: "func1",
+              description: "Function 1",
+              parameters: {
+                type: "object",
+                properties: {},
+              },
+            },
+          },
+        ],
+        parallel_tool_calls: true,
+      },
+      test_param: {
+        name: "parallel_tool_calls",
+        value: true,
+      },
+    },
+    {
+      name: "test_param_logprobs",
+      description: "测试 logprobs 参数",
+      params: {
+        logprobs: true,
+      },
+      test_param: {
+        name: "logprobs",
+        value: true,
+      },
+    },
+    {
+      name: "test_param_top_logprobs",
+      description: "测试不同的 top_logprobs 值",
+      parameterize: {
+        top_logprobs: [
+          1,
+          5,
+          10,
+        ],
+      },
+      params: {
+        logprobs: true,
+        top_logprobs: "$top_logprobs",
+      },
+      test_param: {
+        name: "top_logprobs",
+        value: "$top_logprobs",
+      },
+    },
+    {
+      name: "test_streaming_basic",
+      description: "测试基本流式响应",
+      params: {
+        stream: true,
+      },
+      stream: true,
+      test_param: {
+        name: "stream",
+        value: true,
+      },
+    },
+    {
+      name: "test_streaming_with_usage",
+      description: "测试带 usage 的流式响应",
+      params: {
+        stream: true,
+        stream_options: {
+          include_usage: true,
+        },
+      },
+      stream: true,
+      test_param: {
+        name: "stream_options.include_usage",
+        value: true,
+      },
+    },
+    {
+      name: "test_param_logit_bias",
+      description: "测试 logit_bias 参数",
+      params: {
+        logit_bias: {
+          "31373": -100,
+        },
+      },
+      test_param: {
+        name: "logit_bias",
+        value: {
+          "31373": -100,
+        },
+      },
+    },
+    {
+      name: "test_param_service_tier",
+      description: "测试 service_tier 参数",
+      params: {
+        service_tier: "auto",
+      },
+      test_param: {
+        name: "service_tier",
+        value: "auto",
+      },
+    },
+  ],
+}

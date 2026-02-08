@@ -1,0 +1,329 @@
+{
+  provider: "openai",
+  endpoint: "/v1/images/generations",
+  schemas: {
+    response: "openai.ImageResponse",
+    stream_chunk: "openai.ImageStreamEvent",
+  },
+  base_params: {
+    model: "dall-e-3",
+    prompt: "A cute cat",
+    n: 1,
+  },
+  tests: [
+    {
+      name: "test_baseline",
+      description: "测试基线：仅必需参数",
+      is_baseline: true,
+    },
+    {
+      name: "test_param_size",
+      description: "测试 size 参数（dall-e-3 默认尺寸）",
+      params: {
+        size: "1024x1024",
+      },
+      test_param: {
+        name: "size",
+        value: "1024x1024",
+      },
+    },
+    {
+      name: "test_param_size_dalle2",
+      description: "测试 size 参数（dall-e-2 尺寸变体）",
+      parameterize: {
+        size: [
+          "512x512",
+          "256x256",
+        ],
+      },
+      params: {
+        model: "dall-e-2",
+        size: "$size",
+      },
+      test_param: {
+        name: "size",
+        value: "$size",
+      },
+    },
+    {
+      name: "test_param_size_dalle3",
+      description: "测试 dall-e-3 尺寸变体",
+      parameterize: {
+        size: [
+          "1792x1024",
+          "1024x1792",
+        ],
+      },
+      params: {
+        size: "$size",
+      },
+      test_param: {
+        name: "size",
+        value: "$size",
+      },
+    },
+    {
+      name: "test_param_quality_dalle3",
+      description: "测试 quality 参数（dall-e-3）",
+      parameterize: {
+        quality: [
+          "hd",
+          "standard",
+        ],
+      },
+      params: {
+        quality: "$quality",
+      },
+      test_param: {
+        name: "quality",
+        value: "$quality",
+      },
+    },
+    {
+      name: "test_param_response_format",
+      description: "测试 response_format 参数（dall-e-3/dall-e-2）",
+      parameterize: {
+        response_format: [
+          "url",
+          "b64_json",
+        ],
+      },
+      params: {
+        response_format: "$response_format",
+      },
+      test_param: {
+        name: "response_format",
+        value: "$response_format",
+      },
+    },
+    {
+      name: "test_param_style",
+      description: "测试 style 参数（dall-e-3）",
+      parameterize: {
+        style: [
+          "vivid",
+          "natural",
+        ],
+      },
+      params: {
+        style: "$style",
+      },
+      test_param: {
+        name: "style",
+        value: "$style",
+      },
+    },
+    {
+      name: "test_param_n_dalle2",
+      description: "测试 n 参数（dall-e-2 支持多张）",
+      params: {
+        model: "dall-e-2",
+        n: 2,
+      },
+      test_param: {
+        name: "n",
+        value: 2,
+      },
+    },
+    {
+      name: "test_param_user",
+      description: "测试 user 参数",
+      params: {
+        user: "user-123",
+      },
+      test_param: {
+        name: "user",
+        value: "user-123",
+      },
+    },
+    {
+      name: "test_gpt_image_background_transparent",
+      description: "测试 background 参数（透明背景，GPT image 模型）",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A simple logo with a transparent background",
+        background: "transparent",
+        output_format: "png",
+      },
+      test_param: {
+        name: "background",
+        value: "transparent",
+      },
+    },
+    {
+      name: "test_gpt_image_output_formats",
+      description: "测试 output_format 变体（GPT image 模型）",
+      parameterize: {
+        output_format: [
+          "png",
+          "jpeg",
+          "webp",
+        ],
+      },
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A minimal illustration of a rocket",
+        output_format: "$output_format",
+      },
+      test_param: {
+        name: "output_format",
+        value: "$output_format",
+      },
+    },
+    {
+      name: "test_gpt_image_output_webp_compression",
+      description: "测试 output_format=webp + output_compression（GPT image 模型）",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A futuristic city skyline",
+        output_format: "webp",
+        output_compression: 80,
+      },
+      test_param: {
+        name: "output_compression",
+        value: 80,
+      },
+    },
+    {
+      name: "test_gpt_image_output_jpeg_compression",
+      description: "测试 output_format=jpeg + output_compression（GPT image 模型）",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A portrait photo realistic style",
+        output_format: "jpeg",
+        output_compression: 80,
+      },
+      test_param: {
+        name: "output_compression",
+        value: 80,
+      },
+    },
+    {
+      name: "test_gpt_image_background_variants",
+      description: "测试 background 变体（GPT image 模型）",
+      parameterize: {
+        background: [
+          "transparent",
+          "opaque",
+          "auto",
+        ],
+      },
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A product icon with specified background",
+        background: "$background",
+      },
+      test_param: {
+        name: "background",
+        value: "$background",
+      },
+    },
+    {
+      name: "test_gpt_image_moderation_low",
+      description: "测试 moderation=low（GPT image 模型）",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A landscape painting with trees and river",
+        moderation: "low",
+      },
+      test_param: {
+        name: "moderation",
+        value: "low",
+      },
+    },
+    {
+      name: "test_gpt_image_moderation_auto",
+      description: "测试 moderation=auto（GPT image 模型）",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A sketch of a city skyline",
+        moderation: "auto",
+      },
+      test_param: {
+        name: "moderation",
+        value: "auto",
+      },
+    },
+    {
+      name: "test_gpt_image_quality_high",
+      description: "测试 quality=high（GPT image 模型）",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A detailed illustration of a spaceship cockpit",
+        quality: "high",
+      },
+      test_param: {
+        name: "quality",
+        value: "high",
+      },
+    },
+    {
+      name: "test_gpt_image_quality_variants",
+      description: "测试 quality 其它取值（GPT image 模型）",
+      parameterize: {
+        quality: [
+          "medium",
+          "low",
+          "auto",
+        ],
+      },
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A clean line-art illustration",
+        quality: "$quality",
+      },
+      test_param: {
+        name: "quality",
+        value: "$quality",
+      },
+    },
+    {
+      name: "test_gpt_image_n_multiple",
+      description: "测试 n 参数（GPT image 模型，多张生成）",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A set of minimal icons",
+        n: 2,
+      },
+      test_param: {
+        name: "n",
+        value: 2,
+      },
+    },
+    {
+      name: "test_gpt_image_sizes",
+      description: "测试 size 参数（GPT image 模型）",
+      parameterize: {
+        size: [
+          "1024x1024",
+          "1536x1024",
+          "1024x1536",
+        ],
+      },
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A landscape or portrait illustration",
+        size: "$size",
+      },
+      test_param: {
+        name: "size",
+        value: "$size",
+      },
+    },
+    {
+      name: "test_gpt_image_partial_streaming",
+      description: "测试 partial_images + stream（GPT image 模型流式）",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A painting of a mountain lake",
+        partial_images: true,
+        stream: true,
+      },
+      stream: true,
+      test_param: {
+        name: "stream",
+        value: true,
+      },
+    },
+  ],
+}

@@ -1,0 +1,45 @@
+{
+  provider: "xai",
+  endpoint: "/chat/completions",
+  schemas: {
+    response: "xai.ChatCompletionResponse",
+  },
+  base_params: {
+    model: "grok-beta",
+    messages: [
+      {
+        role: "user",
+        content: "Hello",
+      },
+    ],
+  },
+  tests: [
+    {
+      name: "test_baseline",
+      description: "测试基线",
+      is_baseline: true,
+    },
+    {
+      name: "test_param_temperature",
+      description: "测试 temperature 参数",
+      params: {
+        temperature: 0.7,
+      },
+      test_param: {
+        name: "temperature",
+        value: 0.7,
+      },
+    },
+    {
+      name: "test_param_max_tokens",
+      description: "测试 max_tokens 参数",
+      params: {
+        max_tokens: 100,
+      },
+      test_param: {
+        name: "max_tokens",
+        value: 100,
+      },
+    },
+  ],
+}

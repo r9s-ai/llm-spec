@@ -1,0 +1,93 @@
+{
+  provider: "openai",
+  endpoint: "/v1/embeddings",
+  schemas: {
+    response: "openai.EmbeddingResponse",
+  },
+  base_params: {
+    model: "text-embedding-3-small",
+    input: "Hello, world!",
+  },
+  tests: [
+    {
+      name: "test_baseline",
+      description: "测试基线：仅必需参数",
+      is_baseline: true,
+    },
+    {
+      name: "test_param_input_array",
+      description: "测试 input 参数（字符串数组）",
+      params: {
+        input: [
+          "Hello",
+          "World",
+        ],
+      },
+      test_param: {
+        name: "input",
+        value: [
+          "Hello",
+          "World",
+        ],
+      },
+    },
+    {
+      name: "test_param_input_tokens",
+      description: "测试 input 参数（token 数组）",
+      params: {
+        input: [
+          [
+            11,
+            12,
+            13,
+            14,
+          ],
+        ],
+      },
+      test_param: {
+        name: "input",
+        value: [
+          [
+            11,
+            12,
+            13,
+            14,
+          ],
+        ],
+      },
+    },
+    {
+      name: "test_param_encoding_format",
+      description: "测试 encoding_format 参数（base64）",
+      params: {
+        encoding_format: "base64",
+      },
+      test_param: {
+        name: "encoding_format",
+        value: "base64",
+      },
+    },
+    {
+      name: "test_param_user",
+      description: "测试 user 参数（用户标识）",
+      params: {
+        user: "user-123",
+      },
+      test_param: {
+        name: "user",
+        value: "user-123",
+      },
+    },
+    {
+      name: "test_param_dimensions",
+      description: "测试 dimensions 参数 (仅 V3 模型支持)",
+      params: {
+        dimensions: 512,
+      },
+      test_param: {
+        name: "dimensions",
+        value: 512,
+      },
+    },
+  ],
+}

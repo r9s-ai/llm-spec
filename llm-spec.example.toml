@@ -1,0 +1,46 @@
+# llm-spec.toml example configuration
+#
+# Usage:
+# 1) Copy this file to the project root as `llm-spec.toml`
+# 2) Fill in each provider's api_key / base_url
+# 3) Run pytest to generate reports
+
+
+# Logging configuration
+[log]
+enabled = true                 # Enable logging
+level = "INFO"                 # DEBUG, INFO, WARNING, ERROR
+console = true                 # Log to console
+file = "./logs/llm-spec.log"   # Log file path (optional)
+log_request_body = true        # Log request body
+log_response_body = false      # Log response body (may be large)
+max_body_length = 1000         # Max body length to log
+
+
+# Report configuration
+[report]
+output_dir = "./reports"       # Report output directory (actual path: output_dir/<run_id>/...)
+
+
+# Provider configuration (one section per provider)
+# timeout unit: seconds
+
+[openai]
+api_key = "sk-..."
+base_url = "https://api.openai.com"
+timeout = 30.0
+
+[anthropic]
+api_key = "sk-ant-..."
+base_url = "https://api.anthropic.com"
+timeout = 30.0
+
+[gemini]
+api_key = "..."
+base_url = "https://generativelanguage.googleapis.com"
+timeout = 30.0
+
+[xai]
+api_key = "..."
+base_url = "https://api.x.ai/v1"
+timeout = 30.0

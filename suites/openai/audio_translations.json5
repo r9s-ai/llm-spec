@@ -1,0 +1,57 @@
+{
+  provider: "openai",
+  endpoint: "/v1/audio/translations",
+  schemas: {
+    response: "openai.AudioTranslationResponse",
+  },
+  base_params: {
+    model: "whisper-1",
+  },
+  tests: [
+    {
+      name: "test_baseline",
+      description: "测试基线：仅必需参数",
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      is_baseline: true,
+    },
+    {
+      name: "test_response_format_variants",
+      description: "测试 response_format 参数",
+      parameterize: {
+        response_format: [
+          "json",
+          "text",
+          "srt",
+          "verbose_json",
+          "vtt",
+        ],
+      },
+      params: {
+        response_format: "$response_format",
+      },
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "response_format",
+        value: "$response_format",
+      },
+    },
+    {
+      name: "test_prompt",
+      description: "测试 prompt 参数",
+      params: {
+        prompt: "Translate this into French.",
+      },
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "prompt",
+        value: "Translate this into French.",
+      },
+    },
+  ],
+}
