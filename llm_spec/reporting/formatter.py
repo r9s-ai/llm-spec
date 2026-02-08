@@ -137,20 +137,36 @@ class ParameterTableFormatter:
     def generate_markdown(self) -> str:
         """Generate a concise Markdown report."""
         lines = []
-        api_name = self._get_api_name()
 
-        # Title and summary
-        lines.append(f"# {api_name} Parameter Support Report")
+        # Extract provider details
+        provider = self.report.get("provider", "Unknown")
+        endpoint = self.report.get("endpoint", "Unknown")
+        base_url = self.report.get("base_url", "Unknown")
+        test_time = self.report.get("test_time", "N/A")
+
+        # Title and Metadata
+        lines.append("# LLM API Compliance Report")
         lines.append("")
-        lines.append(f"**Report time**: {self.report.get('test_time', 'N/A')}")
-        lines.append(f"**Total tests**: {self.total_tests}")
-        lines.append(f"**Passed**: {self.passed_tests} ✅")
-        lines.append(f"**Failed**: {self.failed_tests} ❌")
+
+        lines.append("| Metadata | Value |")
+        lines.append("| :--- | :--- |")
+        lines.append(f"| **Provider** | `{provider}` |")
+        lines.append(f"| **Endpoint** | `{endpoint}` |")
+        lines.append(f"| **Base URL** | `{base_url}` |")
+        lines.append(f"| **Date** | {test_time} |")
+        lines.append("")
+
+        # Summary Stats
+        lines.append("### Statistics")
+        lines.append("")
+        lines.append(f"- **Total Tests**: {self.total_tests}")
+        lines.append(f"- **Passed**: {self.passed_tests} ✅")
+        lines.append(f"- **Failed**: {self.failed_tests} ❌")
         lines.append("")
 
         # Table using parameter_support_details
         if self.param_support_details:
-            lines.append("## Parameter Support")
+            lines.append("### Parameter Support Detail")
             lines.append("")
 
             # Check whether there are variant values
@@ -159,7 +175,7 @@ class ParameterTableFormatter:
             if has_variants:
                 # Variants present: 4-column table
                 lines.append("| Parameter | Variant | Request | Validation |")
-                lines.append("|------|--------|----------|--------------|")
+                lines.append("| :--- | :--- | :--- | :--- |")
 
                 for info in self.param_support_details:
                     param = info.get("parameter", "")
@@ -171,25 +187,33 @@ class ParameterTableFormatter:
 
                     # Request status
                     if request_ok:
-                        request_status = "✅"
+                        request_status = "✅ Success"
                     else:
-                        request_status = f"❌ {request_error}" if request_error else "❌"
+                        request_status = (
+                            f"❌ Failed<br><small>{request_error}</small>"
+                            if request_error
+                            else "❌ Failed"
+                        )
 
                     # Validation status
                     if not request_ok:
-                        validation_status = "N/A"
+                        validation_status = "Skipped"
                     elif validation_ok:
-                        validation_status = "✅"
+                        validation_status = "✅ Valid"
                     else:
-                        validation_status = f"❌ {validation_error}" if validation_error else "❌"
+                        validation_status = (
+                            f"❌ Invalid<br><small>{validation_error}</small>"
+                            if validation_error
+                            else "❌ Invalid"
+                        )
 
                     lines.append(
-                        f"| `{param}` | `{variant}` | {request_status} | {validation_status} |"
+                        f"| **{param}** | `{variant}` | {request_status} | {validation_status} |"
                     )
             else:
                 # No variants: 3-column table
                 lines.append("| Parameter | Request | Validation |")
-                lines.append("|------|----------|--------------|")
+                lines.append("| :--- | :--- | :--- |")
 
                 for info in self.param_support_details:
                     param = info.get("parameter", "")
@@ -200,57 +224,56 @@ class ParameterTableFormatter:
 
                     # Request status
                     if request_ok:
-                        request_status = "✅"
+                        request_status = "✅ Success"
                     else:
-                        request_status = f"❌ {request_error}" if request_error else "❌"
+                        request_status = (
+                            f"❌ Failed<br><small>{request_error}</small>"
+                            if request_error
+                            else "❌ Failed"
+                        )
 
                     # Validation status
                     if not request_ok:
-                        validation_status = "N/A"
+                        validation_status = "Skipped"
                     elif validation_ok:
-                        validation_status = "✅"
+                        validation_status = "✅ Valid"
                     else:
-                        validation_status = f"❌ {validation_error}" if validation_error else "❌"
+                        validation_status = (
+                            f"❌ Invalid<br><small>{validation_error}</small>"
+                            if validation_error
+                            else "❌ Invalid"
+                        )
 
-                    lines.append(f"| `{param}` | {request_status} | {validation_status} |")
+                    lines.append(f"| **{param}** | {request_status} | {validation_status} |")
 
             lines.append("")
         else:
             # Legacy format
-            supported_count = len(
-                [p for p in self.supported_params if p not in self.unsupported_params]
-            )
-            unsupported_count = len(self.unsupported_params)
             self.display_params = [
                 p
                 for p in self.tested_params
                 if p in self.supported_params or p in self.unsupported_params
             ]
-            total_count = len(self.display_params)
 
-            lines.append("## Parameter Support")
-            lines.append("")
-            lines.append(f"- **Tested parameters**: {total_count}")
-            lines.append(f"  - ✅ Supported: {supported_count}")
-            lines.append(f"  - ❌ Unsupported: {unsupported_count}")
-            lines.append("")
+            # Since stats are already printed above, we can skip re-printing them or keep them for specific legacy flow contexts
+            # But the user asked for alignment, so let's stick to the new table format logic mainly.
+            # For legacy, we just print the list.
 
-            # Table (legacy)
             if self.display_params:
-                lines.append("## Parameters")
+                lines.append("### Parameters")
                 lines.append("")
                 lines.append("| Parameter | Status |")
-                lines.append("|------|------|")
+                lines.append("| :--- | :--- |")
 
                 for param in self.display_params:
                     if param in self.unsupported_params:
                         status = "❌ Unsupported"
                         reason = self.unsupported_params[param].get("reason", "")
                         if reason:
-                            status += f" ({reason})"
+                            status += f"<br><small>{reason}</small>"
                     else:
                         status = "✅ Supported"
-                    lines.append(f"| `{param}` | {status} |")
+                    lines.append(f"| **{param}** | {status} |")
 
             lines.append("")
 
@@ -258,10 +281,27 @@ class ParameterTableFormatter:
 
     def generate_html(self) -> str:
         """Generate a concise HTML report."""
+        import base64
+        import os
+
         api_name = self._get_api_name()
+
+        # Load logo
+        logo_path = os.path.join(os.path.dirname(__file__), "../../assets/logo.jpg")
+        logo_b64 = ""
+        try:
+            with open(logo_path, "rb") as f:
+                logo_b64 = base64.b64encode(f.read()).decode("utf-8")
+        except Exception:
+            pass
 
         # Use parameter_support_details if available
         use_new_format = bool(self.param_support_details)
+
+        # Extract provider details
+        provider = self.report.get("provider", "Unknown")
+        endpoint = self.report.get("endpoint", "Unknown")
+        base_url = self.report.get("base_url", "Unknown")
 
         html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -270,108 +310,226 @@ class ParameterTableFormatter:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{api_name} Parameter Support Report</title>
     <style>
+        :root {{
+            --color-purple-600: oklch(55.8% .288 302.321);
+            --color-text: #1a1a1a;
+            --color-bg: #ffffff;
+            --color-border: #e5e5e5;
+            --color-success: #16a34a;
+            --color-error: #dc2626;
+            --color-neutral: #525252;
+        }}
+
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
-            color: #333;
-            line-height: 1.6;
-        }}
-        .container {{ max-width: 1000px; margin: 0 auto; padding: 20px; }}
-        h1 {{ color: #1976d2; margin: 30px 0 20px; text-align: center; }}
-        h2 {{ color: #1976d2; margin: 20px 0 10px; border-bottom: 2px solid #1976d2; padding-bottom: 5px; }}
-
-        .summary {{
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.5;
+            font-size: 14px;
         }}
 
-        .stats {{
+        .container {{ max-width: 1200px; margin: 0 auto; padding: 20px; }}
+
+        /* Compact Header Area containing Logo, Title, Config, Stats */
+        .dashboard-header {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin: 15px 0;
+            grid-template-columns: 1fr auto;
+            gap: 20px;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--color-border);
         }}
 
-        .stat {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px;
-            border-radius: 6px;
+        .header-left {{
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }}
+
+        .brand {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }}
+
+        .logo {{ height: 48px; width: auto; }}
+
+        h1 {{
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--color-text);
+            margin: 0;
+        }}
+
+        .meta-info {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px 24px;
+            font-size: 13px;
+        }}
+
+        .meta-item {{ display: flex; gap: 6px; align-items: baseline; }}
+        .meta-label {{ color: var(--color-neutral); font-size: 11px; text-transform: uppercase; font-weight: 600; }}
+        .meta-value {{ font-family: 'Courier New', monospace; font-weight: 600; color: var(--color-text); }}
+
+        .stats-grid {{
+            display: flex;
+            gap: 24px; /* Increased gap since boxes are gone */
+        }}
+
+        .stat-card {{
+            /* Removed background and border */
+            background: transparent;
+            padding: 0;
+            border: none;
             text-align: center;
+            min-width: 80px;
+            display: flex;
+            flex-direction: column-reverse; /* Put label bottom, value top? or kept normal. Usually Label below value. */
+            justify-content: center;
         }}
 
-        .stat-value {{ font-size: 24px; font-weight: bold; margin-bottom: 5px; }}
-        .stat-label {{ font-size: 12px; opacity: 0.9; }}
+        /* Value: Purple, Bigger */
+        .stat-value {{
+            font-family: 'Courier New', monospace;
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--color-purple-600);
+            line-height: 1.1;
+        }}
+
+        /* Label: Bigger, neutral/dark text */
+        .stat-label {{
+            font-size: 13px;
+            color: var(--color-neutral);
+            font-weight: 600;
+            margin-top: 4px;
+            text-transform: uppercase;
+        }}
+
+        h2 {{
+            font-size: 16px;
+            margin: 0 0 15px;
+            color: var(--color-text);
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
 
         table {{
             width: 100%;
-            border-collapse: collapse;
-            background: white;
-            margin: 20px 0;
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 1px solid var(--color-border);
             border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            font-size: 13px;
         }}
 
         th {{
-            background: #1976d2;
-            color: white;
-            padding: 12px;
+            background: #fafafa;
+            color: var(--color-text);
+            padding: 10px 12px;
             text-align: left;
             font-weight: 600;
+            border-bottom: 1px solid var(--color-border);
         }}
 
         td {{
-            padding: 12px;
-            border-bottom: 1px solid #eee;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--color-border);
         }}
 
-        tr:hover {{ background: #f9f9f9; }}
+        tr:last-child td {{ border-bottom: none; }}
+        tr:hover td {{ background: #fafafa; }}
 
-        .param-path {{ font-family: 'Courier New', monospace; color: #d32f2f; }}
-        .status-ok {{ color: #4caf50; font-weight: bold; }}
-        .status-error {{ color: #f44336; font-weight: bold; }}
-        .status-na {{ color: #9e9e9e; font-style: italic; }}
-        .error-detail {{ color: #d32f2f; font-size: 0.9em; }}
+        .param-path {{
+            font-family: 'Courier New', monospace;
+            color: var(--color-text);
+            font-weight: 700;
+            font-size: 13px;
+        }}
+
+        .status-badge {{
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }}
+
+        .status-ok {{ background: #dcfce7; color: var(--color-success); }}
+        .status-error {{ background: #fee2e2; color: var(--color-error); }}
+        .status-na {{ background: #f5f5f5; color: var(--color-neutral); }}
+
+        .error-detail {{
+            display: block;
+            margin-top: 2px;
+            font-size: 11px;
+            color: var(--color-error);
+            max-width: 400px;
+        }}
 
         .footer {{
             text-align: center;
-            color: #999;
+            color: var(--color-neutral);
             margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
-            font-size: 12px;
+            padding-top: 15px;
+            border-top: 1px solid var(--color-border);
+            font-size: 11px;
         }}
     </style>
 </head>
     <body>
         <div class="container">
-            <h1>📋 {api_name} Parameter Support Report</h1>
+            <div class="dashboard-header">
+                <div class="header-left">
+                    <div class="brand">
+                        {f'<img src="data:image/jpeg;base64,{logo_b64}" alt="Logo" class="logo">' if logo_b64 else ""}
+                        <h1>LLM API Compliance Report</h1>
+                    </div>
 
-            <div class="summary">
-                <h2>Test overview</h2>
-                <div class="stats">
-                    <div class="stat">
-                        <div class="stat-value">{self.total_tests}</div>
-                        <div class="stat-label">Total</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">{self.passed_tests}</div>
-                        <div class="stat-label">Passed ✅</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">{self.failed_tests}</div>
-                        <div class="stat-label">Failed ❌</div>
+                    <div class="meta-info">
+                        <div class="meta-item">
+                            <span class="meta-label">Provider</span>
+                            <span class="meta-value">{provider}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Endpoint</span>
+                            <span class="meta-value">{endpoint}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Base URL</span>
+                            <span class="meta-value">{base_url}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Date</span>
+                            <span class="meta-value">{self.report.get("test_time", "N/A")}</span>
+                        </div>
                     </div>
                 </div>
-                <p><strong>Report time</strong>: {self.report.get("test_time", "N/A")}</p>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">{self.total_tests}</div>
+                        <div class="stat-label">Total Tests</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">{self.passed_tests}</div>
+                        <div class="stat-label">Passed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">{self.failed_tests}</div>
+                        <div class="stat-label">Failed</div>
+                    </div>
+                </div>
             </div>
 
-            <h2>Parameter support</h2>
             <table>
 """
 
@@ -384,8 +542,8 @@ class ParameterTableFormatter:
                 html += """            <tr>
                 <th>Parameter</th>
                 <th>Variant</th>
-                <th>Request</th>
-                <th>Validation</th>
+                <th>Request Status</th>
+                <th>Validation Status</th>
             </tr>
 """
                 for info in self.param_support_details:
@@ -398,19 +556,31 @@ class ParameterTableFormatter:
 
                     # Request status
                     if request_ok:
-                        request_status = '<span class="status-ok">✅</span>'
+                        request_status = '<span class="status-badge status-ok">✓ Success</span>'
                     else:
-                        error_msg = f" {request_error}" if request_error else ""
-                        request_status = f'<span class="status-error">❌{error_msg}</span>'
+                        error_msg = (
+                            f'<span class="error-detail">{request_error}</span>'
+                            if request_error
+                            else ""
+                        )
+                        request_status = (
+                            f'<span class="status-badge status-error">✕ Failed</span>{error_msg}'
+                        )
 
                     # Validation status
                     if not request_ok:
-                        validation_status = '<span class="status-na">N/A</span>'
+                        validation_status = '<span class="status-badge status-na">Skipped</span>'
                     elif validation_ok:
-                        validation_status = '<span class="status-ok">✅</span>'
+                        validation_status = '<span class="status-badge status-ok">✓ Valid</span>'
                     else:
-                        error_msg = f" {validation_error}" if validation_error else ""
-                        validation_status = f'<span class="status-error">❌{error_msg}</span>'
+                        error_msg = (
+                            f'<span class="error-detail">{validation_error}</span>'
+                            if validation_error
+                            else ""
+                        )
+                        validation_status = (
+                            f'<span class="status-badge status-error">✕ Invalid</span>{error_msg}'
+                        )
 
                     html += f"""            <tr>
                 <td><span class="param-path">{param}</span></td>
@@ -423,8 +593,8 @@ class ParameterTableFormatter:
                 # No variants: 3-column table
                 html += """            <tr>
                     <th>Parameter</th>
-                    <th>Request</th>
-                    <th>Validation</th>
+                    <th>Request Status</th>
+                    <th>Validation Status</th>
                 </tr>
 """
                 for info in self.param_support_details:
@@ -436,19 +606,31 @@ class ParameterTableFormatter:
 
                     # Request status
                     if request_ok:
-                        request_status = '<span class="status-ok">✅</span>'
+                        request_status = '<span class="status-badge status-ok">✓ Success</span>'
                     else:
-                        error_msg = f" {request_error}" if request_error else ""
-                        request_status = f'<span class="status-error">❌{error_msg}</span>'
+                        error_msg = (
+                            f'<span class="error-detail">{request_error}</span>'
+                            if request_error
+                            else ""
+                        )
+                        request_status = (
+                            f'<span class="status-badge status-error">✕ Failed</span>{error_msg}'
+                        )
 
                     # Validation status
                     if not request_ok:
-                        validation_status = '<span class="status-na">N/A</span>'
+                        validation_status = '<span class="status-badge status-na">Skipped</span>'
                     elif validation_ok:
-                        validation_status = '<span class="status-ok">✅</span>'
+                        validation_status = '<span class="status-badge status-ok">✓ Valid</span>'
                     else:
-                        error_msg = f" {validation_error}" if validation_error else ""
-                        validation_status = f'<span class="status-error">❌{error_msg}</span>'
+                        error_msg = (
+                            f'<span class="error-detail">{validation_error}</span>'
+                            if validation_error
+                            else ""
+                        )
+                        validation_status = (
+                            f'<span class="status-badge status-error">✕ Invalid</span>{error_msg}'
+                        )
 
                     html += f"""            <tr>
                     <td><span class="param-path">{param}</span></td>
@@ -465,12 +647,12 @@ class ParameterTableFormatter:
 """
             for param in self.display_params if hasattr(self, "display_params") else []:
                 if param in self.unsupported_params:
-                    status = '<span class="status-error">❌ Unsupported</span>'
+                    status = '<span class="status-badge status-error">✕ Unsupported</span>'
                     reason = self.unsupported_params[param].get("reason", "")
                     if reason:
-                        status += f' <span class="error-detail">({reason})</span>'
+                        status += f'<span class="error-detail">{reason}</span>'
                 else:
-                    status = '<span class="status-ok">✅ Supported</span>'
+                    status = '<span class="status-badge status-ok">✓ Supported</span>'
 
                 html += f"""            <tr>
                 <td><span class="param-path">{param}</span></td>
@@ -481,7 +663,7 @@ class ParameterTableFormatter:
         html += """        </table>
 
             <div class="footer">
-                <p>This report is generated by llm-spec</p>
+                <p>Generated by LLM-Spec • R9S AI Infrastructure</p>
             </div>
     </div>
 </body>
