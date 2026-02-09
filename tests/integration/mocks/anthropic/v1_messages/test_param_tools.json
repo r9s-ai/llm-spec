@@ -1,0 +1,32 @@
+{
+    "status_code": 200,
+    "headers": {
+        "content-type": "application/json"
+    },
+    "body": {
+        "id": "msg_mock_param_tools",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+            {
+                "type": "text",
+                "text": "I will check the weather."
+            },
+            {
+                "type": "tool_use",
+                "id": "toolu_mock_123",
+                "name": "get_weather",
+                "input": {
+                    "location": "San Francisco, CA"
+                }
+            }
+        ],
+        "model": "claude-3-5-sonnet-20241022",
+        "stop_reason": "tool_use",
+        "stop_sequence": null,
+        "usage": {
+            "input_tokens": 50,
+            "output_tokens": 40
+        }
+    }
+}

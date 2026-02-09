@@ -10,7 +10,7 @@
   tests: [
     {
       name: "test_baseline",
-      description: "测试基线：仅必需参数",
+      description: "Baseline test: only required parameters",
       files: {
         file: "assets/audio/hello_en.mp3",
       },
@@ -18,7 +18,7 @@
     },
     {
       name: "test_response_format_variants",
-      description: "测试 response_format 参数",
+      description: "Test response_format parameter",
       parameterize: {
         response_format: [
           "json",
@@ -41,7 +41,7 @@
     },
     {
       name: "test_prompt",
-      description: "测试 prompt 参数",
+      description: "Test prompt parameter",
       params: {
         prompt: "Translate this into French.",
       },

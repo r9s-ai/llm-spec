@@ -1,0 +1,24 @@
+{
+    "status_code": 200,
+    "headers": {
+        "content-type": "application/json"
+    },
+    "body": {
+        "id": "msg_mock_stop_sequences",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+            {
+                "type": "text",
+                "text": "I will stop at StopHere."
+            }
+        ],
+        "model": "claude-3-5-sonnet-20241022",
+        "stop_reason": "stop_sequence",
+        "stop_sequence": "StopHere",
+        "usage": {
+            "input_tokens": 10,
+            "output_tokens": 10
+        }
+    }
+}

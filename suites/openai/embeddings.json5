@@ -11,12 +11,12 @@
   tests: [
     {
       name: "test_baseline",
-      description: "测试基线：仅必需参数",
+      description: "Baseline test: only required parameters",
       is_baseline: true,
     },
     {
       name: "test_param_input_array",
-      description: "测试 input 参数（字符串数组）",
+      description: "Test input parameter (string array)",
       params: {
         input: [
           "Hello",
@@ -33,7 +33,7 @@
     },
     {
       name: "test_param_input_tokens",
-      description: "测试 input 参数（token 数组）",
+      description: "Test input parameter (token array)",
       params: {
         input: [
           [
@@ -58,7 +58,7 @@
     },
     {
       name: "test_param_encoding_format",
-      description: "测试 encoding_format 参数（base64）",
+      description: "Test encoding_format parameter (base64)",
       params: {
         encoding_format: "base64",
       },
@@ -69,7 +69,7 @@
     },
     {
       name: "test_param_user",
-      description: "测试 user 参数（用户标识）",
+      description: "Test user parameter (user identifier)",
       params: {
         user: "user-123",
       },
@@ -80,7 +80,7 @@
     },
     {
       name: "test_param_dimensions",
-      description: "测试 dimensions 参数 (仅 V3 模型支持)",
+      description: "Test dimensions parameter (V3 models only)",
       params: {
         dimensions: 512,
       },

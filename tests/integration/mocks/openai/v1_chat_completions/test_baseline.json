@@ -1,0 +1,29 @@
+{
+    "status_code": 200,
+    "headers": {
+        "content-type": "application/json"
+    },
+    "body": {
+        "id": "chatcmpl-mock-baseline",
+        "object": "chat.completion",
+        "created": 1677652288,
+        "model": "gpt-4o-mini",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Hello! How can I help you today?"
+                },
+                "logprobs": null,
+                "finish_reason": "stop"
+            }
+        ],
+        "usage": {
+            "prompt_tokens": 9,
+            "completion_tokens": 9,
+            "total_tokens": 18
+        },
+        "system_fingerprint": "fp_mock"
+    }
+}

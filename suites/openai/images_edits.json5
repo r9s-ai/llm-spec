@@ -12,7 +12,7 @@
   tests: [
     {
       name: "test_baseline",
-      description: "测试基线：gpt-image-1.5 单图 + prompt",
+      description: "Baseline test: gpt-image-1.5 single image + prompt",
       files: {
         image: "assets/images/test_base.png",
       },
@@ -20,7 +20,7 @@
     },
     {
       name: "test_param_response_format_url_dalle2",
-      description: "dall-e-2 支持 response_format=url",
+      description: "dall-e-2 supports response_format=url",
       params: {
         model: "dall-e-2",
         response_format: "url",
@@ -35,7 +35,7 @@
     },
     {
       name: "test_param_background_transparent",
-      description: "GPT image 支持 background 透明",
+      description: "GPT image supports transparent background",
       params: {
         background: "transparent",
       },
@@ -49,7 +49,7 @@
     },
     {
       name: "test_param_output_format_webp",
-      description: "GPT image 支持 output_format=webp",
+      description: "GPT image supports output_format=webp",
       params: {
         output_format: "webp",
       },
@@ -63,7 +63,7 @@
     },
     {
       name: "test_param_output_compression",
-      description: "GPT image 支持 output_compression (webp/jpeg)",
+      description: "GPT image supports output_compression (webp/jpeg)",
       params: {
         output_format: "webp",
         output_compression: 80,
@@ -78,7 +78,7 @@
     },
     {
       name: "test_param_size_gpt_landscape",
-      description: "GPT image 尺寸横版",
+      description: "GPT image landscape size",
       params: {
         size: "1536x1024",
       },
@@ -92,7 +92,7 @@
     },
     {
       name: "test_param_n_multiple",
-      description: "生成多张图片 (n=2)",
+      description: "Generate multiple images (n=2)",
       params: {
         n: 2,
       },
@@ -106,7 +106,7 @@
     },
     {
       name: "test_param_input_fidelity_high",
-      description: "输入忠实度（仅 GPT image 模型）",
+      description: "Input fidelity (GPT image model only)",
       params: {
         input_fidelity: "high",
       },
@@ -120,7 +120,7 @@
     },
     {
       name: "test_param_mask_png",
-      description: "带 mask 的编辑",
+      description: "Edit with mask",
       files: {
         image: "assets/images/test_base.png",
         mask: "assets/images/test_base.png",
@@ -132,7 +132,7 @@
     },
     {
       name: "test_param_user",
-      description: "用户标识 user",
+      description: "User identifier",
       params: {
         user: "user-123",
       },

@@ -16,12 +16,12 @@
   tests: [
     {
       name: "test_baseline",
-      description: "测试基线",
+      description: "Baseline test",
       is_baseline: true,
     },
     {
       name: "test_param_temperature",
-      description: "测试 temperature 参数",
+      description: "Test temperature parameter",
       params: {
         temperature: 0.7,
       },
@@ -32,7 +32,7 @@
     },
     {
       name: "test_param_max_tokens",
-      description: "测试 max_tokens 参数",
+      description: "Test max_tokens parameter",
       params: {
         max_tokens: 100,
       },

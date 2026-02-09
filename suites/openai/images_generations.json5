@@ -13,12 +13,12 @@
   tests: [
     {
       name: "test_baseline",
-      description: "测试基线：仅必需参数",
+      description: "Baseline test: only required parameters",
       is_baseline: true,
     },
     {
       name: "test_param_size",
-      description: "测试 size 参数（dall-e-3 默认尺寸）",
+      description: "Test size parameter (dall-e-3 default size)",
       params: {
         size: "1024x1024",
       },
@@ -29,7 +29,7 @@
     },
     {
       name: "test_param_size_dalle2",
-      description: "测试 size 参数（dall-e-2 尺寸变体）",
+      description: "Test size parameter (dall-e-2 size variants)",
       parameterize: {
         size: [
           "512x512",
@@ -47,7 +47,7 @@
     },
     {
       name: "test_param_size_dalle3",
-      description: "测试 dall-e-3 尺寸变体",
+      description: "Test dall-e-3 size variants",
       parameterize: {
         size: [
           "1792x1024",
@@ -64,7 +64,7 @@
     },
     {
       name: "test_param_quality_dalle3",
-      description: "测试 quality 参数（dall-e-3）",
+      description: "Test quality parameter (dall-e-3)",
       parameterize: {
         quality: [
           "hd",
@@ -81,7 +81,7 @@
     },
     {
       name: "test_param_response_format",
-      description: "测试 response_format 参数（dall-e-3/dall-e-2）",
+      description: "Test response_format parameter (dall-e-3/dall-e-2)",
       parameterize: {
         response_format: [
           "url",
@@ -98,7 +98,7 @@
     },
     {
       name: "test_param_style",
-      description: "测试 style 参数（dall-e-3）",
+      description: "Test style parameter (dall-e-3)",
       parameterize: {
         style: [
           "vivid",
@@ -115,7 +115,7 @@
     },
     {
       name: "test_param_n_dalle2",
-      description: "测试 n 参数（dall-e-2 支持多张）",
+      description: "Test n parameter (dall-e-2 supports multiple)",
       params: {
         model: "dall-e-2",
         n: 2,
@@ -127,7 +127,7 @@
     },
     {
       name: "test_param_user",
-      description: "测试 user 参数",
+      description: "Test user parameter",
       params: {
         user: "user-123",
       },
@@ -138,7 +138,7 @@
     },
     {
       name: "test_gpt_image_background_transparent",
-      description: "测试 background 参数（透明背景，GPT image 模型）",
+      description: "Test background parameter (transparent background, GPT image model)",
       params: {
         model: "gpt-image-1.5",
         prompt: "A simple logo with a transparent background",
@@ -152,7 +152,7 @@
     },
     {
       name: "test_gpt_image_output_formats",
-      description: "测试 output_format 变体（GPT image 模型）",
+      description: "Test output_format variants (GPT image model)",
       parameterize: {
         output_format: [
           "png",
@@ -172,7 +172,7 @@
     },
     {
       name: "test_gpt_image_output_webp_compression",
-      description: "测试 output_format=webp + output_compression（GPT image 模型）",
+      description: "Test output_format=webp + output_compression (GPT image model)",
       params: {
         model: "gpt-image-1.5",
         prompt: "A futuristic city skyline",
@@ -186,7 +186,7 @@
     },
     {
       name: "test_gpt_image_output_jpeg_compression",
-      description: "测试 output_format=jpeg + output_compression（GPT image 模型）",
+      description: "Test output_format=jpeg + output_compression (GPT image model)",
       params: {
         model: "gpt-image-1.5",
         prompt: "A portrait photo realistic style",
@@ -200,7 +200,7 @@
     },
     {
       name: "test_gpt_image_background_variants",
-      description: "测试 background 变体（GPT image 模型）",
+      description: "Test background variants (GPT image model)",
       parameterize: {
         background: [
           "transparent",
@@ -220,7 +220,7 @@
     },
     {
       name: "test_gpt_image_moderation_low",
-      description: "测试 moderation=low（GPT image 模型）",
+      description: "Test moderation=low (GPT image model)",
       params: {
         model: "gpt-image-1.5",
         prompt: "A landscape painting with trees and river",
@@ -233,7 +233,7 @@
     },
     {
       name: "test_gpt_image_moderation_auto",
-      description: "测试 moderation=auto（GPT image 模型）",
+      description: "Test moderation=auto (GPT image model)",
       params: {
         model: "gpt-image-1.5",
         prompt: "A sketch of a city skyline",
@@ -246,7 +246,7 @@
     },
     {
       name: "test_gpt_image_quality_high",
-      description: "测试 quality=high（GPT image 模型）",
+      description: "Test quality=high (GPT image model)",
       params: {
         model: "gpt-image-1.5",
         prompt: "A detailed illustration of a spaceship cockpit",
@@ -259,7 +259,7 @@
     },
     {
       name: "test_gpt_image_quality_variants",
-      description: "测试 quality 其它取值（GPT image 模型）",
+      description: "Test other quality values (GPT image model)",
       parameterize: {
         quality: [
           "medium",
@@ -279,7 +279,7 @@
     },
     {
       name: "test_gpt_image_n_multiple",
-      description: "测试 n 参数（GPT image 模型，多张生成）",
+      description: "Test n parameter (GPT image model, multiple generation)",
       params: {
         model: "gpt-image-1.5",
         prompt: "A set of minimal icons",
@@ -292,7 +292,7 @@
     },
     {
       name: "test_gpt_image_sizes",
-      description: "测试 size 参数（GPT image 模型）",
+      description: "Test size parameter (GPT image model)",
       parameterize: {
         size: [
           "1024x1024",
@@ -312,7 +312,7 @@
     },
     {
       name: "test_gpt_image_partial_streaming",
-      description: "测试 partial_images + stream（GPT image 模型流式）",
+      description: "Test partial_images + stream (GPT image model streaming)",
       params: {
         model: "gpt-image-1.5",
         prompt: "A painting of a mountain lake",

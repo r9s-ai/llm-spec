@@ -1,0 +1,28 @@
+{
+    "status_code": 200,
+    "headers": {
+        "content-type": "application/json"
+    },
+    "body": {
+        "id": "msg_mock_thinking",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+            {
+                "type": "thinking",
+                "thinking": "I am thinking about 25 * 17. 25 * 10 = 250, 25 * 7 = 175. 250 + 175 = 425."
+            },
+            {
+                "type": "text",
+                "text": "The answer is 425."
+            }
+        ],
+        "model": "claude-3-7-sonnet-20250219",
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "usage": {
+            "input_tokens": 20,
+            "output_tokens": 50
+        }
+    }
+}

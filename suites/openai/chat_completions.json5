@@ -27,12 +27,12 @@
   tests: [
     {
       name: "test_baseline",
-      description: "测试基线：仅必需参数",
+      description: "Baseline test: only required parameters",
       is_baseline: true,
     },
     {
       name: "test_param_temperature",
-      description: "测试 temperature 参数",
+      description: "Test temperature parameter",
       params: {
         temperature: 0.7,
       },
@@ -43,7 +43,7 @@
     },
     {
       name: "test_param_max_tokens",
-      description: "测试 max_tokens 参数",
+      description: "Test max_tokens parameter",
       params: {
         max_tokens: 100,
       },
@@ -54,7 +54,7 @@
     },
     {
       name: "test_param_top_p",
-      description: "测试 top_p 参数",
+      description: "Test top_p parameter",
       params: {
         top_p: 0.9,
       },
@@ -65,7 +65,7 @@
     },
     {
       name: "test_param_n",
-      description: "测试 n 参数（生成多个响应）",
+      description: "Test n parameter (generate multiple responses)",
       params: {
         n: 2,
       },
@@ -76,7 +76,7 @@
     },
     {
       name: "test_param_stop_string",
-      description: "测试 stop 参数（字符串形式）",
+      description: "Test stop parameter (string format)",
       params: {
         stop: "\n",
       },
@@ -87,7 +87,7 @@
     },
     {
       name: "test_param_stop_array",
-      description: "测试 stop 参数（数组形式）",
+      description: "Test stop parameter (array format)",
       params: {
         stop: [
           "\n",
@@ -104,7 +104,7 @@
     },
     {
       name: "test_param_frequency_penalty",
-      description: "测试 frequency_penalty 参数",
+      description: "Test frequency_penalty parameter",
       params: {
         frequency_penalty: 0.5,
       },
@@ -115,7 +115,7 @@
     },
     {
       name: "test_param_presence_penalty",
-      description: "测试 presence_penalty 参数",
+      description: "Test presence_penalty parameter",
       params: {
         presence_penalty: 0.5,
       },
@@ -126,7 +126,7 @@
     },
     {
       name: "test_param_seed",
-      description: "测试 seed 参数（确定性输出）",
+      description: "Test seed parameter (deterministic output)",
       params: {
         seed: 12345,
       },
@@ -137,7 +137,7 @@
     },
     {
       name: "test_param_max_completion_tokens",
-      description: "测试 max_completion_tokens 参数（新参数）",
+      description: "Test max_completion_tokens parameter (new parameter)",
       params: {
         max_completion_tokens: 100,
       },
@@ -148,7 +148,7 @@
     },
     {
       name: "test_param_user",
-      description: "测试 user 参数（用户标识）",
+      description: "Test user parameter (user identifier)",
       params: {
         user: "user-123",
       },
@@ -159,7 +159,7 @@
     },
     {
       name: "test_response_format_text",
-      description: "测试 response_format 为 text（默认）",
+      description: "Test response_format as text (default)",
       params: {
         response_format: {
           type: "text",
@@ -172,7 +172,7 @@
     },
     {
       name: "test_response_format_json_object",
-      description: "测试 response_format 为 json_object",
+      description: "Test response_format as json_object",
       params: {
         messages: [
           {
@@ -191,7 +191,7 @@
     },
     {
       name: "test_response_format_json_schema",
-      description: "测试 response_format 为 json_schema",
+      description: "Test response_format as json_schema",
       params: {
         messages: [
           {
@@ -228,7 +228,7 @@
     },
     {
       name: "test_param_tools",
-      description: "测试 tools 参数（函数调用）",
+      description: "Test tools parameter (function calling)",
       params: {
         messages: [
           {
@@ -285,7 +285,7 @@
     },
     {
       name: "test_tool_choice_variants",
-      description: "测试不同的 tool_choice 值",
+      description: "Test different tool_choice values",
       parameterize: {
         tool_choice: [
           "none",
@@ -329,7 +329,7 @@
     },
     {
       name: "test_parallel_tool_calls",
-      description: "测试 parallel_tool_calls 参数",
+      description: "Test parallel_tool_calls parameter",
       params: {
         messages: [
           {
@@ -359,7 +359,7 @@
     },
     {
       name: "test_param_logprobs",
-      description: "测试 logprobs 参数",
+      description: "Test logprobs parameter",
       params: {
         logprobs: true,
       },
@@ -370,7 +370,7 @@
     },
     {
       name: "test_param_top_logprobs",
-      description: "测试不同的 top_logprobs 值",
+      description: "Test different top_logprobs values",
       parameterize: {
         top_logprobs: [
           1,
@@ -389,7 +389,7 @@
     },
     {
       name: "test_streaming_basic",
-      description: "测试基本流式响应",
+      description: "Test basic streaming response",
       params: {
         stream: true,
       },
@@ -401,7 +401,7 @@
     },
     {
       name: "test_streaming_with_usage",
-      description: "测试带 usage 的流式响应",
+      description: "Test streaming response with usage",
       params: {
         stream: true,
         stream_options: {
@@ -416,7 +416,7 @@
     },
     {
       name: "test_param_logit_bias",
-      description: "测试 logit_bias 参数",
+      description: "Test logit_bias parameter",
       params: {
         logit_bias: {
           "31373": -100,
@@ -431,7 +431,7 @@
     },
     {
       name: "test_param_service_tier",
-      description: "测试 service_tier 参数",
+      description: "Test service_tier parameter",
       params: {
         service_tier: "auto",
       },

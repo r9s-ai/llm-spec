@@ -16,13 +16,18 @@ Usage:
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
+import httpx
 import pytest
+import respx
 
+from llm_spec.adapters.base import ProviderAdapter
 from llm_spec.reporting.collector import ReportCollector
 from llm_spec.runners import ConfigDrivenTestRunner, SpecTestCase, SpecTestSuite, load_test_suite
+from tests.integration.mock_loader import MockDataLoader
 
 if TYPE_CHECKING:
     pass
@@ -46,7 +51,7 @@ def _get_suite(config_path: Path) -> SpecTestSuite:
     return _SUITE_CACHE[config_path]
 
 
-def _get_collector(config_path: Path, client: Any) -> ReportCollector:
+def _get_collector(config_path: Path, client: ProviderAdapter) -> ReportCollector:
     """Get or create a ReportCollector (cached by suite path)."""
     if config_path not in _COLLECTORS:
         suite = _get_suite(config_path)
@@ -96,13 +101,25 @@ _TEST_CONFIGS = discover_test_configs()
     [(c[0], c[1]) for c in _TEST_CONFIGS],
     ids=[c[2] for c in _TEST_CONFIGS],
 )
-def test_from_config(config_path: Path, test_name: str, request: pytest.FixtureRequest):
+def test_from_config(
+    config_path: Path,
+    test_name: str,
+    request: pytest.FixtureRequest,
+    mock_mode: bool,
+    respx_mock: respx.MockRouter | None,
+    mock_data_loader: MockDataLoader,
+) -> None:
     """Run a single test case from a suite config.
+
+    Supports both real API calls and mock mode (via --mock flag).
 
     Args:
         config_path: JSON5 suite config path
         test_name: test case name
         request: pytest fixture request
+        mock_mode: whether mock mode is enabled
+        respx_mock: respx mock router (if mock mode enabled)
+        mock_data_loader: mock data loader instance
     """
     suite = _get_suite(config_path)
 
@@ -131,6 +148,16 @@ def test_from_config(config_path: Path, test_name: str, request: pytest.FixtureR
     # Logger is attached to adapters
     logger = getattr(client, "logger", None)
 
+    # Mock mode: setup respx route for this specific test
+    if mock_mode and respx_mock:
+        _setup_mock_route(
+            respx_mock=respx_mock,
+            mock_loader=mock_data_loader,
+            suite=suite,
+            test_case=test_case,
+            client=client,
+        )
+
     # Run
     runner = ConfigDrivenTestRunner(suite, client, collector, logger)
     success = runner.run_test(test_case)
@@ -141,6 +168,75 @@ def test_from_config(config_path: Path, test_name: str, request: pytest.FixtureR
 
     # Assert
     assert success, f"Test '{test_name}' failed"
+
+
+def _setup_mock_route(
+    respx_mock: respx.MockRouter,
+    mock_loader: MockDataLoader,
+    suite: SpecTestSuite,
+    test_case: SpecTestCase,
+    client: ProviderAdapter,
+) -> None:
+    """Setup respx mock route for a single test case.
+
+    Registers HTTP mock responses based on mock data files.
+    Supports both streaming and non-streaming responses.
+
+    Args:
+        respx_mock: respx mock router
+        mock_loader: mock data loader instance
+        suite: test suite configuration
+        test_case: specific test case to mock
+        client: provider client adapter
+    """
+    # Build full URL
+    base_url = client.get_base_url()
+    endpoint = test_case.endpoint_override or suite.endpoint
+    full_url = f"{base_url}{endpoint}"
+
+    is_stream = test_case.stream
+
+    # Load mock data
+    try:
+        mock_data = mock_loader.load_response(
+            provider=suite.provider,
+            endpoint=endpoint,
+            test_name=test_case.name,
+            is_stream=is_stream,
+        )
+    except FileNotFoundError as e:
+        pytest.skip(f"Mock data not available: {e}")
+        return
+
+    # Register respx route
+    if is_stream:
+        # Streaming response: combine all chunks into single response
+        # The HTTPClient.stream() method will iterate over the bytes
+        if isinstance(mock_data, dict):
+            raise TypeError(
+                f"Expected Iterator[bytes] for streaming response, got {type(mock_data)}"
+            )
+        chunks = list(mock_data)  # mock_data is Iterator[bytes]
+        combined_content = b"".join(chunks)
+
+        respx_mock.post(full_url).mock(
+            return_value=httpx.Response(
+                status_code=200,
+                headers={"content-type": "text/event-stream"},
+                content=combined_content,
+            )
+        )
+    else:
+        # Non-streaming response
+        if not isinstance(mock_data, dict):
+            raise TypeError(f"Expected dict for non-streaming response, got {type(mock_data)}")
+        respx_mock.post(full_url).mock(
+            return_value=httpx.Response(
+                status_code=mock_data["status_code"],
+                headers=mock_data.get("headers", {}),
+                json=mock_data["body"],
+            )
+        )
 
 
 # ============================================================================
@@ -162,7 +258,7 @@ class TestGeminiFromConfig:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def finalize_config_reports(request: pytest.FixtureRequest):
+def finalize_config_reports(request: pytest.FixtureRequest) -> Generator[None, None, None]:
     """Finalize per-suite reports at session end."""
     yield
 

@@ -11,7 +11,7 @@
   tests: [
     {
       name: "test_baseline",
-      description: "测试基线：仅必需参数",
+      description: "Baseline test: only required parameters",
       files: {
         file: "assets/audio/hello_en.mp3",
       },
@@ -19,7 +19,7 @@
     },
     {
       name: "test_param_language",
-      description: "测试 language 参数",
+      description: "Test language parameter",
       params: {
         language: "en",
       },
@@ -33,7 +33,7 @@
     },
     {
       name: "test_param_temperature",
-      description: "测试 temperature 参数",
+      description: "Test temperature parameter",
       params: {
         temperature: 0.0,
       },
@@ -47,7 +47,7 @@
     },
     {
       name: "test_response_format_variants",
-      description: "测试 response_format 参数（常见格式）",
+      description: "Test response_format parameter (common formats)",
       parameterize: {
         response_format: [
           "json",
@@ -68,7 +68,7 @@
     },
     {
       name: "test_prompt",
-      description: "测试 prompt 参数",
+      description: "Test prompt parameter",
       params: {
         model: "gpt-4o-mini-transcribe",
         prompt: "Please transcribe in a friendly style.",
@@ -83,7 +83,7 @@
     },
     {
       name: "test_chunking_strategy_auto",
-      description: "测试 chunking_strategy = auto",
+      description: "Test chunking_strategy = auto",
       params: {
         model: "gpt-4o-mini-transcribe",
         chunking_strategy: "auto",
@@ -98,7 +98,7 @@
     },
     {
       name: "test_chunking_strategy_server_vad",
-      description: "测试 chunking_strategy = server_vad 对象",
+      description: "Test chunking_strategy = server_vad object",
       params: {
         model: "gpt-4o-mini-transcribe",
         chunking_strategy: {
@@ -117,7 +117,7 @@
     },
     {
       name: "test_include_logprobs",
-      description: "测试 include=logprobs",
+      description: "Test include=logprobs",
       params: {
         model: "gpt-4o-mini-transcribe",
         include: [
@@ -137,7 +137,7 @@
     },
     {
       name: "test_known_speakers",
-      description: "测试 known_speaker_names + known_speaker_references",
+      description: "Test known_speaker_names + known_speaker_references",
       params: {
         model: "gpt-4o-mini-transcribe",
         known_speaker_names: [
@@ -162,7 +162,7 @@
     },
     {
       name: "test_timestamp_granularities",
-      description: "测试 timestamp_granularities",
+      description: "Test timestamp_granularities",
       params: {
         model: "gpt-4o-mini-transcribe",
         response_format: "verbose_json",
@@ -184,7 +184,7 @@
     },
     {
       name: "test_stream_flag",
-      description: "测试 stream=true",
+      description: "Test stream=true",
       params: {
         model: "gpt-4o-mini-transcribe",
         stream: true,

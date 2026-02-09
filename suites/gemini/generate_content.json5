@@ -19,12 +19,12 @@
   tests: [
     {
       name: "test_baseline",
-      description: "测试基线：仅必需参数",
+      description: "Baseline test: only required parameters",
       is_baseline: true,
     },
     {
       name: "test_param_temperature",
-      description: "测试 temperature 参数",
+      description: "Test temperature parameter",
       params: {
         temperature: 0.7,
       },
@@ -35,7 +35,7 @@
     },
     {
       name: "test_param_max_output_tokens",
-      description: "测试 maxOutputTokens 参数",
+      description: "Test maxOutputTokens parameter",
       params: {
         maxOutputTokens: 100,
       },
@@ -46,7 +46,7 @@
     },
     {
       name: "test_param_top_p",
-      description: "测试 topP 参数",
+      description: "Test topP parameter",
       params: {
         topP: 0.9,
       },
@@ -57,7 +57,7 @@
     },
     {
       name: "test_param_top_k",
-      description: "测试 topK 参数",
+      description: "Test topK parameter",
       params: {
         topK: 40,
       },
@@ -68,7 +68,7 @@
     },
     {
       name: "test_param_candidate_count",
-      description: "测试 candidateCount 参数",
+      description: "Test candidateCount parameter",
       params: {
         candidateCount: 2,
       },
@@ -79,7 +79,7 @@
     },
     {
       name: "test_param_stop_sequences",
-      description: "测试 stopSequences 参数",
+      description: "Test stopSequences parameter",
       params: {
         stopSequences: [
           "END",
@@ -93,7 +93,7 @@
     },
     {
       name: "test_param_presence_penalty",
-      description: "测试 presencePenalty 参数",
+      description: "Test presencePenalty parameter",
       params: {
         presencePenalty: 0.5,
       },
@@ -104,7 +104,7 @@
     },
     {
       name: "test_param_frequency_penalty",
-      description: "测试 frequencyPenalty 参数",
+      description: "Test frequencyPenalty parameter",
       params: {
         frequencyPenalty: 0.5,
       },
@@ -115,7 +115,7 @@
     },
     {
       name: "test_param_seed",
-      description: "测试 seed 参数",
+      description: "Test seed parameter",
       params: {
         seed: 42,
       },
@@ -126,7 +126,7 @@
     },
     {
       name: "test_response_format_json",
-      description: "测试 JSON 响应格式",
+      description: "Test JSON response format",
       params: {
         responseMimeType: "application/json",
       },
@@ -137,7 +137,7 @@
     },
     {
       name: "test_response_format_json_with_schema",
-      description: "测试带 schema 的 JSON 响应",
+      description: "Test JSON response with schema",
       override_base: true,
       no_wrapper: true,
       params: {
@@ -192,7 +192,7 @@
     },
     {
       name: "test_param_system_instruction",
-      description: "测试 systemInstruction 参数",
+      description: "Test systemInstruction parameter",
       no_wrapper: true,
       params: {
         systemInstruction: {
@@ -216,7 +216,7 @@
     },
     {
       name: "test_param_safety_settings",
-      description: "测试 safetySettings 参数",
+      description: "Test safetySettings parameter",
       no_wrapper: true,
       params: {
         safetySettings: [
@@ -238,7 +238,7 @@
     },
     {
       name: "test_safety_threshold",
-      description: "测试不同安全阈值",
+      description: "Test different safety thresholds",
       no_wrapper: true,
       parameterize: {
         threshold: [
@@ -263,7 +263,7 @@
     },
     {
       name: "test_param_function_calling",
-      description: "测试函数调用",
+      description: "Test function calling",
       override_base: true,
       no_wrapper: true,
       params: {
@@ -327,7 +327,7 @@
     },
     {
       name: "test_param_code_execution",
-      description: "测试代码执行",
+      description: "Test code execution",
       override_base: true,
       no_wrapper: true,
       params: {

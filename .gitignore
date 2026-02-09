@@ -1,5 +1,9 @@
-.claude/claude.md
+.claude/*
 _docs/*
+__*
+
+reports/
+llm-spec.toml
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -91,8 +95,3 @@ Thumbs.db
 config.yaml
 config.local.yaml
 *.log
-
-
-reports/
-llm-spec.toml
-docs/BLOG_LLM_SPEC.md
