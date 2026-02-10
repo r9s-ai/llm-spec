@@ -159,7 +159,12 @@ class ParameterTableFormatter:
                 except Exception:
                     pass
 
-            display_str = value
+            # Escape control characters like \n, \r, \t, etc.
+            # We use json.dumps for robust escaping, then strip surrounding quotes.
+            if any(ord(c) < 32 for c in value):
+                display_str = json.dumps(value, ensure_ascii=False).strip('"')
+            else:
+                display_str = value
         elif isinstance(value, (list, dict)):
             try:
                 display_str = json.dumps(value, ensure_ascii=False)

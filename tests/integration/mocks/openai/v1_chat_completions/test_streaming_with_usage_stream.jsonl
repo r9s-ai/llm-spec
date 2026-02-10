@@ -1,0 +1,5 @@
+{"type": "chunk", "data": {"id": "chatcmpl-mock-usage", "object": "chat.completion.chunk", "created": 1677652288, "model": "gpt-4o-mini", "choices": [{"index": 0, "delta": {"role": "assistant", "content": ""}, "finish_reason": null}]}}
+{"type": "chunk", "data": {"id": "chatcmpl-mock-usage", "object": "chat.completion.chunk", "created": 1677652288, "model": "gpt-4o-mini", "choices": [{"index": 0, "delta": {"content": "Hello"}, "finish_reason": null}]}}
+{"type": "chunk", "data": {"id": "chatcmpl-mock-usage", "object": "chat.completion.chunk", "created": 1677652288, "model": "gpt-4o-mini", "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}}
+{"type": "chunk", "data": {"id": "chatcmpl-mock-usage", "object": "chat.completion.chunk", "created": 1677652288, "model": "gpt-4o-mini", "choices": [], "usage": {"prompt_tokens": 5, "completion_tokens": 1, "total_tokens": 6}}}
+{"type": "done", "data": "[DONE]"}

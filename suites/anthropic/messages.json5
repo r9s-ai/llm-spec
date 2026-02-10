@@ -121,38 +121,6 @@
     },
     {
       name: "test_param_image_base64",
-      description: "Test base64 image input",
-      override_base: true,
-      params: {
-        model: "claude-haiku-4.5",
-        max_tokens: 256,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: "image/png",
-                  data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-                },
-              },
-              {
-                type: "text",
-                text: "What do you see?",
-              },
-            ],
-          },
-        ],
-      },
-      test_param: {
-        name: "image.source.data",
-        value: null,
-      },
-    },
-    {
-      name: "test_image_media_type",
       description: "Test different image media_type with valid headers",
       parameterize: {
         image_data: [

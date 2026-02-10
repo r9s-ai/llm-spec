@@ -63,6 +63,12 @@ class SpecTestCase:
     files: dict[str, str] | None = None
     """File upload mapping: {"param_name": "file_path"}."""
 
+    schemas: dict[str, str] | None = None
+    """Test-level schema overrides."""
+
+    required_fields: list[str] | None = None
+    """List of fields that MUST be present and not None in the response."""
+
 
 @dataclass
 class SpecTestSuite:
@@ -85,6 +91,9 @@ class SpecTestSuite:
 
     tests: list[SpecTestCase] = field(default_factory=list)
     """List of test cases."""
+
+    required_fields: list[str] = field(default_factory=list)
+    """Suite-level required fields."""
 
     stream_rules: dict[str, Any] | None = None
     """Suite-level stream rules (can be overridden per test)."""
@@ -162,6 +171,8 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
             no_wrapper=test_config.get("no_wrapper", False),
             endpoint_override=test_config.get("endpoint_override"),
             files=test_config.get("files"),
+            schemas=test_config.get("schemas"),
+            required_fields=test_config.get("required_fields"),
         )
 
 
@@ -247,6 +258,8 @@ def load_test_suite(config_path: Path) -> SpecTestSuite:
                     no_wrapper=t.get("no_wrapper", False),
                     endpoint_override=t.get("endpoint_override"),
                     files=t.get("files"),
+                    schemas=t.get("schemas"),
+                    required_fields=t.get("required_fields"),
                 )
             )
 
@@ -257,6 +270,7 @@ def load_test_suite(config_path: Path) -> SpecTestSuite:
         base_params=data.get("base_params", {}),
         param_wrapper=data.get("param_wrapper"),
         tests=tests,
+        required_fields=data.get("required_fields", []),
         stream_rules=data.get("stream_rules", data.get("stream_validation")),
         config_path=config_path,
     )
@@ -408,14 +422,25 @@ class ConfigDrivenTestRunner:
             if test.stream:
                 return self._run_stream_test(test, endpoint, params)
             else:
-                return self._run_normal_test(test, endpoint, params)
+                # Resolve schema overrides
+                response_schema = self.response_schema
+                if test.schemas and "response" in test.schemas:
+                    response_schema = get_schema(test.schemas["response"])
+
+                return self._run_normal_test(test, endpoint, params, response_schema)
         finally:
             # Clear context
             current_test_name.reset(token)
 
     # _get_logger removed
 
-    def _run_normal_test(self, test: SpecTestCase, endpoint: str, params: dict[str, Any]) -> bool:
+    def _run_normal_test(
+        self,
+        test: SpecTestCase,
+        endpoint: str,
+        params: dict[str, Any],
+        response_schema: type[BaseModel] | None = None,
+    ) -> bool:
         """Run a non-streaming request test (with optional logging)."""
         files = None
         opened_files = []
@@ -493,33 +518,50 @@ class ConfigDrivenTestRunner:
 
         # Validate response (schema only on HTTP success)
         http_success = 200 <= status_code < 300
-        if self.response_schema and http_success:
+        schema_valid = True
+        validation_errors: list[str] = []
+
+        if response_schema and http_success:
             # HTTP success: validate schema
             # Optimization: if response_body is already a dict, validate JSON directly.
             if isinstance(response_body, dict):
-                result = ResponseValidator.validate_json(response_body, self.response_schema)
+                result = ResponseValidator.validate_json(response_body, response_schema)
             else:
-                result = ResponseValidator.validate_response(response, self.response_schema)
+                result = ResponseValidator.validate_response(response, response_schema)
 
             # Log validation errors
             if not result.is_valid:
+                schema_valid = False
+                validation_errors.append(result.error_message or "Schema validation failed")
                 self._log_validation_error(test.name, result, status_code, response_body)
-        elif not http_success:
+
+        # Check required fields (both suite-level and test-level)
+        all_required_fields = list(self.suite.required_fields)
+        if test.required_fields:
+            all_required_fields.extend(test.required_fields)
+
+        missing_required: list[str] = []
+        if http_success and isinstance(response_body, dict):
+            for field_path in all_required_fields:
+                val = get_value_at_path(response_body, field_path)
+                if val is None:
+                    missing_required.append(field_path)
+                    validation_errors.append(f"Missing required field: {field_path}")
+
+        is_valid = schema_valid and not missing_required
+
+        if not http_success:
             # HTTP failure: skip schema validation
-            result = ValidationResult(
-                is_valid=False,
-                error_message=f"HTTP {status_code}: {response_body}",
-                missing_fields=[],
-                expected_fields=[],
-            )
+            error_message = f"HTTP {status_code}: {response_body}"
+            expected_fields = []
+            missing_fields = []
         else:
-            # No schema and HTTP success: only check status
-            result = ValidationResult(
-                is_valid=True,
-                error_message=None,
-                missing_fields=[],
-                expected_fields=[],
-            )
+            # HTTP success
+            error_message = "; ".join(validation_errors) if validation_errors else None
+            # For backward compatibility with record_test we need individual parts
+            # but record_test takes 'error' string.
+            expected_fields = []  # result.expected_fields if we had one
+            missing_fields = missing_required
 
         # Build tested_param (if test_param is configured)
         tested_param: tuple[str, Any] | None = None
@@ -536,14 +578,14 @@ class ConfigDrivenTestRunner:
             params=params,
             status_code=status_code,
             response_body=response_body,
-            error=result.error_message if not result.is_valid else None,
-            missing_fields=result.missing_fields,
-            expected_fields=result.expected_fields,
+            error=error_message,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
             tested_param=tested_param,
             is_baseline=test.is_baseline,
         )
 
-        return 200 <= status_code < 300 and result.is_valid
+        return http_success and is_valid
 
     # _format_stream_response removed (moved to StreamParser.format_stream_response)
 

@@ -1,0 +1,33 @@
+{
+    "status_code": 200,
+    "headers": {
+        "content-type": "application/json"
+    },
+    "body": {
+        "id": "chatcmpl-mock-gpt5.2-mini-reasoning",
+        "object": "chat.completion",
+        "created": 1677652288,
+        "model": "gpt-5.2-mini",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "As a GPT-5.2-mini model, I have completed the reasoning task efficiently with the requested effort level.",
+                    "reasoning_content": "Internal thinking process of gpt-5.2-mini..."
+                },
+                "logprobs": null,
+                "finish_reason": "stop"
+            }
+        ],
+        "usage": {
+            "prompt_tokens": 15,
+            "completion_tokens": 80,
+            "total_tokens": 95,
+            "completion_tokens_details": {
+                "reasoning_tokens": 60
+            }
+        },
+        "system_fingerprint": "fp_mock_gpt5.2_mini"
+    }
+}

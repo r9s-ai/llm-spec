@@ -4,20 +4,20 @@
         "content-type": "application/json"
     },
     "body": {
-        "id": "msg_mock_image_base64",
+        "id": "msg_mock_tool_choice_auto",
         "type": "message",
         "role": "assistant",
         "content": [
             {
                 "type": "text",
-                "text": "I see a mock 1x1 image."
+                "text": "Tool choice auto."
             }
         ],
         "model": "claude-3-5-sonnet-20241022",
         "stop_reason": "end_turn",
         "stop_sequence": null,
         "usage": {
-            "input_tokens": 100,
+            "input_tokens": 50,
             "output_tokens": 10
         }
     }

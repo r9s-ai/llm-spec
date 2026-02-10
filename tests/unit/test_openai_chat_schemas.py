@@ -1,6 +1,12 @@
+import pytest
+from pydantic import ValidationError
+
 from llm_spec.validation.schemas.openai.chat import (
     ChatCompletionChunkResponse,
     ChatCompletionResponse,
+    FunctionCall,
+    FunctionToolCall,
+    Message,
 )
 
 
@@ -39,6 +45,74 @@ def test_openai_chat_completion_response_accepts_typed_content_parts_and_custom_
     }
 
     ChatCompletionResponse(**payload)
+
+
+def test_openai_chat_completion_response_requires_mandatory_fields():
+    # Missing 'id'
+    payload = {
+        "object": "chat.completion",
+        "created": 1720000000,
+        "model": "gpt-4o-mini",
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": "hi"}}],
+    }
+    with pytest.raises(ValidationError):
+        ChatCompletionResponse(**payload)
+
+
+def test_openai_chat_completion_with_reasoning_and_refusal():
+    payload = {
+        "id": "chatcmpl_123",
+        "object": "chat.completion",
+        "created": 1720000000,
+        "model": "gpt-4o-mini",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Final answer",
+                    "reasoning_content": "Chain of thought...",
+                    "refusal": "I cannot do that.",
+                },
+                "finish_reason": "stop",
+            }
+        ],
+    }
+    resp = ChatCompletionResponse(**payload)
+    assert resp.choices[0].message.reasoning_content == "Chain of thought..."
+    assert resp.choices[0].message.refusal == "I cannot do that."
+
+
+def test_openai_message_role_validation():
+    # Valid developer role
+    Message(role="developer", content="You are a helpful assistant")
+
+    # Invalid assistant (missing everything)
+    with pytest.raises(ValidationError, match="Assistant message must have at least one"):
+        Message(role="assistant")
+
+    # Valid assistant variants
+    Message(role="assistant", content="Hi")
+    Message(
+        role="assistant",
+        tool_calls=[
+            FunctionToolCall(
+                id="c1", type="function", function=FunctionCall(name="f1", arguments="{}")
+            )
+        ],
+    )
+    Message(role="assistant", function_call=FunctionCall(name="f1", arguments="{}"))
+    Message(role="assistant", refusal="No")
+
+    # Tool role validation
+    with pytest.raises(ValidationError, match="Tool message must have 'tool_call_id'"):
+        Message(role="tool", content="done")
+    Message(role="tool", content="done", tool_call_id="call_1")
+
+    # Function role validation
+    with pytest.raises(ValidationError, match="Function message must have 'name'"):
+        Message(role="function", content="done")
+    Message(role="function", content="done", name="get_weather")
 
 
 def test_openai_chat_completion_chunk_accepts_tool_call_delta_shape():

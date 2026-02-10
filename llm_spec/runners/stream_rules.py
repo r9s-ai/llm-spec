@@ -74,6 +74,9 @@ def validate_stream(
 
     observation_names = [o.get("name") for o in observations if isinstance(o, dict)]
     observed_event_names = [n for n in observation_names if isinstance(n, str)]
+    observed_data = [
+        o.get("data") for o in observations if isinstance(o, dict) and o.get("kind") == "event"
+    ]
 
     min_observations = effective_rules.get("min_observations")
     if isinstance(min_observations, int) and len(observed_event_names) < min_observations:
@@ -82,14 +85,18 @@ def validate_stream(
 
     checks = effective_rules.get("checks")
     if isinstance(checks, list):
-        missing.extend(_evaluate_stream_checks(checks, observed_event_names))
+        missing.extend(_evaluate_stream_checks(checks, observed_event_names, observed_data))
         return missing
 
     # No explicit checks and no min_observations: treat as stream validation disabled.
     return []
 
 
-def _evaluate_stream_checks(checks: list[Any], observed_event_names: list[str]) -> list[str]:
+def _evaluate_stream_checks(
+    checks: list[Any],
+    observed_event_names: list[str],
+    observed_data: list[dict[str, Any] | None],
+) -> list[str]:
     missing: list[str] = []
     for check in checks:
         if not isinstance(check, dict):
@@ -131,6 +138,16 @@ def _evaluate_stream_checks(checks: list[Any], observed_event_names: list[str]) 
                 terminal, observed_event_names[-1]
             ):
                 missing.append(f"terminal:{_format_requirement_label(terminal)}")
+
+        elif ct == "required_field":
+            field_path = check.get("field")
+            found = False
+            for data in observed_data:
+                if data and _get_value_at_path_local(data, field_path) is not None:
+                    found = True
+                    break
+            if not found:
+                missing.append(f"field:{field_path}")
 
     return missing
 
@@ -324,3 +341,18 @@ def _find_missing_sequence_items(
         if not found:
             missing.append(_format_requirement_label(req))
     return missing
+
+
+def _get_value_at_path_local(obj: dict[str, Any], path: str | None) -> Any:
+    """Helper to get value at path (mini-duplicate of runner.py to avoid circular dep)."""
+    if not path:
+        return None
+    parts = path.split(".")
+    current = obj
+    for part in parts:
+        # Simple dict traversal (array index support omitted for brevity/simplicity in stream chunks)
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+        else:
+            return None
+    return current

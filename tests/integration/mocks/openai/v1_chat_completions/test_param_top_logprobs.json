@@ -1,0 +1,63 @@
+{
+    "status_code": 200,
+    "headers": {
+        "content-type": "application/json"
+    },
+    "body": {
+        "id": "chatcmpl-mock-top-logprobs",
+        "object": "chat.completion",
+        "created": 1677652288,
+        "model": "gpt-4o-mini",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Hello"
+                },
+                "logprobs": {
+                    "content": [
+                        {
+                            "token": "Hello",
+                            "logprob": -0.01,
+                            "bytes": [
+                                72,
+                                101,
+                                108,
+                                108,
+                                111
+                            ],
+                            "top_logprobs": [
+                                {
+                                    "token": "Hello",
+                                    "logprob": -0.01,
+                                    "bytes": [
+                                        72,
+                                        101,
+                                        108,
+                                        108,
+                                        111
+                                    ]
+                                },
+                                {
+                                    "token": "Hi",
+                                    "logprob": -2.5,
+                                    "bytes": [
+                                        72,
+                                        105
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "finish_reason": "stop"
+            }
+        ],
+        "usage": {
+            "prompt_tokens": 5,
+            "completion_tokens": 2,
+            "total_tokens": 7
+        }
+    }
+}

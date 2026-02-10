@@ -1,0 +1,35 @@
+{
+    "status_code": 200,
+    "headers": {
+        "content-type": "application/json"
+    },
+    "body": {
+        "id": "chatcmpl-mock-n",
+        "object": "chat.completion",
+        "created": 1677652288,
+        "model": "gpt-4o-mini",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Hello there (choice 1)!"
+                },
+                "finish_reason": "stop"
+            },
+            {
+                "index": 1,
+                "message": {
+                    "role": "assistant",
+                    "content": "Hi! (choice 2)"
+                },
+                "finish_reason": "stop"
+            }
+        ],
+        "usage": {
+            "prompt_tokens": 5,
+            "completion_tokens": 15,
+            "total_tokens": 20
+        }
+    }
+}

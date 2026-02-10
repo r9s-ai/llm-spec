@@ -1,14 +1,6 @@
-"""OpenAI Chat Completions API Pydantic schemas.
-
-Notes:
-- assistant message `content` can be a string or an array of typed parts
-- tool calls can be `function` or `custom`
-- streaming deltas (chunks) can be partial, so some fields are kept permissive
-"""
-
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 # ============================================================================
 # Tool call related models (Tool Calls)
@@ -94,11 +86,30 @@ class MessageContentPart(BaseModel):
 class Message(BaseModel):
     """Message."""
 
-    role: str
+    role: Literal["developer", "system", "user", "assistant", "tool", "function"]
     content: str | list[MessageContentPart] | None = None
     refusal: str | None = None
+    reasoning_content: str | None = None
     tool_calls: list[ToolCall] | None = None
+    function_call: FunctionCall | None = None
+    tool_call_id: str | None = None
+    name: str | None = None
     audio: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_role_fields(self) -> "Message":
+        """Validate role-specific field requirements."""
+        if self.role == "assistant":
+            # Assistant: content is required unless tool_calls, function_call or refusal is present
+            if not any([self.content, self.tool_calls, self.function_call, self.refusal]):
+                raise ValueError(
+                    "Assistant message must have at least one of 'content', 'tool_calls', 'function_call', or 'refusal'."
+                )
+        elif self.role == "tool" and not self.tool_call_id:
+            raise ValueError("Tool message must have 'tool_call_id'.")
+        elif self.role == "function" and not self.name:
+            raise ValueError("Function message must have 'name'.")
+        return self
 
 
 class Choice(BaseModel):
@@ -144,6 +155,7 @@ class DeltaMessage(BaseModel):
     role: str | None = None
     content: str | None = None
     refusal: str | None = None
+    reasoning_content: str | None = None
     tool_calls: list[dict[str, Any]] | None = None  # streaming structure may be partial
     audio: dict[str, Any] | None = None
 

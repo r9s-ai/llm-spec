@@ -1,0 +1,35 @@
+{
+    "status_code": 200,
+    "headers": {
+        "content-type": "application/json"
+    },
+    "body": {
+        "id": "chatcmpl-mock-modalities-simplified",
+        "object": "chat.completion",
+        "created": 1677652288,
+        "model": "gpt-4o-audio-preview",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Hello! I am responding with text and audio.",
+                    "audio": {
+                        "id": "audio_mock_999",
+                        "data": "U2ltcGxpZmllZCBtb2Nr",
+                        "expires_at": 1677738688,
+                        "transcript": "Hello! I am responding with text and audio."
+                    }
+                },
+                "logprobs": null,
+                "finish_reason": "stop"
+            }
+        ],
+        "usage": {
+            "prompt_tokens": 12,
+            "completion_tokens": 20,
+            "total_tokens": 32
+        },
+        "system_fingerprint": "fp_mock_modalities_simple"
+    }
+}

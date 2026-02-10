@@ -92,6 +92,7 @@ Suites are defined in JSON5, allowing for comments and flexible syntax. Each sui
       name: "test_param_temperature",
       params: { temperature: 0.7 },
       test_param: { name: "temperature", value: 0.7 },
+      required_fields: ["choices[0].message.content"]
     }
   ]
 }
