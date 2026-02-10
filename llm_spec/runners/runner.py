@@ -119,11 +119,33 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
 
     for value in param_values:
         # Build a test name suffix
-        suffix = ",".join(str(v) for v in value) if isinstance(value, list) else str(value)
+        if isinstance(value, dict):
+            # If it's a dict, try to find a descriptive label
+            label = (
+                value.get("media_type")
+                or value.get("label")
+                or value.get("name")
+                or value.get("key")
+            )
+            if label:
+                # Use the label, but sanitize it for any potential slashes
+                suffix = str(label).replace("/", "_")
+            else:
+                # Fallback to a shortened string representation
+                val_str = str(value)
+                suffix = val_str[:20] + "..." if len(val_str) > 20 else val_str
+        elif isinstance(value, list):
+            suffix = ",".join(str(v) for v in value)
+        else:
+            suffix = str(value)
 
-        # Replace $param_name references inside params
+        # Replace $param_name references inside params and test_param
         params = copy.deepcopy(test_config.get("params", {}))
         replace_parameter_references(params, param_name, value)
+
+        test_param = copy.deepcopy(test_config.get("test_param"))
+        if test_param:
+            replace_parameter_references(test_param, param_name, value)
 
         # Build variant test name
         variant_name = f"{test_config['name']}[{suffix}]"
@@ -132,7 +154,7 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
             name=variant_name,
             description=test_config.get("description", ""),
             params=params,
-            test_param=test_config.get("test_param"),
+            test_param=test_param,
             is_baseline=test_config.get("is_baseline", False),
             stream=test_config.get("stream", False),
             stream_rules=test_config.get("stream_rules", test_config.get("stream_validation")),
@@ -144,19 +166,36 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
 
 
 def replace_parameter_references(obj: Any, ref_name: str, ref_value: Any) -> None:
-    """Recursively replace parameter references like ``$ref_name``."""
+    """Recursively replace parameter references like ``$ref_name`` or ``$ref_name.field``."""
     if isinstance(obj, dict):
         for key, val in list(obj.items()):
-            if isinstance(val, str) and val == f"${ref_name}":
-                obj[key] = ref_value
-            else:
-                replace_parameter_references(val, ref_name, ref_value)
+            if isinstance(val, str):
+                if val == f"${ref_name}":
+                    obj[key] = ref_value
+                elif val.startswith(f"${ref_name}."):
+                    # Extract field name (e.g., $var.field -> field)
+                    field = val[len(ref_name) + 2 :]
+                    if isinstance(ref_value, dict) and field in ref_value:
+                        obj[key] = ref_value[field]
+
+            # Recurse into nested structures
+            new_val = obj.get(key)
+            if isinstance(new_val, (dict, list)):
+                replace_parameter_references(new_val, ref_name, ref_value)
+
     elif isinstance(obj, list):
         for i, item in enumerate(obj):
-            if isinstance(item, str) and item == f"${ref_name}":
-                obj[i] = ref_value
-            else:
-                replace_parameter_references(item, ref_name, ref_value)
+            if isinstance(item, str):
+                if item == f"${ref_name}":
+                    obj[i] = ref_value
+                elif item.startswith(f"${ref_name}."):
+                    field = item[len(ref_name) + 2 :]
+                    if isinstance(ref_value, dict) and field in ref_value:
+                        obj[i] = ref_value[field]
+
+            # Recurse into nested structures
+            if isinstance(obj[i], (dict, list)):
+                replace_parameter_references(obj[i], ref_name, ref_value)
 
 
 def load_test_suite(config_path: Path) -> SpecTestSuite:
@@ -174,17 +213,34 @@ def load_test_suite(config_path: Path) -> SpecTestSuite:
     tests: list[SpecTestCase] = []
 
     for t in data.get("tests", []):
+        # Validation: check for mandatory fields
+        test_name = t.get("name")
+        if not test_name:
+            raise ValueError(f"Missing 'name' for test in suite: {config_path}")
+
+        is_baseline = t.get("is_baseline", False)
+        if not is_baseline:
+            # Non-baseline tests must have params and test_param
+            if "params" not in t:
+                raise ValueError(
+                    f"Missing 'params' for non-baseline test '{test_name}' in suite: {config_path}"
+                )
+            if "test_param" not in t:
+                raise ValueError(
+                    f"Missing 'test_param' for non-baseline test '{test_name}' in suite: {config_path}"
+                )
+
         # Expand parameterized tests
         if "parameterize" in t:
             tests.extend(expand_parameterized_tests(t))
         else:
             tests.append(
                 SpecTestCase(
-                    name=t["name"],
+                    name=test_name,
                     description=t.get("description", ""),
                     params=t.get("params", {}),
                     test_param=t.get("test_param"),
-                    is_baseline=t.get("is_baseline", False),
+                    is_baseline=is_baseline,
                     stream=t.get("stream", False),
                     stream_rules=t.get("stream_rules", t.get("stream_validation")),
                     override_base=t.get("override_base", False),

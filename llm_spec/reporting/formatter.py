@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 from llm_spec.reporting.report_types import (
     ParameterSupportInfo,
@@ -134,6 +136,44 @@ class ParameterTableFormatter:
         else:
             return f"{provider} API"
 
+    def _format_display_value(self, value: Any, truncate: bool = True) -> str:
+        r"""Format a parameter value for display in reports.
+
+        Rules:
+        1. If None, return "-"
+        2. If it's a file path (contains / or \ and NOT 'data:'), return basename.类型
+        3. If truncate is True, truncate string to 100 chars.
+        4. If complex (list/dict), json.dumps and optionally truncate to 100 chars.
+        """
+        if value is None:
+            return "-"
+
+        if isinstance(value, str):
+            # Check for file path (heuristic: contains / or \ and not a data URI)
+            if ("/" in value or "\\" in value) and not value.startswith("data:"):
+                try:
+                    p = Path(value)
+                    # We want "filename.ext"
+                    if p.name:
+                        return p.name
+                except Exception:
+                    pass
+
+            display_str = value
+        elif isinstance(value, (list, dict)):
+            try:
+                display_str = json.dumps(value, ensure_ascii=False)
+            except Exception:
+                display_str = str(value)
+        else:
+            display_str = str(value)
+
+        # Truncate if requested
+        if truncate and len(display_str) > 100:
+            return display_str[:97] + "..."
+
+        return display_str
+
     def generate_markdown(self) -> str:
         """Generate a concise Markdown report."""
         lines = []
@@ -166,85 +206,48 @@ class ParameterTableFormatter:
 
         # Table using parameter_support_details
         if self.param_support_details:
-            lines.append("### Parameter Support Detail")
-            lines.append("")
+            # Always show 4 columns for new format: Parameter | Value | Request | Validation
+            lines.append("| Parameter | Value | Request | Validation |")
+            lines.append("| :--- | :--- | :--- | :--- |")
 
-            # Check whether there are variant values
-            has_variants = any(info.get("variant_value") for info in self.param_support_details)
+            for info in self.param_support_details:
+                param = info.get("parameter", "")
+                # Prefer 'value' field (raw value), fallback to 'variant_value'
+                raw_value = info.get("value")
+                if raw_value is None:
+                    raw_value = info.get("variant_value")
 
-            if has_variants:
-                # Variants present: 4-column table
-                lines.append("| Parameter | Variant | Request | Validation |")
-                lines.append("| :--- | :--- | :--- | :--- |")
+                value_display = self._format_display_value(raw_value)
+                request_ok = info.get("request_ok", False)
+                request_error = info.get("request_error")
+                validation_ok = info.get("validation_ok", False)
+                validation_error = info.get("validation_error")
 
-                for info in self.param_support_details:
-                    param = info.get("parameter", "")
-                    variant = info.get("variant_value") or "-"
-                    request_ok = info.get("request_ok", False)
-                    request_error = info.get("request_error")
-                    validation_ok = info.get("validation_ok", False)
-                    validation_error = info.get("validation_error")
-
-                    # Request status
-                    if request_ok:
-                        request_status = "✅ Success"
-                    else:
-                        request_status = (
-                            f"❌ Failed<br><small>{request_error}</small>"
-                            if request_error
-                            else "❌ Failed"
-                        )
-
-                    # Validation status
-                    if not request_ok:
-                        validation_status = "Skipped"
-                    elif validation_ok:
-                        validation_status = "✅ Valid"
-                    else:
-                        validation_status = (
-                            f"❌ Invalid<br><small>{validation_error}</small>"
-                            if validation_error
-                            else "❌ Invalid"
-                        )
-
-                    lines.append(
-                        f"| **{param}** | `{variant}` | {request_status} | {validation_status} |"
+                # Request status
+                if request_ok:
+                    request_status = "✅ Success"
+                else:
+                    request_status = (
+                        f"❌ Failed<br><small>{request_error}</small>"
+                        if request_error
+                        else "❌ Failed"
                     )
-            else:
-                # No variants: 3-column table
-                lines.append("| Parameter | Request | Validation |")
-                lines.append("| :--- | :--- | :--- |")
 
-                for info in self.param_support_details:
-                    param = info.get("parameter", "")
-                    request_ok = info.get("request_ok", False)
-                    request_error = info.get("request_error")
-                    validation_ok = info.get("validation_ok", False)
-                    validation_error = info.get("validation_error")
+                # Validation status
+                if not request_ok:
+                    validation_status = "Skipped"
+                elif validation_ok:
+                    validation_status = "✅ Valid"
+                else:
+                    validation_status = (
+                        f"❌ Invalid<br><small>{validation_error}</small>"
+                        if validation_error
+                        else "❌ Invalid"
+                    )
 
-                    # Request status
-                    if request_ok:
-                        request_status = "✅ Success"
-                    else:
-                        request_status = (
-                            f"❌ Failed<br><small>{request_error}</small>"
-                            if request_error
-                            else "❌ Failed"
-                        )
-
-                    # Validation status
-                    if not request_ok:
-                        validation_status = "Skipped"
-                    elif validation_ok:
-                        validation_status = "✅ Valid"
-                    else:
-                        validation_status = (
-                            f"❌ Invalid<br><small>{validation_error}</small>"
-                            if validation_error
-                            else "❌ Invalid"
-                        )
-
-                    lines.append(f"| **{param}** | {request_status} | {validation_status} |")
+                lines.append(
+                    f"| **{param}** | `{value_display}` | {request_status} | {validation_status} |"
+                )
 
             lines.append("")
         else:
@@ -427,6 +430,7 @@ class ParameterTableFormatter:
             border-radius: 8px;
             overflow: hidden;
             font-size: 13px;
+            table-layout: fixed; /* Fixed layout for truncation */
         }}
 
         th {{
@@ -441,7 +445,15 @@ class ParameterTableFormatter:
         td {{
             padding: 8px 12px;
             border-bottom: 1px solid var(--color-border);
+            vertical-align: middle;
+            overflow: hidden;
         }}
+
+        /* Column widths */
+        th:nth-child(1), td:nth-child(1) {{ width: 25%; }}
+        th:nth-child(2), td:nth-child(2) {{ width: 40%; }}
+        th:nth-child(3), td:nth-child(3) {{ width: 17%; }}
+        th:nth-child(4), td:nth-child(4) {{ width: 18%; }}
 
         tr:last-child td {{ border-bottom: none; }}
         tr:hover td {{ background: #fafafa; }}
@@ -451,6 +463,10 @@ class ParameterTableFormatter:
             color: var(--color-text);
             font-weight: 700;
             font-size: 13px;
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }}
 
         .status-badge {{
@@ -534,109 +550,63 @@ class ParameterTableFormatter:
 """
 
         if use_new_format:
-            # Check whether there are variant values
-            has_variants = any(info.get("variant_value") for info in self.param_support_details)
-
-            if has_variants:
-                # Variants present: 4-column table
-                html += """            <tr>
+            # Always show 4 columns for new format: Parameter | Value | Request Status | Validation Status
+            html += """            <tr>
                 <th>Parameter</th>
-                <th>Variant</th>
+                <th>Value</th>
                 <th>Request Status</th>
                 <th>Validation Status</th>
             </tr>
 """
-                for info in self.param_support_details:
-                    param = info.get("parameter", "")
-                    variant = info.get("variant_value") or "-"
-                    request_ok = info.get("request_ok", False)
-                    request_error = info.get("request_error")
-                    validation_ok = info.get("validation_ok", False)
-                    validation_error = info.get("validation_error")
+            for info in self.param_support_details:
+                param = info.get("parameter", "")
+                raw_value = info.get("value")
+                if raw_value is None:
+                    raw_value = info.get("variant_value")
 
-                    # Request status
-                    if request_ok:
-                        request_status = '<span class="status-badge status-ok">✓ Success</span>'
-                    else:
-                        error_msg = (
-                            f'<span class="error-detail">{request_error}</span>'
-                            if request_error
-                            else ""
-                        )
-                        request_status = (
-                            f'<span class="status-badge status-error">✕ Failed</span>{error_msg}'
-                        )
+                value_display = self._format_display_value(raw_value, truncate=False)
+                # Escaping quotes for title attribute
+                hover_text = str(value_display).replace('"', "&quot;")
 
-                    # Validation status
-                    if not request_ok:
-                        validation_status = '<span class="status-badge status-na">Skipped</span>'
-                    elif validation_ok:
-                        validation_status = '<span class="status-badge status-ok">✓ Valid</span>'
-                    else:
-                        error_msg = (
-                            f'<span class="error-detail">{validation_error}</span>'
-                            if validation_error
-                            else ""
-                        )
-                        validation_status = (
-                            f'<span class="status-badge status-error">✕ Invalid</span>{error_msg}'
-                        )
+                request_ok = info.get("request_ok", False)
+                request_error = info.get("request_error")
+                validation_ok = info.get("validation_ok", False)
+                validation_error = info.get("validation_error")
 
-                    html += f"""            <tr>
-                <td><span class="param-path">{param}</span></td>
-                <td><span class="param-path">{variant}</span></td>
+                # Request status
+                if request_ok:
+                    request_status = '<span class="status-badge status-ok">✓ Success</span>'
+                else:
+                    error_msg = (
+                        f'<span class="error-detail">{request_error}</span>'
+                        if request_error
+                        else ""
+                    )
+                    request_status = (
+                        f'<span class="status-badge status-error">✕ Failed</span>{error_msg}'
+                    )
+
+                # Validation status
+                if not request_ok:
+                    validation_status = '<span class="status-badge status-na">Skipped</span>'
+                elif validation_ok:
+                    validation_status = '<span class="status-badge status-ok">✓ Valid</span>'
+                else:
+                    error_msg = (
+                        f'<span class="error-detail">{validation_error}</span>'
+                        if validation_error
+                        else ""
+                    )
+                    validation_status = (
+                        f'<span class="status-badge status-error">✕ Invalid</span>{error_msg}'
+                    )
+
+                html += f"""            <tr>
+                <td><span class="param-path" title="{param}">{param}</span></td>
+                <td><span class="param-path" title="{hover_text}">{value_display}</span></td>
                 <td>{request_status}</td>
                 <td>{validation_status}</td>
             </tr>
-"""
-            else:
-                # No variants: 3-column table
-                html += """            <tr>
-                    <th>Parameter</th>
-                    <th>Request Status</th>
-                    <th>Validation Status</th>
-                </tr>
-"""
-                for info in self.param_support_details:
-                    param = info.get("parameter", "")
-                    request_ok = info.get("request_ok", False)
-                    request_error = info.get("request_error")
-                    validation_ok = info.get("validation_ok", False)
-                    validation_error = info.get("validation_error")
-
-                    # Request status
-                    if request_ok:
-                        request_status = '<span class="status-badge status-ok">✓ Success</span>'
-                    else:
-                        error_msg = (
-                            f'<span class="error-detail">{request_error}</span>'
-                            if request_error
-                            else ""
-                        )
-                        request_status = (
-                            f'<span class="status-badge status-error">✕ Failed</span>{error_msg}'
-                        )
-
-                    # Validation status
-                    if not request_ok:
-                        validation_status = '<span class="status-badge status-na">Skipped</span>'
-                    elif validation_ok:
-                        validation_status = '<span class="status-badge status-ok">✓ Valid</span>'
-                    else:
-                        error_msg = (
-                            f'<span class="error-detail">{validation_error}</span>'
-                            if validation_error
-                            else ""
-                        )
-                        validation_status = (
-                            f'<span class="status-badge status-error">✕ Invalid</span>{error_msg}'
-                        )
-
-                    html += f"""            <tr>
-                    <td><span class="param-path">{param}</span></td>
-                    <td>{request_status}</td>
-                    <td>{validation_status}</td>
-                </tr>
 """
         else:
             # Legacy: 2-column table

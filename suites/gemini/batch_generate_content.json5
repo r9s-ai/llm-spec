@@ -23,6 +23,7 @@
     {
       name: "test_batch_baseline",
       description: "Baseline batch request",
+      is_baseline: true,
       params: {},
     },
     {

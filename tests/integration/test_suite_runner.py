@@ -75,19 +75,14 @@ def discover_test_configs() -> list[tuple[Path, str, str]]:
         return configs
 
     for config_file in sorted(SUITES_DIR.rglob("*.json5")):
-        try:
-            suite = _get_suite(config_file)
+        suite = _get_suite(config_file)
 
-            for test in suite.tests:
-                # Human-readable test id, e.g.:
-                #   openai/chat_completions::test_param_temperature
-                relative_path = config_file.relative_to(SUITES_DIR)
-                test_id = f"{relative_path.with_suffix('')}::{test.name}"
-                configs.append((config_file, test.name, test_id))
-
-        except Exception as e:
-            # Skip invalid suites but warn
-            print(f"Warning: Failed to load {config_file}: {e}")
+        for test in suite.tests:
+            # Human-readable test id, e.g.:
+            #   openai/chat_completions::test_param_temperature
+            relative_path = config_file.relative_to(SUITES_DIR)
+            test_id = f"{relative_path.with_suffix('')}::{test.name}"
+            configs.append((config_file, test.name, test_id))
 
     return configs
 
@@ -207,6 +202,10 @@ def _setup_mock_route(
     except FileNotFoundError as e:
         pytest.skip(f"Mock data not available: {e}")
         return
+    except Exception as e:
+        print(f"\n[MOCK ERROR] Failed to load mock data for '{test_case.name}': {e}")
+        pytest.fail(f"Mock data error: {e}")
+        return
 
     # Register respx route
     if is_stream:
@@ -216,7 +215,12 @@ def _setup_mock_route(
             raise TypeError(
                 f"Expected Iterator[bytes] for streaming response, got {type(mock_data)}"
             )
-        chunks = list(mock_data)  # mock_data is Iterator[bytes]
+        try:
+            chunks = list(mock_data)  # mock_data is Iterator[bytes]
+        except Exception as e:
+            print(f"\n[MOCK ERROR] Failed to parse stream data for '{test_case.name}': {e}")
+            pytest.fail(f"Mock stream error: {e}")
+            return
         combined_content = b"".join(chunks)
 
         respx_mock.post(full_url).mock(

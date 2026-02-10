@@ -121,6 +121,7 @@
     {
       name: "test_param_mask_png",
       description: "Edit with mask",
+      params: {},
       files: {
         image: "assets/images/test_base.png",
         mask: "assets/images/test_base.png",
