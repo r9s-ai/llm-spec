@@ -1,0 +1,3 @@
+{"type": "chunk", "data": {"type": "speech.audio.delta", "audio": "U29tZSBmYWtlIGF1ZGlvIGRhdGE="}}
+{"type": "chunk", "data": {"type": "speech.audio.done", "usage": {"total_tokens": 10}}}
+{"type": "done"}

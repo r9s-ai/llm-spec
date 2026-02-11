@@ -40,21 +40,46 @@ class AudioLogprob(BaseModel):
     bytes: list[int] | None = None
 
 
+class TranscriptSegment(BaseModel):
+    """A segment from verbose_json transcription/translation response."""
+
+    id: int
+    seek: int
+    start: float
+    end: float
+    text: str
+    tokens: list[int]
+    temperature: float
+    avg_logprob: float
+    compression_ratio: float
+    no_speech_prob: float
+
+
+class TranscriptWord(BaseModel):
+    """A word-level timestamp from verbose_json with timestamp_granularities."""
+
+    word: str
+    start: float
+    end: float
+
+
 class AudioTranscriptJSON(BaseModel):
     """Non-streaming transcription/translation JSON shape.
 
     Notes:
     - response_format=json: { "text": ... }
-    - response_format=verbose_json: includes many more fields but still contains text.
+    - response_format=verbose_json: includes duration, language, segments, words, etc.
     - Some variants include usage (tokens or duration), depending on model/billing.
+    - Optional fields (task, language, duration, segments, words, logprobs, usage)
+      are validated via ``required_fields`` in test suites on a per-test basis.
     """
 
     text: str
     task: str | None = None
     language: str | None = None
     duration: float | None = None
-    segments: list[dict[str, Any]] | None = None
-    words: list[dict[str, Any]] | None = None
+    segments: list[TranscriptSegment] | None = None
+    words: list[TranscriptWord] | None = None
     logprobs: list[AudioLogprob] | None = None
     usage: AudioUsageTokens | AudioUsageDuration | dict[str, Any] | None = None
 
@@ -106,7 +131,7 @@ class TranscriptTextSegmentEvent(BaseModel):
     start: float
     end: float
     text: str
-    speaker: str
+    speaker: str | None = None
 
 
 class TranscriptTextDoneEvent(BaseModel):

@@ -129,20 +129,13 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
     for value in param_values:
         # Build a test name suffix
         if isinstance(value, dict):
-            # If it's a dict, try to find a descriptive label
-            label = (
-                value.get("media_type")
-                or value.get("label")
-                or value.get("name")
-                or value.get("key")
-            )
-            if label:
-                # Use the label, but sanitize it for any potential slashes
-                suffix = str(label).replace("/", "_")
-            else:
-                # Fallback to a shortened string representation
-                val_str = str(value)
-                suffix = val_str[:20] + "..." if len(val_str) > 20 else val_str
+            # Dict values must have a 'suffix' field for test name generation
+            if "suffix" not in value:
+                raise ValueError(
+                    f"Parameterized dict value must have 'suffix' field in test "
+                    f"'{test_config['name']}': {value}"
+                )
+            suffix = str(value["suffix"]).replace("/", "_")
         elif isinstance(value, list):
             suffix = ",".join(str(v) for v in value)
         else:
@@ -159,13 +152,18 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
         # Build variant test name
         variant_name = f"{test_config['name']}[{suffix}]"
 
+        # Resolve stream from parameterized value or test config
+        stream = test_config.get("stream", False)
+        if isinstance(value, dict) and "stream" in value:
+            stream = value["stream"]
+
         yield SpecTestCase(
             name=variant_name,
             description=test_config.get("description", ""),
             params=params,
             test_param=test_param,
             is_baseline=test_config.get("is_baseline", False),
-            stream=test_config.get("stream", False),
+            stream=stream,
             stream_rules=test_config.get("stream_rules", test_config.get("stream_validation")),
             override_base=test_config.get("override_base", False),
             no_wrapper=test_config.get("no_wrapper", False),

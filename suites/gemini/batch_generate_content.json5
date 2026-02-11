@@ -366,63 +366,69 @@
       name: "test_batch_size_variants",
       description: "Batch size variants",
       params: {
-        requests: "$requests",
+        requests: "$requests.value",
       },
       parameterize: {
         requests: [
-          [
-            {
-              contents: [
-                {
-                  parts: [
-                    {
-                      text: "R1",
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-          [
-            {
-              contents: [
-                {
-                  parts: [
-                    {
-                      text: "R1",
-                    },
-                  ],
-                },
-              ],
-            },
-            {
-              contents: [
-                {
-                  parts: [
-                    {
-                      text: "R2",
-                    },
-                  ],
-                },
-              ],
-            },
-            {
-              contents: [
-                {
-                  parts: [
-                    {
-                      text: "R3",
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
+          {
+            suffix: "single",
+            value: [
+              {
+                contents: [
+                  {
+                    parts: [
+                      {
+                        text: "R1",
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            suffix: "triple",
+            value: [
+              {
+                contents: [
+                  {
+                    parts: [
+                      {
+                        text: "R1",
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                contents: [
+                  {
+                    parts: [
+                      {
+                        text: "R2",
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                contents: [
+                  {
+                    parts: [
+                      {
+                        text: "R3",
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
         ],
       },
       test_param: {
         name: "requests",
-        value: "$requests",
+        value: "$requests.value",
       },
     },
   ],

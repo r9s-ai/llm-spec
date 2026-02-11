@@ -97,26 +97,29 @@
       },
     },
     {
-      name: "test_param_stream_format_audio",
-      description: "Test stream_format parameter (audio format)",
-      params: {
-        stream_format: "audio",
+      name: "test_param_stream_format",
+      description: "Test stream_format parameter variants",
+      parameterize: {
+        variant: [
+          {
+            suffix: "audio",
+            value: "audio",
+            stream: false,
+          },
+          {
+            suffix: "sse",
+            value: "sse",
+            stream: true,
+          },
+        ],
       },
+      params: {
+        stream_format: "$variant.value",
+      },
+      stream: "$variant.stream",
       test_param: {
         name: "stream_format",
-        value: "audio",
-      },
-    },
-    {
-      name: "test_param_stream_format_sse",
-      description: "Test stream_format parameter (sse format)",
-      params: {
-        stream_format: "sse",
-      },
-      stream: true,
-      test_param: {
-        name: "stream_format",
-        value: "sse",
+        value: "$variant.value",
       },
     },
   ],

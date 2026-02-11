@@ -1,0 +1,7 @@
+{
+    "status_code": 200,
+    "headers": {
+        "content-type": "audio/mpeg"
+    },
+    "body_base64": "//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+}

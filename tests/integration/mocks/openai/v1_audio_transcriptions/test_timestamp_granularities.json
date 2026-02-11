@@ -1,0 +1,32 @@
+{
+    "status_code": 200,
+    "headers": {
+        "content-type": "application/json"
+    },
+    "body": {
+        "task": "transcribe",
+        "language": "english",
+        "duration": 1.52,
+        "text": "Hello, how are you?",
+        "segments": [
+            {
+                "id": 0,
+                "seek": 0,
+                "start": 0.0,
+                "end": 1.52,
+                "text": "Hello, how are you?",
+                "tokens": [50364, 2425, 11, 577, 366, 291, 30, 50440],
+                "temperature": 0.0,
+                "avg_logprob": -0.2345,
+                "compression_ratio": 0.85,
+                "no_speech_prob": 0.012
+            }
+        ],
+        "words": [
+            {"word": "Hello,", "start": 0.0, "end": 0.32},
+            {"word": "how", "start": 0.34, "end": 0.56},
+            {"word": "are", "start": 0.58, "end": 0.72},
+            {"word": "you?", "start": 0.74, "end": 1.52}
+        ]
+    }
+}

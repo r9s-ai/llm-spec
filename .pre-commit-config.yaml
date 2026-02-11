@@ -12,6 +12,7 @@ repos:
       - id: check-yaml
       - id: check-toml
       - id: check-json
+        exclude: tests/integration/mocks/.*stream.*\.json
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: check-merge-conflict

@@ -49,33 +49,30 @@ class MockDataLoader:
         Raises:
             FileNotFoundError: If the mock data file doesn't exist
         """
-        # Build file path: provider/endpoint_dir/test_name{.json|_stream.jsonl}
+        # Build file path: provider/endpoint_dir/test_name.json
         endpoint_dir = endpoint.strip("/").replace("/", "_")
-        suffix = "_stream.jsonl" if is_stream else ".json"
-
-        # Sanitize test_name to prevent "strange" directory structures
         safe_name = self._sanitize_filename(test_name)
-        mock_file = self.base_dir / provider / endpoint_dir / f"{safe_name}{suffix}"
+        file_path = self.base_dir / provider / endpoint_dir / f"{safe_name}.json"
 
         # Fallback logic: if a variant-specific mock file (e.g., name[variant].json)
         # is not found, try the base mock file (name.json) if it's a parameterized test.
-        if not mock_file.exists() and "[" in safe_name and "]" in safe_name:
+        if not file_path.exists() and "[" in safe_name and "]" in safe_name:
             # Extract base name from variant name, e.g., "test_name[variant]" -> "test_name"
             base_name = safe_name.split("[", 1)[0]
-            fallback_file = self.base_dir / provider / endpoint_dir / f"{base_name}{suffix}"
+            fallback_file = self.base_dir / provider / endpoint_dir / f"{base_name}.json"
             if fallback_file.exists():
-                mock_file = fallback_file
+                file_path = fallback_file
 
-        if not mock_file.exists():
+        if not file_path.exists():
             raise FileNotFoundError(
-                f"Mock data not found: {mock_file}\n"
-                f"Please create mock data for {provider}/{endpoint_dir}/{safe_name}"
+                f"Mock data not found: {file_path}\n"
+                f"Please create mock data for {provider}/{endpoint_dir}/{test_name}"
             )
 
         if is_stream:
-            return self._load_stream_response(mock_file)
+            return self._load_stream_response(file_path)
         else:
-            return self._load_json_response(mock_file)
+            return self._load_json_response(file_path)
 
     def _sanitize_filename(self, name: str) -> str:
         """Replace all characters except alphanumeric, _, -, [, and ] with _."""

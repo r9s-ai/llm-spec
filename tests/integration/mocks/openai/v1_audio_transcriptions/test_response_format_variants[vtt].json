@@ -1,0 +1,7 @@
+{
+    "status_code": 200,
+    "headers": {
+        "content-type": "text/plain; charset=utf-8"
+    },
+    "body": "WEBVTT\n\n00:00:00.000 --> 00:00:01.520\nHello, how are you?\n"
+}

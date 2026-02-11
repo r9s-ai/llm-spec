@@ -47,11 +47,14 @@
     },
     {
       name: "test_response_format_variants",
-      description: "Test response_format parameter (common formats)",
+      description: "Test response_format parameter (all formats)",
       parameterize: {
         response_format: [
           "json",
           "text",
+          "verbose_json",
+          "srt",
+          "vtt",
         ],
       },
       params: {
@@ -134,6 +137,7 @@
           "logprobs",
         ],
       },
+      required_fields: ["logprobs"],
     },
     {
       name: "test_known_speakers",
@@ -162,7 +166,7 @@
     },
     {
       name: "test_timestamp_granularities",
-      description: "Test timestamp_granularities",
+      description: "Test timestamp_granularities with verbose_json",
       params: {
         model: "gpt-4o-mini-transcribe",
         response_format: "verbose_json",
@@ -181,6 +185,7 @@
           "segment",
         ],
       },
+      required_fields: ["duration", "language", "segments", "words"],
     },
     {
       name: "test_stream_flag",

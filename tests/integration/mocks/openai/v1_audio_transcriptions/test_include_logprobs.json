@@ -1,0 +1,17 @@
+{
+    "status_code": 200,
+    "headers": {
+        "content-type": "application/json"
+    },
+    "body": {
+        "text": "Hello, how are you?",
+        "logprobs": [
+            {"token": "Hello", "logprob": -0.05, "bytes": [72, 101, 108, 108, 111]},
+            {"token": ",", "logprob": -0.12, "bytes": [44]},
+            {"token": " how", "logprob": -0.08, "bytes": [32, 104, 111, 119]},
+            {"token": " are", "logprob": -0.03, "bytes": [32, 97, 114, 101]},
+            {"token": " you", "logprob": -0.04, "bytes": [32, 121, 111, 117]},
+            {"token": "?", "logprob": -0.01, "bytes": [63]}
+        ]
+    }
+}

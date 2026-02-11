@@ -53,5 +53,19 @@
         value: "Translate this into French.",
       },
     },
+    {
+      name: "test_param_temperature",
+      description: "Test temperature parameter",
+      params: {
+        temperature: 0.0,
+      },
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "temperature",
+        value: 0.0,
+      },
+    },
   ],
 }

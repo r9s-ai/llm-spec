@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json as _json
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
@@ -12,6 +13,23 @@ from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import ProviderConfig
 from llm_spec.json_types import Headers, JSONValue
 from llm_spec.logger import RequestLogger
+
+
+def _serialize_form_data(params: Any) -> dict[str, Any]:
+    """Serialize complex values (dict/list) in form-data params to JSON strings.
+
+    httpx multipart encoder only accepts primitive types (str/int/float/bytes).
+    Dict and list values must be JSON-serialized before passing as form fields.
+    """
+    if not isinstance(params, dict):
+        return params
+    form_data: dict[str, Any] = {}
+    for k, v in params.items():
+        if isinstance(v, (dict, list)):
+            form_data[k] = _json.dumps(v)
+        else:
+            form_data[k] = v
+    return form_data
 
 
 class ProviderAdapter(ABC):
@@ -85,7 +103,7 @@ class ProviderAdapter(ABC):
                 method=method,
                 url=url,
                 headers=headers,
-                data=params,
+                data=_serialize_form_data(params),
                 files=files,
                 timeout=self.config.timeout,
             )
@@ -128,7 +146,7 @@ class ProviderAdapter(ABC):
                 method=method,
                 url=url,
                 headers=headers,
-                data=params,
+                data=_serialize_form_data(params),
                 files=files,
                 timeout=self.config.timeout,
             )

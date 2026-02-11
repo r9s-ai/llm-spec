@@ -234,13 +234,32 @@ def _setup_mock_route(
         # Non-streaming response
         if not isinstance(mock_data, dict):
             raise TypeError(f"Expected dict for non-streaming response, got {type(mock_data)}")
-        respx_mock.post(full_url).mock(
-            return_value=httpx.Response(
-                status_code=mock_data["status_code"],
-                headers=mock_data.get("headers", {}),
-                json=mock_data["body"],
+
+        # Support binary mock data via base64
+        if "body_base64" in mock_data:
+            import base64
+
+            # Handle missing padding in base64 string
+            b64_data = mock_data["body_base64"]
+            padding_needed = (-len(b64_data)) % 4
+            if padding_needed:
+                b64_data += "=" * padding_needed
+            content = base64.b64decode(b64_data)
+            respx_mock.post(full_url).mock(
+                return_value=httpx.Response(
+                    status_code=mock_data["status_code"],
+                    headers=mock_data.get("headers", {}),
+                    content=content,
+                )
             )
-        )
+        else:
+            respx_mock.post(full_url).mock(
+                return_value=httpx.Response(
+                    status_code=mock_data["status_code"],
+                    headers=mock_data.get("headers", {}),
+                    json=mock_data["body"],
+                )
+            )
 
 
 # ============================================================================
