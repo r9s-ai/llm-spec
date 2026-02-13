@@ -1,0 +1,4 @@
+{"type":"chunk","data":{"responseId":"resp_mock_gemini_stream_001","candidates":[{"index":0,"content":{"role":"model","parts":[{"text":"Hello"}]}}],"modelVersion":"gemini-3-flash-preview"}}
+{"type":"chunk","data":{"responseId":"resp_mock_gemini_stream_001","candidates":[{"index":0,"content":{"role":"model","parts":[{"text":"! How can I help"}]}}],"modelVersion":"gemini-3-flash-preview"}}
+{"type":"chunk","data":{"responseId":"resp_mock_gemini_stream_001","candidates":[{"index":0,"content":{"role":"model","parts":[{"text":" you today?"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":3,"candidatesTokenCount":8,"totalTokenCount":11},"modelVersion":"gemini-3-flash-preview"}}
+{"type":"done","data":null}

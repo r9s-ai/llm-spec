@@ -344,15 +344,35 @@ def _find_missing_sequence_items(
 
 
 def _get_value_at_path_local(obj: dict[str, Any], path: str | None) -> Any:
-    """Helper to get value at path (mini-duplicate of runner.py to avoid circular dep)."""
+    """Helper to get value at path (mini-duplicate of runner.py to avoid circular dep).
+
+    Supports dotted paths with simple array indexing like ``candidates[0].content.parts[0].text``.
+    """
     if not path:
         return None
     parts = path.split(".")
-    current = obj
+    current: Any = obj
+
     for part in parts:
-        # Simple dict traversal (array index support omitted for brevity/simplicity in stream chunks)
+        # Handle array index, e.g. "candidates[0]"
+        match = re.match(r"(\w+)\[(\d+)\]", part)
+        if match:
+            key, idx_str = match.groups()
+            if not (isinstance(current, dict) and key in current):
+                return None
+            current = current[key]
+            if not isinstance(current, list):
+                return None
+            idx = int(idx_str)
+            if idx >= len(current):
+                return None
+            current = current[idx]
+            continue
+
         if isinstance(current, dict) and part in current:
             current = current[part]
-        else:
-            return None
+            continue
+
+        return None
+
     return current

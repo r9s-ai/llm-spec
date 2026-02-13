@@ -1,0 +1,29 @@
+{
+  "status_code": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "responseId": "resp_mock_gemini_generate_001",
+    "candidates": [
+      {
+        "content": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "{\"greeting\":\"Hello\"}"
+            }
+          ]
+        },
+        "finishReason": "STOP",
+        "index": 0
+      }
+    ],
+    "usageMetadata": {
+      "promptTokenCount": 3,
+      "candidatesTokenCount": 8,
+      "totalTokenCount": 11
+    },
+    "modelVersion": "gemini-3-flash-preview"
+  }
+}
