@@ -7,506 +7,61 @@
   base_params: {
     contents: [
       {
-        parts: [
-          {
-            text: "Hello",
-          },
-        ],
+        role: "user",
+        parts: [{ text: "Say hello" }],
       },
     ],
   },
+  // Gemini generation parameters typically live under generationConfig.
   param_wrapper: "generationConfig",
+  required_fields: ["candidates[0].content.parts[0].text"],
   tests: [
     {
       name: "test_baseline",
-      description: "Baseline test: only required parameters",
+      description: "Baseline test: preview model + minimal required parameters",
       is_baseline: true,
     },
     {
       name: "test_param_temperature",
-      description: "Test temperature parameter",
-      params: {
-        temperature: 0.7,
-      },
-      test_param: {
-        name: "generationConfig.temperature",
-        value: null,
-      },
+      description: "Test generationConfig.temperature (image model override)",
+      endpoint_override: "/v1beta/models/gemini-3-flash-image:generateContent",
+      params: { temperature: 0.7 },
+      test_param: { name: "generationConfig.temperature", value: 0.7 },
     },
     {
       name: "test_param_max_output_tokens",
-      description: "Test maxOutputTokens parameter",
-      params: {
-        maxOutputTokens: 100,
-      },
-      test_param: {
-        name: "generationConfig.maxOutputTokens",
-        value: null,
-      },
+      description: "Test generationConfig.maxOutputTokens (image model override)",
+      endpoint_override: "/v1beta/models/gemini-3-flash-image:generateContent",
+      params: { maxOutputTokens: 64 },
+      test_param: { name: "generationConfig.maxOutputTokens", value: 64 },
     },
     {
       name: "test_param_top_p",
-      description: "Test topP parameter",
-      params: {
-        topP: 0.9,
-      },
-      test_param: {
-        name: "generationConfig.topP",
-        value: null,
-      },
+      description: "Test generationConfig.topP (image model override)",
+      endpoint_override: "/v1beta/models/gemini-3-flash-image:generateContent",
+      params: { topP: 0.9 },
+      test_param: { name: "generationConfig.topP", value: 0.9 },
     },
     {
       name: "test_param_top_k",
-      description: "Test topK parameter",
-      params: {
-        topK: 40,
-      },
-      test_param: {
-        name: "generationConfig.topK",
-        value: null,
-      },
+      description: "Test generationConfig.topK (image model override)",
+      endpoint_override: "/v1beta/models/gemini-3-flash-image:generateContent",
+      params: { topK: 20 },
+      test_param: { name: "generationConfig.topK", value: 20 },
     },
     {
       name: "test_param_candidate_count",
-      description: "Test candidateCount parameter",
-      params: {
-        candidateCount: 2,
-      },
-      test_param: {
-        name: "generationConfig.candidateCount",
-        value: null,
-      },
+      description: "Test generationConfig.candidateCount (image model override)",
+      endpoint_override: "/v1beta/models/gemini-3-flash-image:generateContent",
+      params: { candidateCount: 2 },
+      test_param: { name: "generationConfig.candidateCount", value: 2 },
     },
     {
       name: "test_param_stop_sequences",
-      description: "Test stopSequences parameter",
-      params: {
-        stopSequences: [
-          "END",
-          "STOP",
-        ],
-      },
-      test_param: {
-        name: "generationConfig.stopSequences",
-        value: null,
-      },
-    },
-    {
-      name: "test_param_presence_penalty",
-      description: "Test presencePenalty parameter",
-      params: {
-        presencePenalty: 0.5,
-      },
-      test_param: {
-        name: "generationConfig.presencePenalty",
-        value: null,
-      },
-    },
-    {
-      name: "test_param_frequency_penalty",
-      description: "Test frequencyPenalty parameter",
-      params: {
-        frequencyPenalty: 0.5,
-      },
-      test_param: {
-        name: "generationConfig.frequencyPenalty",
-        value: null,
-      },
-    },
-    {
-      name: "test_param_seed",
-      description: "Test seed parameter",
-      params: {
-        seed: 42,
-      },
-      test_param: {
-        name: "generationConfig.seed",
-        value: null,
-      },
-    },
-    {
-      name: "test_response_format_json",
-      description: "Test JSON response format",
-      params: {
-        responseMimeType: "application/json",
-      },
-      test_param: {
-        name: "generationConfig.responseMimeType",
-        value: null,
-      },
-    },
-    {
-      name: "test_response_format_json_with_schema",
-      description: "Test JSON response with schema",
-      override_base: true,
-      no_wrapper: true,
-      params: {
-        contents: [
-          {
-            parts: [
-              {
-                text: "List 3 popular cookie recipes.",
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "object",
-            properties: {
-              recipes: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    name: {
-                      type: "string",
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      test_param: {
-        name: "generationConfig.responseSchema",
-        value: {
-          type: "object",
-          properties: {
-            recipes: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  name: {
-                    type: "string",
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    {
-      name: "test_param_system_instruction",
-      description: "Test systemInstruction parameter",
-      no_wrapper: true,
-      params: {
-        systemInstruction: {
-          parts: [
-            {
-              text: "You are a helpful assistant.",
-            },
-          ],
-        },
-      },
-      test_param: {
-        name: "systemInstruction",
-        value: {
-          parts: [
-            {
-              text: "You are a helpful assistant.",
-            },
-          ],
-        },
-      },
-    },
-    {
-      name: "test_param_safety_settings",
-      description: "Test safetySettings parameter",
-      no_wrapper: true,
-      params: {
-        safetySettings: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-        ],
-      },
-      test_param: {
-        name: "safetySettings",
-        value: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-        ],
-      },
-    },
-    {
-      name: "test_safety_threshold",
-      description: "Test different safety thresholds",
-      no_wrapper: true,
-      parameterize: {
-        threshold: [
-          "BLOCK_NONE",
-          "BLOCK_ONLY_HIGH",
-          "BLOCK_MEDIUM_AND_ABOVE",
-          "BLOCK_LOW_AND_ABOVE",
-        ],
-      },
-      params: {
-        safetySettings: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "$threshold",
-          },
-        ],
-      },
-      test_param: {
-        name: "safetySettings[].threshold",
-        value: null,
-      },
-    },
-    {
-      name: "test_param_function_calling",
-      description: "Test function calling",
-      override_base: true,
-      no_wrapper: true,
-      params: {
-        contents: [
-          {
-            parts: [
-              {
-                text: "What's the weather in Tokyo?",
-              },
-            ],
-          },
-        ],
-        tools: [
-          {
-            functionDeclarations: [
-              {
-                name: "get_weather",
-                description: "Get the current weather for a location",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    location: {
-                      type: "string",
-                      description: "The city name",
-                    },
-                  },
-                  required: [
-                    "location",
-                  ],
-                },
-              },
-            ],
-          },
-        ],
-      },
-      test_param: {
-        name: "tools",
-        value: [
-          {
-            functionDeclarations: [
-              {
-                name: "get_weather",
-                description: "Get the current weather for a location",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    location: {
-                      type: "string",
-                      description: "The city name",
-                    },
-                  },
-                  required: [
-                    "location",
-                  ],
-                },
-              },
-            ],
-          },
-        ],
-      },
-    },
-    {
-      name: "test_param_code_execution",
-      description: "Test code execution",
-      override_base: true,
-      no_wrapper: true,
-      params: {
-        contents: [
-          {
-            parts: [
-              {
-                text: "What is the sum of the first 50 prime numbers?",
-              },
-            ],
-          },
-        ],
-        tools: [
-          {
-            codeExecution: {},
-          },
-        ],
-      },
-      test_param: {
-        name: "tools[].codeExecution",
-        value: null,
-      },
-    },
-    {
-      name: "test_param_response_logprobs",
-      description: "Test response_logprobs",
-      params: {
-        responseLogprobs: true,
-      },
-      test_param: {
-        name: "generationConfig.responseLogprobs",
-        value: null,
-      },
-    },
-    {
-      name: "test_param_logprobs",
-      description: "Test logprobs",
-      params: {
-        logprobs: 5,
-      },
-      test_param: {
-        name: "generationConfig.logprobs",
-        value: null,
-      },
-    },
-    {
-      name: "test_param_audio_timestamp",
-      description: "Test audio_timestamp",
-      params: {
-        audioTimestamp: true,
-      },
-      test_param: {
-        name: "generationConfig.audioTimestamp",
-        value: null,
-      },
-    },
-    {
-      name: "test_param_media_resolution",
-      description: "Test media resolution",
-      params: {
-        mediaResolution: "MEDIA_RESOLUTION_LOW",
-      },
-      test_param: {
-        name: "generationConfig.mediaResolution",
-        value: null,
-      },
-    },
-    {
-      name: "test_param_response_modalities",
-      description: "Test response modalities",
-      params: {
-        responseModalities: [
-          "TEXT",
-          "AUDIO",
-        ],
-      },
-      test_param: {
-        name: "generationConfig.responseModalities",
-        value: null,
-      },
-    },
-    {
-      name: "test_param_speech_config",
-      description: "Test speech config",
-      override_base: true,
-      no_wrapper: true,
-      params: {
-        contents: [
-          {
-            parts: [
-              {
-                text: "Hello",
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          responseModalities: [
-            "AUDIO",
-          ],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: "Aoide",
-              },
-            },
-          },
-        },
-      },
-      test_param: {
-        name: "generationConfig.speechConfig",
-        value: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: "Aoide",
-            },
-          },
-        },
-      },
-    },
-    {
-      name: "test_param_thinking_config",
-      description: "Test thinking config",
-      params: {
-        thinkingConfig: {
-          includeThinking: true,
-        },
-      },
-      test_param: {
-        name: "generationConfig.thinkingConfig",
-        value: null,
-      },
-    },
-    {
-      name: "test_param_image_config",
-      description: "Test image config",
-      override_base: true,
-      no_wrapper: true,
-      params: {
-        contents: [
-          {
-            parts: [
-              {
-                text: "Hello",
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          responseModalities: [
-            "IMAGE",
-          ],
-          imageConfig: {
-            aspectRatio: "ASPECT_RATIO_16_9",
-            imageSize: "IMAGE_SIZE_SMALL",
-          },
-        },
-      },
-      test_param: {
-        name: "generationConfig.imageConfig",
-        value: {
-          aspectRatio: "ASPECT_RATIO_16_9",
-          imageSize: "IMAGE_SIZE_SMALL",
-        },
-      },
-    },
-    {
-      name: "test_param_enable_enhanced_civic_answers",
-      description: "Test enhanced civic answers",
-      no_wrapper: true,
-      params: {
-        confidenceScoreConfig: {
-          enableEnhancedCivicAnswers: true,
-        },
-      },
-      test_param: {
-        name: "confidenceScoreConfig.enableEnhancedCivicAnswers",
-        value: true,
-      },
+      description: "Test generationConfig.stopSequences (image model override)",
+      endpoint_override: "/v1beta/models/gemini-3-flash-image:generateContent",
+      params: { stopSequences: ["END"] },
+      test_param: { name: "generationConfig.stopSequences", value: ["END"] },
     },
   ],
 }

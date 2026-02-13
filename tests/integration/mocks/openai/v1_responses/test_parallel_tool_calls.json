@@ -1,0 +1,25 @@
+{
+  "status_code": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "id": "resp_mock_001",
+    "object": "response",
+    "created_at": 1700000000,
+    "model": "gpt-4o-mini",
+    "status": "completed",
+    "output": [
+      {
+        "id": "item_1",
+        "type": "message"
+      }
+    ],
+    "output_text": "Hello from mock.",
+    "usage": {
+      "input_tokens": 5,
+      "output_tokens": 3,
+      "total_tokens": 8
+    }
+  }
+}

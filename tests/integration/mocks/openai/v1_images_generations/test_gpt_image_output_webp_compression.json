@@ -1,0 +1,27 @@
+{
+  "status_code": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "created": 1700000012,
+    "data": [
+      {
+        "b64_json": "UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAUAmJaQAA3AA/v89WAAAAA=="
+      }
+    ],
+    "output_format": "webp",
+    "background": "auto",
+    "size": "1024x1024",
+    "quality": "auto",
+    "usage": {
+      "total_tokens": 110,
+      "input_tokens": 55,
+      "output_tokens": 55,
+      "input_tokens_details": {
+        "image_tokens": 0,
+        "text_tokens": 55
+      }
+    }
+  }
+}

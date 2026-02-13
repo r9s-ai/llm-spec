@@ -1,0 +1,15 @@
+{
+  "status_code": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "created": 1700000000,
+    "data": [
+      {
+        "url": "https://example.com/mock-image.png",
+        "revised_prompt": "A cute cat"
+      }
+    ]
+  }
+}

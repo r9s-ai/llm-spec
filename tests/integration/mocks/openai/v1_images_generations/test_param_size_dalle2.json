@@ -1,0 +1,15 @@
+{
+  "status_code": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "created": 1700000002,
+    "data": [
+      {
+        "url": "https://example.com/mock-dalle2-size.png"
+      }
+    ],
+    "size": "512x512"
+  }
+}

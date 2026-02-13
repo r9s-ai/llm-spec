@@ -49,19 +49,43 @@ class MockDataLoader:
         Raises:
             FileNotFoundError: If the mock data file doesn't exist
         """
-        # Build file path: provider/endpoint_dir/test_name.json
+        # Build file path:
+        # - non-stream: provider/endpoint_dir/test_name.json
+        # - stream: provider/endpoint_dir/test_name.jsonl (preferred), fallback to .json for backward compatibility
         endpoint_dir = endpoint.strip("/").replace("/", "_")
         safe_name = self._sanitize_filename(test_name)
-        file_path = self.base_dir / provider / endpoint_dir / f"{safe_name}.json"
+        stream_fallback_path: Path | None = None
+        if is_stream:
+            file_path = self.base_dir / provider / endpoint_dir / f"{safe_name}.jsonl"
+            stream_fallback_path = self.base_dir / provider / endpoint_dir / f"{safe_name}.json"
+        else:
+            file_path = self.base_dir / provider / endpoint_dir / f"{safe_name}.json"
+
+        # Backward compatibility: stream mocks previously used `.json` extension.
+        if (
+            is_stream
+            and not file_path.exists()
+            and stream_fallback_path
+            and stream_fallback_path.exists()
+        ):
+            file_path = stream_fallback_path
 
         # Fallback logic: if a variant-specific mock file (e.g., name[variant].json)
         # is not found, try the base mock file (name.json) if it's a parameterized test.
         if not file_path.exists() and "[" in safe_name and "]" in safe_name:
             # Extract base name from variant name, e.g., "test_name[variant]" -> "test_name"
             base_name = safe_name.split("[", 1)[0]
-            fallback_file = self.base_dir / provider / endpoint_dir / f"{base_name}.json"
-            if fallback_file.exists():
-                file_path = fallback_file
+            if is_stream:
+                fallback_jsonl = self.base_dir / provider / endpoint_dir / f"{base_name}.jsonl"
+                fallback_json = self.base_dir / provider / endpoint_dir / f"{base_name}.json"
+                if fallback_jsonl.exists():
+                    file_path = fallback_jsonl
+                elif fallback_json.exists():
+                    file_path = fallback_json
+            else:
+                fallback_file = self.base_dir / provider / endpoint_dir / f"{base_name}.json"
+                if fallback_file.exists():
+                    file_path = fallback_file
 
         if not file_path.exists():
             raise FileNotFoundError(

@@ -1,0 +1,16 @@
+{
+  "status_code": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "created": 1700000003,
+    "data": [
+      {
+        "url": "https://example.com/mock-dalle3-size.png",
+        "revised_prompt": "A cute cat"
+      }
+    ],
+    "size": "1792x1024"
+  }
+}

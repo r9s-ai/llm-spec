@@ -1,0 +1,31 @@
+{
+  "status_code": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "created": 1700000010,
+    "background": "transparent",
+    "output_format": "png",
+    "data": [
+      {
+        "b64_json": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PmH2eQAAAABJRU5ErkJggg=="
+      }
+    ],
+    "size": "1024x1024",
+    "quality": "high",
+    "usage": {
+      "total_tokens": 120,
+      "input_tokens": 60,
+      "output_tokens": 60,
+      "input_tokens_details": {
+        "image_tokens": 0,
+        "text_tokens": 60
+      },
+      "output_tokens_details": {
+        "image_tokens": 60,
+        "text_tokens": 0
+      }
+    }
+  }
+}

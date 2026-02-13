@@ -1,0 +1,27 @@
+{
+  "status_code": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "created": 1700000013,
+    "data": [
+      {
+        "b64_json": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAXEAADAQAAAAAAAAAAAAAAAAAAAhEB/8QAFQEBAQAAAAAAAAAAAAAAAAAAAwT/xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oADAMBAAIRAxEAPwCkA//Z"
+      }
+    ],
+    "output_format": "jpeg",
+    "background": "auto",
+    "size": "1024x1024",
+    "quality": "auto",
+    "usage": {
+      "total_tokens": 110,
+      "input_tokens": 55,
+      "output_tokens": 55,
+      "input_tokens_details": {
+        "image_tokens": 0,
+        "text_tokens": 55
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{"type": "chunk", "data": {"type": "response.created", "response_id": "resp_mock_001"}}
+{"type": "chunk", "data": {"type": "response.output_item.added", "item": {"id": "item_1", "type": "message"}, "output_index": 0}}
+{"type": "chunk", "data": {"type": "response.content_part.added", "item_id": "item_1", "content_index": 0, "part": {"type": "output_text", "text": ""}}}
+{"type": "chunk", "data": {"type": "response.output_text.delta", "text": "Hello"}}
+{"type": "chunk", "data": {"type": "response.output_text.done", "text": "Hello"}}
+{"type": "chunk", "data": {"type": "response.content_part.done", "item_id": "item_1", "content_index": 0}}
+{"type": "chunk", "data": {"type": "response.output_item.done", "item": {"id": "item_1", "type": "message"}, "output_index": 0}}
+{"type": "chunk", "data": {"type": "response.completed", "response_id": "resp_mock_001"}}
+{"type": "done"}

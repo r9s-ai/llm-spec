@@ -1,0 +1,21 @@
+{
+  "status_code": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "object": "list",
+    "data": [
+      {
+        "object": "embedding",
+        "index": 0,
+        "embedding": "AACAPwAAgL8AAIA/AACAPw=="
+      }
+    ],
+    "model": "text-embedding-3-small",
+    "usage": {
+      "prompt_tokens": 3,
+      "total_tokens": 3
+    }
+  }
+}

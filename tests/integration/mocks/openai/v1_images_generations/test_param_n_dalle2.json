@@ -1,0 +1,17 @@
+{
+  "status_code": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "created": 1700000007,
+    "data": [
+      {
+        "url": "https://example.com/mock-n1.png"
+      },
+      {
+        "url": "https://example.com/mock-n2.png"
+      }
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "status_code": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "created": 1700000101,
+    "data": [
+      {
+        "url": "https://example.com/mock-edit-url.png"
+      }
+    ]
+  }
+}
