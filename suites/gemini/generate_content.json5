@@ -16,8 +16,6 @@
       },
     ],
   },
-  // Gemini generation parameters typically live under generationConfig.
-  param_wrapper: "generationConfig",
   tests: [
     {
       name: "test_baseline",
@@ -28,49 +26,49 @@
     {
       name: "test_param_temperature",
       description: "Test generationConfig.temperature",
-      params: { temperature: 0.7 },
+      params: { generationConfig: { temperature: 0.7 } },
       test_param: { name: "generationConfig.temperature", value: 0.7 },
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
       name: "test_param_max_output_tokens",
       description: "Test generationConfig.maxOutputTokens",
-      params: { maxOutputTokens: 64 },
+      params: { generationConfig: { maxOutputTokens: 64 } },
       test_param: { name: "generationConfig.maxOutputTokens", value: 64 },
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
       name: "test_param_top_p",
       description: "Test generationConfig.topP",
-      params: { topP: 0.9 },
+      params: { generationConfig: { topP: 0.9 } },
       test_param: { name: "generationConfig.topP", value: 0.9 },
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
       name: "test_param_top_k",
       description: "Test generationConfig.topK",
-      params: { topK: 20 },
+      params: { generationConfig: { topK: 20 } },
       test_param: { name: "generationConfig.topK", value: 20 },
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
       name: "test_param_candidate_count",
       description: "Test generationConfig.candidateCount",
-      params: { candidateCount: 2 },
+      params: { generationConfig: { candidateCount: 2 } },
       test_param: { name: "generationConfig.candidateCount", value: 2 },
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
       name: "test_param_stop_sequences",
       description: "Test generationConfig.stopSequences",
-      params: { stopSequences: ["END"] },
+      params: { generationConfig: { stopSequences: ["END"] } },
       test_param: { name: "generationConfig.stopSequences", value: ["END"] },
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
       name: "test_param_response_mime_type",
       description: "Test generationConfig.responseMimeType (JSON output)",
-      params: { responseMimeType: "application/json" },
+      params: { generationConfig: { responseMimeType: "application/json" } },
       test_param: { name: "generationConfig.responseMimeType", value: "application/json" },
       required_fields: ["candidates[0].content.parts[0].text"],
     },
@@ -78,11 +76,13 @@
       name: "test_param_response_schema",
       description: "Test generationConfig.responseSchema (JSON schema)",
       params: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "object",
-          properties: { greeting: { type: "string" } },
-          required: ["greeting"],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "object",
+            properties: { greeting: { type: "string" } },
+            required: ["greeting"],
+          },
         },
       },
       test_param: { name: "generationConfig.responseSchema", value: { type: "object" } },
@@ -91,7 +91,6 @@
     {
       name: "test_param_system_instruction",
       description: "Test systemInstruction (top-level field)",
-      no_wrapper: true,
       params: {
         systemInstruction: { parts: [{ text: "You are a concise assistant." }] },
         generationConfig: { maxOutputTokens: 64 },
@@ -102,7 +101,6 @@
     {
       name: "test_param_tools_function_declarations",
       description: "Test tools.functionDeclarations + toolConfig.functionCallingConfig (top-level fields)",
-      no_wrapper: true,
       params: {
         tools: [
           {
@@ -128,7 +126,6 @@
     {
       name: "test_tool_call_any",
       description: "Tool calling: force a function call via toolConfig.functionCallingConfig.mode=ANY",
-      no_wrapper: true,
       override_base: true,
       params: {
         contents: [
@@ -169,7 +166,6 @@
     {
       name: "test_tool_call_none",
       description: "Tool calling: disable tool calls via toolConfig.functionCallingConfig.mode=NONE",
-      no_wrapper: true,
       override_base: true,
       params: {
         contents: [
@@ -202,7 +198,6 @@
     {
       name: "test_param_safety_settings",
       description: "Test safetySettings (top-level field)",
-      no_wrapper: true,
       // Parameterize across all documented categories + thresholds.
       // This expands into many variants like:
       //   test_param_safety_settings[HARM_CATEGORY_HARASSMENT:BLOCK_MEDIUM_AND_ABOVE]
@@ -258,7 +253,7 @@
       endpoint_override: "/v1beta/models/gemini-3-flash-image:generateContent",
       // Multimodal response generation: must explicitly request IMAGE.
       // See: https://ai.google.dev/gemini-api/docs/image-generation
-      params: { responseModalities: ["TEXT", "IMAGE"] },
+      params: { generationConfig: { responseModalities: ["TEXT", "IMAGE"] } },
       test_param: { name: "generationConfig.responseModalities", value: ["TEXT", "IMAGE"] },
       required_fields: [
         "candidates[0].content.parts[0].inlineData.data",

@@ -54,9 +54,6 @@ class SpecTestCase:
     override_base: bool = False
     """Whether to fully override base_params."""
 
-    no_wrapper: bool = False
-    """Whether to skip applying param_wrapper."""
-
     endpoint_override: str | None = None
     """Override the suite endpoint for this test."""
 
@@ -85,9 +82,6 @@ class SpecTestSuite:
 
     base_params: dict[str, Any] = field(default_factory=dict)
     """Baseline params (required params)."""
-
-    param_wrapper: str | None = None
-    """Optional wrapper key, e.g. Gemini "generationConfig"."""
 
     tests: list[SpecTestCase] = field(default_factory=list)
     """List of test cases."""
@@ -166,7 +160,6 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
             stream=stream,
             stream_rules=test_config.get("stream_rules", test_config.get("stream_validation")),
             override_base=test_config.get("override_base", False),
-            no_wrapper=test_config.get("no_wrapper", False),
             endpoint_override=test_config.get("endpoint_override"),
             files=test_config.get("files"),
             schemas=test_config.get("schemas"),
@@ -253,7 +246,6 @@ def load_test_suite(config_path: Path) -> SpecTestSuite:
                     stream=t.get("stream", False),
                     stream_rules=t.get("stream_rules", t.get("stream_validation")),
                     override_base=t.get("override_base", False),
-                    no_wrapper=t.get("no_wrapper", False),
                     endpoint_override=t.get("endpoint_override"),
                     files=t.get("files"),
                     schemas=t.get("schemas"),
@@ -266,7 +258,6 @@ def load_test_suite(config_path: Path) -> SpecTestSuite:
         endpoint=data["endpoint"],
         schemas=data.get("schemas", {}),
         base_params=data.get("base_params", {}),
-        param_wrapper=data.get("param_wrapper"),
         tests=tests,
         required_fields=data.get("required_fields", []),
         stream_rules=data.get("stream_rules", data.get("stream_validation")),
@@ -355,14 +346,7 @@ class ConfigDrivenTestRunner:
         base = {} if test.override_base else copy.deepcopy(self.suite.base_params)
 
         test_params = copy.deepcopy(test.params)
-
-        # Apply param_wrapper (e.g. Gemini generationConfig)
-        if self.suite.param_wrapper and not test.no_wrapper and test_params:
-            # Wrap test params into the configured container key
-            wrapped = {self.suite.param_wrapper: test_params}
-            base.update(wrapped)
-        else:
-            base.update(test_params)
+        base.update(test_params)
 
         return base
 
