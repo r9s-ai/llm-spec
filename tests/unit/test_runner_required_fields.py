@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from llm_spec.reporting.collector import ReportCollector
+from llm_spec.reporting.collector import EndpointResultBuilder
 from llm_spec.runners.runner import ConfigDrivenTestRunner, SpecTestCase, SpecTestSuite
 
 
@@ -11,7 +11,7 @@ def test_runner_required_fields_validation():
         endpoint="/v1/chat/completions",
         required_fields=["id", "choices[0].message.content"],
     )
-    collector = ReportCollector(
+    collector = EndpointResultBuilder(
         provider="openai", endpoint="/v1/chat/completions", base_url="https://api.openai.com"
     )
     client = MagicMock()
@@ -50,7 +50,7 @@ def test_runner_test_level_required_fields():
     suite = SpecTestSuite(
         provider="openai", endpoint="/v1/chat/completions", required_fields=["id"]
     )
-    collector = ReportCollector(
+    collector = EndpointResultBuilder(
         provider="openai", endpoint="/v1/chat/completions", base_url="https://api.openai.com"
     )
     client = MagicMock()

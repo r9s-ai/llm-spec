@@ -124,6 +124,8 @@ class HTTPClient(BaseHTTPClient):
         url: str,
         headers: Headers | None = None,
         json: JSONValue | None = None,
+        data: Any | None = None,
+        files: Any | None = None,
         timeout: float | None = None,
     ) -> Iterator[bytes]:
         """Send a synchronous streaming request (Server-Sent Events).
@@ -135,6 +137,8 @@ class HTTPClient(BaseHTTPClient):
             url: request URL
             headers: request headers
             json: JSON request body
+            data: form data
+            files: upload files
             timeout: timeout in seconds
 
         Yields:
@@ -148,6 +152,8 @@ class HTTPClient(BaseHTTPClient):
             url=url,
             headers=headers,
             json=json,
+            data=data,
+            files=files,
             timeout=timeout_val,
         ) as response:
             self.stream_status_code = response.status_code
@@ -165,6 +171,8 @@ class HTTPClient(BaseHTTPClient):
         url: str,
         headers: Headers | None = None,
         json: JSONValue | None = None,
+        data: Any | None = None,
+        files: Any | None = None,
         timeout: float | None = None,
     ) -> AsyncIterator[bytes]:
         """Send an asynchronous streaming request (Server-Sent Events).
@@ -176,6 +184,8 @@ class HTTPClient(BaseHTTPClient):
             url: request URL
             headers: request headers
             json: JSON request body
+            data: form data
+            files: upload files
             timeout: timeout in seconds
 
         Yields:
@@ -188,6 +198,8 @@ class HTTPClient(BaseHTTPClient):
             url=url,
             headers=headers,
             json=json,
+            data=data,
+            files=files,
             timeout=timeout_val,
         ) as response:
             self.stream_status_code = response.status_code

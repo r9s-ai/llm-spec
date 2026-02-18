@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import copy
-import re
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import httpx
+from pydantic import BaseModel as PydanticBaseModel
+from pydantic import ConfigDict, Field, model_validator
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -18,7 +21,9 @@ import json5
 
 from llm_spec.adapters.base import ProviderAdapter
 from llm_spec.logger import RequestLogger, current_test_name
-from llm_spec.reporting.collector import ReportCollector
+from llm_spec.path_utils import get_value_at_path
+from llm_spec.reporting.collector import EndpointResultBuilder
+from llm_spec.reporting.report_types import TestedParameter, TestExecutionResult
 from llm_spec.runners.parsers import ResponseParser, StreamResponseParser
 from llm_spec.runners.stream_rules import extract_observations, validate_stream
 from llm_spec.validation.validator import ResponseValidator, ValidationResult
@@ -45,7 +50,7 @@ class SpecTestCase:
     is_baseline: bool = False
     """Whether this is a baseline test (records all params)."""
 
-    stream: bool = False
+    stream: Any = False
     """Whether this is a streaming test."""
 
     stream_rules: dict[str, Any] | None = None
@@ -65,6 +70,9 @@ class SpecTestCase:
 
     required_fields: list[str] | None = None
     """List of fields that MUST be present and not None in the response."""
+
+    method: str | None = None
+    """Optional HTTP method override for this test."""
 
 
 @dataclass
@@ -94,6 +102,83 @@ class SpecTestSuite:
 
     config_path: Path | None = None
     """Config file path."""
+
+    method: str = "POST"
+    """Default HTTP method for this suite."""
+
+    suite_name: str | None = None
+    """Optional human-friendly suite name."""
+
+
+class _RawTestCase(PydanticBaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: str = ""
+    params: dict[str, Any] = Field(default_factory=dict)
+    test_param: dict[str, Any] | None = None
+    is_baseline: bool = False
+    stream: Any = False
+    stream_rules: dict[str, Any] | None = None
+    stream_validation: dict[str, Any] | None = None
+    override_base: bool = False
+    endpoint_override: str | None = None
+    files: dict[str, str] | None = None
+    schemas: dict[str, str] | None = None
+    required_fields: list[str] | None = None
+    parameterize: dict[str, list[Any]] | None = None
+    method: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_legacy_fields(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if "stream_rules" not in data and "stream_validation" in data:
+            data = dict(data)
+            data["stream_rules"] = data.get("stream_validation")
+        return data
+
+    @model_validator(mode="after")
+    def _validate_required_non_baseline_fields(self) -> _RawTestCase:
+        if self.is_baseline:
+            if isinstance(self.stream, str) and not self.parameterize:
+                raise ValueError(
+                    f"Invalid stream value for baseline test '{self.name}': {self.stream}"
+                )
+            return self
+        if self.test_param is None:
+            raise ValueError(f"Missing 'test_param' for non-baseline test '{self.name}'")
+        if "name" not in self.test_param:
+            raise ValueError(f"Missing test_param.name for test '{self.name}'")
+        if isinstance(self.stream, str) and not self.parameterize:
+            raise ValueError(f"Invalid stream value for test '{self.name}': {self.stream}")
+        return self
+
+
+class _RawSuite(PydanticBaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str
+    endpoint: str
+    schemas: dict[str, str] = Field(default_factory=dict)
+    base_params: dict[str, Any] = Field(default_factory=dict)
+    tests: list[_RawTestCase] = Field(default_factory=list)
+    required_fields: list[str] = Field(default_factory=list)
+    stream_rules: dict[str, Any] | None = None
+    stream_validation: dict[str, Any] | None = None
+    method: str = "POST"
+    suite_name: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_legacy_fields(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if "stream_rules" not in data and "stream_validation" in data:
+            data = dict(data)
+            data["stream_rules"] = data.get("stream_validation")
+        return data
 
 
 def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTestCase]:
@@ -164,6 +249,7 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
             files=test_config.get("files"),
             schemas=test_config.get("schemas"),
             required_fields=test_config.get("required_fields"),
+            method=test_config.get("method"),
         )
 
 
@@ -210,93 +296,48 @@ def load_test_suite(config_path: Path) -> SpecTestSuite:
         Parsed SpecTestSuite
     """
     with open(config_path, encoding="utf-8") as f:
-        data = json5.load(f)
+        raw_data = json5.load(f)
+
+    data = _RawSuite.model_validate(raw_data)
 
     tests: list[SpecTestCase] = []
 
-    for t in data.get("tests", []):
-        # Validation: check for mandatory fields
-        test_name = t.get("name")
-        if not test_name:
-            raise ValueError(f"Missing 'name' for test in suite: {config_path}")
-
-        is_baseline = t.get("is_baseline", False)
-        if not is_baseline:
-            # Non-baseline tests must have params and test_param
-            if "params" not in t:
-                raise ValueError(
-                    f"Missing 'params' for non-baseline test '{test_name}' in suite: {config_path}"
-                )
-            if "test_param" not in t:
-                raise ValueError(
-                    f"Missing 'test_param' for non-baseline test '{test_name}' in suite: {config_path}"
-                )
-
+    for t in data.tests:
+        t_dict = t.model_dump()
         # Expand parameterized tests
-        if "parameterize" in t:
-            tests.extend(expand_parameterized_tests(t))
+        if t.parameterize:
+            tests.extend(expand_parameterized_tests(t_dict))
         else:
             tests.append(
                 SpecTestCase(
-                    name=test_name,
-                    description=t.get("description", ""),
-                    params=t.get("params", {}),
-                    test_param=t.get("test_param"),
-                    is_baseline=is_baseline,
-                    stream=t.get("stream", False),
-                    stream_rules=t.get("stream_rules", t.get("stream_validation")),
-                    override_base=t.get("override_base", False),
-                    endpoint_override=t.get("endpoint_override"),
-                    files=t.get("files"),
-                    schemas=t.get("schemas"),
-                    required_fields=t.get("required_fields"),
+                    name=t.name,
+                    description=t.description,
+                    params=t.params,
+                    test_param=t.test_param,
+                    is_baseline=t.is_baseline,
+                    stream=t.stream if isinstance(t.stream, bool) else False,
+                    stream_rules=t.stream_rules,
+                    override_base=t.override_base,
+                    endpoint_override=t.endpoint_override,
+                    files=t.files,
+                    schemas=t.schemas,
+                    required_fields=t.required_fields,
+                    method=t.method,
                 )
             )
 
     return SpecTestSuite(
-        provider=data["provider"],
-        endpoint=data["endpoint"],
-        schemas=data.get("schemas", {}),
-        base_params=data.get("base_params", {}),
+        provider=data.provider,
+        endpoint=data.endpoint,
+        schemas=data.schemas,
+        base_params=data.base_params,
         tests=tests,
-        required_fields=data.get("required_fields", []),
-        stream_rules=data.get("stream_rules", data.get("stream_validation")),
+        required_fields=data.required_fields,
+        stream_rules=data.stream_rules,
         config_path=config_path,
+        method=data.method,
+        suite_name=data.suite_name,
     )
-
-
-def get_value_at_path(obj: dict[str, Any], path: str) -> Any:
-    """Get a nested value by a dotted path.
-
-    Args:
-        obj: dict object
-        path: dotted path, e.g. ``"response_format.type"``
-
-    Returns:
-        The value at the given path, or None if missing.
-    """
-    parts = path.split(".")
-    current = obj
-
-    for part in parts:
-        # Handle array index, e.g. "tools[0]"
-        match = re.match(r"(\w+)\[(\d+)\]", part)
-        if match:
-            key, idx = match.groups()
-            if isinstance(current, dict) and key in current:
-                current = current[key]
-                if isinstance(current, list) and int(idx) < len(current):
-                    current = current[int(idx)]
-                else:
-                    return None
-            else:
-                return None
-        elif isinstance(current, dict) and part in current:
-            current = current[part]
-        else:
-            return None
-
-    return current
 
 
 class ConfigDrivenTestRunner:
@@ -306,14 +347,14 @@ class ConfigDrivenTestRunner:
     1. Build request params (merge base_params with test params)
     2. Execute requests (non-streaming or streaming)
     3. Validate responses (schema + stream rules)
-    4. Record results into ReportCollector
+    4. Record results into EndpointResultBuilder
     """
 
     def __init__(
         self,
         suite: SpecTestSuite,
         client: ProviderAdapter,
-        collector: ReportCollector,
+        collector: EndpointResultBuilder,
         logger: RequestLogger | None = None,
     ):
         """Initialize the runner.
@@ -382,6 +423,152 @@ class ConfigDrivenTestRunner:
 
             self.logger.logger.error(json.dumps(error_details, ensure_ascii=False))
 
+    @staticmethod
+    def _build_tested_param(test: SpecTestCase) -> TestedParameter | None:
+        """Build normalized tested_param payload."""
+        if not test.test_param:
+            return None
+        param_name = test.test_param.get("name")
+        if not isinstance(param_name, str) or not param_name:
+            return None
+        return {"name": param_name, "value": test.test_param.get("value")}
+
+    @staticmethod
+    def _make_test_result(
+        *,
+        test: SpecTestCase,
+        params: dict[str, Any],
+        status_code: int,
+        response_body: Any,
+        error: str | None = None,
+        missing_fields: list[str] | None = None,
+        expected_fields: list[str] | None = None,
+        tested_param: TestedParameter | None = None,
+        request_ok: bool | None = None,
+        schema_ok: bool | None = None,
+        required_fields_ok: bool | None = None,
+        stream_rules_ok: bool | None = None,
+        missing_events: list[str] | None = None,
+        started_at: str | None = None,
+        finished_at: str | None = None,
+        latency_ms: int | None = None,
+    ) -> TestExecutionResult:
+        """Create one stable result object used by reporting."""
+        result: TestExecutionResult = {
+            "test_name": test.name,
+            "params": params,
+            "status_code": status_code,
+            "response_body": response_body,
+            "error": error,
+            "missing_fields": missing_fields or [],
+            "expected_fields": expected_fields or [],
+            "tested_param": tested_param,
+            "is_baseline": test.is_baseline,
+            "missing_events": missing_events or [],
+        }
+        if request_ok is not None:
+            result["request_ok"] = request_ok
+        if schema_ok is not None:
+            result["schema_ok"] = schema_ok
+        if required_fields_ok is not None:
+            result["required_fields_ok"] = required_fields_ok
+        if stream_rules_ok is not None:
+            result["stream_rules_ok"] = stream_rules_ok
+        if started_at is not None:
+            result["started_at"] = started_at
+        if finished_at is not None:
+            result["finished_at"] = finished_at
+        if latency_ms is not None:
+            result["latency_ms"] = latency_ms
+        return result
+
+    def _build_redacted_request_headers(self) -> dict[str, Any]:
+        """Build request headers with sensitive values redacted."""
+        if not hasattr(self.client, "prepare_headers"):
+            return {}
+        headers = self.client.prepare_headers() or {}
+        if not isinstance(headers, dict):
+            return {}
+        return {
+            k: v if k.lower() != "authorization" and "key" not in k.lower() else "***"
+            for k, v in headers.items()
+        }
+
+    def _log_outbound_request(
+        self,
+        *,
+        request_id: str | None,
+        endpoint: str,
+        method: str,
+        params: dict[str, Any],
+        file_entries: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """Log request metadata and a safe body snapshot."""
+        if not self.logger or not request_id:
+            return
+
+        base_url = getattr(self.client, "get_base_url", lambda: "")() or ""
+        endpoint_path = endpoint if endpoint.startswith("/") else f"/{endpoint}"
+        url = base_url.rstrip("/") + endpoint_path
+        headers = self._build_redacted_request_headers()
+        body: Any = params
+        if file_entries:
+            body = {
+                "params": params,
+                "files": file_entries,
+            }
+
+        self.logger.log_request(
+            request_id=request_id,
+            method=method,
+            url=url,
+            headers=headers,
+            body=body,
+        )
+
+    def _prepare_upload_files(
+        self, test: SpecTestCase
+    ) -> tuple[dict[str, Any] | None, list[Any], list[dict[str, Any]]]:
+        """Prepare multipart files and safe file metadata for logging."""
+        files: dict[str, Any] | None = None
+        opened_files: list[Any] = []
+        file_entries: list[dict[str, Any]] = []
+        if not test.files:
+            return files, opened_files, file_entries
+
+        files = {}
+        for param_name, file_path_str in test.files.items():
+            path = Path(file_path_str).expanduser()
+            if not path.is_absolute() and not path.exists() and self.suite.config_path is not None:
+                rel = path
+                base = self.suite.config_path.parent
+                candidates = [
+                    base / rel,
+                    base.parent / rel,
+                    base.parent.parent / rel,
+                ]
+                for c in candidates:
+                    if c.exists():
+                        path = c
+                        break
+            if not path.exists():
+                raise FileNotFoundError(f"Test file not found: {file_path_str}")
+            f = open(path, "rb")  # noqa: SIM115
+            opened_files.append(f)
+            files[param_name] = (path.name, f)
+            try:
+                size_bytes = path.stat().st_size
+            except OSError:
+                size_bytes = None
+            file_entries.append(
+                {
+                    "field": param_name,
+                    "filename": path.name,
+                    "size_bytes": size_bytes,
+                }
+            )
+        return files, opened_files, file_entries
+
     def run_test(self, test: SpecTestCase) -> bool:
         """Run a single test.
 
@@ -400,16 +587,17 @@ class ConfigDrivenTestRunner:
         try:
             endpoint = test.endpoint_override or self.suite.endpoint
             params = self.build_params(test)
+            method = test.method or self.suite.method
 
             if test.stream:
-                return self._run_stream_test(test, endpoint, params)
+                return self._run_stream_test(test, endpoint, params, method=method)
             else:
                 # Resolve schema overrides
                 response_schema = self.response_schema
                 if test.schemas and "response" in test.schemas:
                     response_schema = get_schema(test.schemas["response"])
 
-                return self._run_normal_test(test, endpoint, params, response_schema)
+                return self._run_normal_test(test, endpoint, params, response_schema, method=method)
         finally:
             # Clear context
             current_test_name.reset(token)
@@ -422,66 +610,30 @@ class ConfigDrivenTestRunner:
         endpoint: str,
         params: dict[str, Any],
         response_schema: type[BaseModel] | None = None,
+        *,
+        method: str,
     ) -> bool:
         """Run a non-streaming request test (with optional logging)."""
-        files = None
-        opened_files = []
+        started_at = datetime.now(UTC).isoformat()
+        start_monotonic = time.monotonic()
+        files, opened_files, file_entries = self._prepare_upload_files(test)
         request_id = self.logger.generate_request_id() if self.logger else None
 
-        # Prepare file uploads
-        if test.files:
-            files = {}
-            for param_name, file_path_str in test.files.items():
-                path = Path(file_path_str).expanduser()
-                if (
-                    not path.is_absolute()
-                    and not path.exists()
-                    and self.suite.config_path is not None
-                ):
-                    rel = path
-                    base = self.suite.config_path.parent
-                    candidates = [
-                        base / rel,
-                        base.parent / rel,
-                        base.parent.parent / rel,
-                    ]
-                    for c in candidates:
-                        if c.exists():
-                            path = c
-                            break
-                if not path.exists():
-                    raise FileNotFoundError(f"Test file not found: {file_path_str}")
-                # Open files early so we can close them reliably later.
-                f = open(path, "rb")  # noqa: SIM115
-                opened_files.append(f)
-                # Simple (filename, file) tuple for now.
-                files[param_name] = (path.name, f)
-
-        # Log request
-        if self.logger and request_id:
-            # Build full URL
-            base_url = getattr(self.client, "get_base_url", lambda: "")()
-            url = base_url.rstrip("/") + endpoint
-            # Get headers (redacted)
-            headers = {}
-            if hasattr(self.client, "prepare_headers"):
-                headers = self.client.prepare_headers()
-                # Redact secrets
-                headers = {
-                    k: v if k.lower() != "authorization" and "key" not in k.lower() else "***"
-                    for k, v in headers.items()
-                }
-
-            self.logger.log_request(
-                request_id=request_id,
-                method="POST",
-                url=url,
-                headers=headers,
-                body=params if not files else None,  # Don't log body when uploading files
-            )
+        self._log_outbound_request(
+            request_id=request_id,
+            endpoint=endpoint,
+            method=method,
+            params=params,
+            file_entries=file_entries or None,
+        )
 
         try:
-            response = self.client.request(endpoint=endpoint, params=params, files=files)
+            response = self.client.request(
+                endpoint=endpoint,
+                params=params,
+                files=files,
+                method=method,
+            )
         finally:
             # Ensure files are closed
             for f in opened_files:
@@ -502,6 +654,8 @@ class ConfigDrivenTestRunner:
         http_success = 200 <= status_code < 300
         schema_valid = True
         validation_errors: list[str] = []
+        schema_missing_fields: list[str] = []
+        expected_fields: list[str] = []
 
         if response_schema and http_success:
             # HTTP success: validate schema
@@ -510,10 +664,12 @@ class ConfigDrivenTestRunner:
                 result = ResponseValidator.validate_json(response_body, response_schema)
             else:
                 result = ResponseValidator.validate_response(response, response_schema)
+            expected_fields = result.expected_fields
 
             # Log validation errors
             if not result.is_valid:
                 schema_valid = False
+                schema_missing_fields = list(result.missing_fields)
                 validation_errors.append(result.error_message or "Schema validation failed")
                 self._log_validation_error(test.name, result, status_code, response_body)
 
@@ -535,86 +691,85 @@ class ConfigDrivenTestRunner:
         if not http_success:
             # HTTP failure: skip schema validation
             error_message = f"HTTP {status_code}: {response_body}"
-            expected_fields = []
             missing_fields = []
         else:
             # HTTP success
             error_message = "; ".join(validation_errors) if validation_errors else None
-            # For backward compatibility with record_test we need individual parts
-            # but record_test takes 'error' string.
-            expected_fields = []  # result.expected_fields if we had one
-            missing_fields = missing_required
+            missing_fields = schema_missing_fields + missing_required
 
-        # Build tested_param (if test_param is configured)
-        tested_param: tuple[str, Any] | None = None
-        if test.test_param:
-            # New format: test_param is {"name": "param.name", "value": "..."}
-            param_name = test.test_param.get("name")
-            param_value = test.test_param.get("value")
-            if param_name is not None:
-                tested_param = (param_name, param_value)
-
-        # Record test result (collector handles parameter support bookkeeping)
-        self.collector.record_test(
-            test_name=test.name,
-            params=params,
-            status_code=status_code,
-            response_body=response_body,
-            error=error_message,
-            missing_fields=missing_fields,
-            expected_fields=expected_fields,
-            tested_param=tested_param,
-            is_baseline=test.is_baseline,
+        tested_param = self._build_tested_param(test)
+        finished_at = datetime.now(UTC).isoformat()
+        latency_ms = int((time.monotonic() - start_monotonic) * 1000)
+        http_success = 200 <= status_code < 300
+        schema_ok = http_success and schema_valid
+        required_fields_ok = http_success and not bool(missing_fields)
+        self.collector.record_result(
+            self._make_test_result(
+                test=test,
+                params=params,
+                status_code=status_code,
+                response_body=response_body,
+                error=error_message,
+                missing_fields=missing_fields,
+                expected_fields=expected_fields,
+                tested_param=tested_param,
+                request_ok=http_success,
+                schema_ok=schema_ok,
+                required_fields_ok=required_fields_ok,
+                stream_rules_ok=True,
+                started_at=started_at,
+                finished_at=finished_at,
+                latency_ms=latency_ms,
+            )
         )
 
         return http_success and is_valid
 
     # _format_stream_response removed (moved to StreamParser.format_stream_response)
 
-    def _run_stream_test(self, test: SpecTestCase, endpoint: str, params: dict[str, Any]) -> bool:
+    def _run_stream_test(
+        self, test: SpecTestCase, endpoint: str, params: dict[str, Any], *, method: str
+    ) -> bool:
         """Run a streaming request test (this layer collects chunks and logs)."""
+        started_at = datetime.now(UTC).isoformat()
+        start_monotonic = time.monotonic()
+        finished_timing: tuple[str, int] | None = None
 
-        # Build tested_param (if test_param is configured)
-        tested_param: tuple[str, Any] | None = None
-        if test.test_param:
-            param_name = test.test_param.get("name")
-            param_value = test.test_param.get("value")
-            if param_name is not None:
-                tested_param = (param_name, param_value)
+        def _finish_timing() -> tuple[str, int]:
+            nonlocal finished_timing
+            if finished_timing is None:
+                finished_timing = (
+                    datetime.now(UTC).isoformat(),
+                    int((time.monotonic() - start_monotonic) * 1000),
+                )
+            return finished_timing
+
+        tested_param = self._build_tested_param(test)
 
         # Collect the full streaming response
         all_raw_chunks: list[bytes] = []
         http_status_code = 200
+        files, opened_files, file_entries = self._prepare_upload_files(test)
         request_id = self.logger.generate_request_id() if self.logger else None
         # Reuse a single parser across stages to avoid duplicate parsing.
         parser = StreamResponseParser(self.suite.provider)
         parsed_chunks: list[dict[str, Any]] = []
 
-        # Log request
-        if self.logger and request_id:
-            base_url = getattr(self.client, "get_base_url", lambda: "")()
-            url = base_url.rstrip("/") + endpoint
-            headers = {}
-            if hasattr(self.client, "prepare_headers"):
-                headers = self.client.prepare_headers()
-                headers = {
-                    k: v if k.lower() != "authorization" and "key" not in k.lower() else "***"
-                    for k, v in headers.items()
-                }
-
-            self.logger.log_request(
-                request_id=request_id,
-                method="POST",
-                url=url,
-                headers=headers,
-                body=params,
-            )
+        self._log_outbound_request(
+            request_id=request_id,
+            endpoint=endpoint,
+            method=method,
+            params=params,
+            file_entries=file_entries or None,
+        )
 
         try:
             # Stage 1: establish connection and collect all raw chunks
             try:
                 # Transport layer streams bytes; runner collects them.
-                for chunk_bytes in self.client.stream(endpoint=endpoint, params=params):
+                for chunk_bytes in self.client.stream(
+                    endpoint=endpoint, params=params, method=method, files=files
+                ):
                     all_raw_chunks.append(chunk_bytes)
                 # Try to read the real status code (HTTPClient.stream sets stream_status_code).
                 http_client = getattr(self.client, "http_client", None)
@@ -640,14 +795,22 @@ class ConfigDrivenTestRunner:
                                 "test_name": test.name,
                             },
                         )
-                    self.collector.record_test(
-                        test_name=test.name,
-                        params=params,
-                        status_code=http_status_code,
-                        response_body=None,
-                        error="No chunks received",
-                        tested_param=tested_param,
-                        is_baseline=test.is_baseline,
+                    self.collector.record_result(
+                        self._make_test_result(
+                            test=test,
+                            params=params,
+                            status_code=http_status_code,
+                            response_body=None,
+                            error="No chunks received",
+                            tested_param=tested_param,
+                            request_ok=False,
+                            schema_ok=False,
+                            required_fields_ok=False,
+                            stream_rules_ok=False,
+                            started_at=started_at,
+                            finished_at=_finish_timing()[0],
+                            latency_ms=_finish_timing()[1],
+                        )
                     )
                     return False
             except httpx.HTTPStatusError as e:
@@ -671,14 +834,22 @@ class ConfigDrivenTestRunner:
                             "response_body": error_body,
                         },
                     )
-                self.collector.record_test(
-                    test_name=test.name,
-                    params=params,
-                    status_code=http_status_code,
-                    response_body=error_body,
-                    error=f"HTTP {http_status_code}: {e.response.text}",
-                    tested_param=tested_param,
-                    is_baseline=test.is_baseline,
+                self.collector.record_result(
+                    self._make_test_result(
+                        test=test,
+                        params=params,
+                        status_code=http_status_code,
+                        response_body=error_body,
+                        error=f"HTTP {http_status_code}: {e.response.text}",
+                        tested_param=tested_param,
+                        request_ok=False,
+                        schema_ok=False,
+                        required_fields_ok=False,
+                        stream_rules_ok=False,
+                        started_at=started_at,
+                        finished_at=_finish_timing()[0],
+                        latency_ms=_finish_timing()[1],
+                    )
                 )
                 return False
             except Exception as e:
@@ -699,14 +870,22 @@ class ConfigDrivenTestRunner:
                             "test_name": test.name,
                         },
                     )
-                self.collector.record_test(
-                    test_name=test.name,
-                    params=params,
-                    status_code=0,
-                    response_body=None,
-                    error=f"Connection error: {e}",
-                    tested_param=tested_param,
-                    is_baseline=test.is_baseline,
+                self.collector.record_result(
+                    self._make_test_result(
+                        test=test,
+                        params=params,
+                        status_code=0,
+                        response_body=None,
+                        error=f"Connection error: {e}",
+                        tested_param=tested_param,
+                        request_ok=False,
+                        schema_ok=False,
+                        required_fields_ok=False,
+                        stream_rules_ok=False,
+                        started_at=started_at,
+                        finished_at=_finish_timing()[0],
+                        latency_ms=_finish_timing()[1],
+                    )
                 )
                 return False
 
@@ -740,14 +919,22 @@ class ConfigDrivenTestRunner:
                                 "raw_chunks_count": len(all_raw_chunks),
                             },
                         )
-                    self.collector.record_test(
-                        test_name=test.name,
-                        params=params,
-                        status_code=http_status_code,
-                        response_body=error_body,
-                        error=f"Stream parse error: {e}",
-                        tested_param=tested_param,
-                        is_baseline=test.is_baseline,
+                    self.collector.record_result(
+                        self._make_test_result(
+                            test=test,
+                            params=params,
+                            status_code=http_status_code,
+                            response_body=error_body,
+                            error=f"Stream parse error: {e}",
+                            tested_param=tested_param,
+                            request_ok=True,
+                            schema_ok=False,
+                            required_fields_ok=True,
+                            stream_rules_ok=False,
+                            started_at=started_at,
+                            finished_at=_finish_timing()[0],
+                            latency_ms=_finish_timing()[1],
+                        )
                     )
                     return False
 
@@ -776,14 +963,22 @@ class ConfigDrivenTestRunner:
                                 "raw_chunks_count": len(all_raw_chunks),
                             },
                         )
-                    self.collector.record_test(
-                        test_name=test.name,
-                        params=params,
-                        status_code=http_status_code,
-                        response_body=error_body,
-                        error="No chunks received",
-                        tested_param=tested_param,
-                        is_baseline=test.is_baseline,
+                    self.collector.record_result(
+                        self._make_test_result(
+                            test=test,
+                            params=params,
+                            status_code=http_status_code,
+                            response_body=error_body,
+                            error="No chunks received",
+                            tested_param=tested_param,
+                            request_ok=True,
+                            schema_ok=False,
+                            required_fields_ok=True,
+                            stream_rules_ok=False,
+                            started_at=started_at,
+                            finished_at=_finish_timing()[0],
+                            latency_ms=_finish_timing()[1],
+                        )
                     )
                     return False
                 if self.logger and request_id:
@@ -830,19 +1025,27 @@ class ConfigDrivenTestRunner:
                 if validation_errors:
                     # Stage 3 failed: return early to avoid duplicate summary logs in stage 4.
                     content = parser.get_complete_content()
-                    self.collector.record_test(
-                        test_name=test.name,
-                        params=params,
-                        status_code=http_status_code,
-                        response_body={
-                            "chunks_count": len(parser.all_chunks),
-                            "content_length": len(content),
-                            "validation_errors": validation_errors,
-                            "invalid_chunks": invalid_chunks[:5],
-                        },
-                        error="; ".join(validation_errors),
-                        tested_param=tested_param,
-                        is_baseline=test.is_baseline,
+                    self.collector.record_result(
+                        self._make_test_result(
+                            test=test,
+                            params=params,
+                            status_code=http_status_code,
+                            response_body={
+                                "chunks_count": len(parser.all_chunks),
+                                "content_length": len(content),
+                                "validation_errors": validation_errors,
+                                "invalid_chunks": invalid_chunks[:5],
+                            },
+                            error="; ".join(validation_errors),
+                            tested_param=tested_param,
+                            request_ok=True,
+                            schema_ok=False,
+                            required_fields_ok=True,
+                            stream_rules_ok=True,
+                            started_at=started_at,
+                            finished_at=_finish_timing()[0],
+                            latency_ms=_finish_timing()[1],
+                        )
                     )
                     return False
 
@@ -896,33 +1099,50 @@ class ConfigDrivenTestRunner:
                             "total_errors": len(validation_errors),
                         },
                     )
-                self.collector.record_test(
-                    test_name=test.name,
+                self.collector.record_result(
+                    self._make_test_result(
+                        test=test,
+                        params=params,
+                        status_code=http_status_code,
+                        response_body={
+                            "chunks_count": len(parser.all_chunks),
+                            "content_length": len(content),
+                            "validation_errors": validation_errors,
+                        },
+                        error="; ".join(validation_errors),
+                        tested_param=tested_param,
+                        request_ok=True,
+                        schema_ok=True,
+                        required_fields_ok=True,
+                        stream_rules_ok=False,
+                        missing_events=missing_events,
+                        started_at=started_at,
+                        finished_at=_finish_timing()[0],
+                        latency_ms=_finish_timing()[1],
+                    )
+                )
+                return False
+
+            # Record success
+            self.collector.record_result(
+                self._make_test_result(
+                    test=test,
                     params=params,
                     status_code=http_status_code,
                     response_body={
                         "chunks_count": len(parser.all_chunks),
                         "content_length": len(content),
-                        "validation_errors": validation_errors,
                     },
-                    error="; ".join(validation_errors),
+                    error=None,
                     tested_param=tested_param,
-                    is_baseline=test.is_baseline,
+                    request_ok=True,
+                    schema_ok=True,
+                    required_fields_ok=True,
+                    stream_rules_ok=True,
+                    started_at=started_at,
+                    finished_at=_finish_timing()[0],
+                    latency_ms=_finish_timing()[1],
                 )
-                return False
-
-            # Record success
-            self.collector.record_test(
-                test_name=test.name,
-                params=params,
-                status_code=http_status_code,
-                response_body={
-                    "chunks_count": len(parser.all_chunks),
-                    "content_length": len(content),
-                },
-                error=None,
-                tested_param=tested_param,
-                is_baseline=test.is_baseline,
             )
 
             return True
@@ -945,16 +1165,27 @@ class ConfigDrivenTestRunner:
                         "test_name": test.name,
                     },
                 )
-            self.collector.record_test(
-                test_name=test.name,
-                params=params,
-                status_code=500,
-                response_body=None,
-                error=f"Unexpected error: {e}",
-                tested_param=tested_param,
-                is_baseline=test.is_baseline,
+            self.collector.record_result(
+                self._make_test_result(
+                    test=test,
+                    params=params,
+                    status_code=500,
+                    response_body=None,
+                    error=f"Unexpected error: {e}",
+                    tested_param=tested_param,
+                    request_ok=False,
+                    schema_ok=False,
+                    required_fields_ok=False,
+                    stream_rules_ok=False,
+                    started_at=started_at,
+                    finished_at=_finish_timing()[0],
+                    latency_ms=_finish_timing()[1],
+                )
             )
             return False
+        finally:
+            for f in opened_files:
+                f.close()
 
     def run_all(self) -> dict[str, bool]:
         """Run all tests in the suite.

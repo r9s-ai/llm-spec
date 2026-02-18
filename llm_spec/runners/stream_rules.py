@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from llm_spec.path_utils import get_value_at_path
+
 Observation = dict[str, Any]
 
 
@@ -143,7 +145,7 @@ def _evaluate_stream_checks(
             field_path = check.get("field")
             found = False
             for data in observed_data:
-                if data and _get_value_at_path_local(data, field_path) is not None:
+                if data and get_value_at_path(data, field_path) is not None:
                     found = True
                     break
             if not found:
@@ -341,38 +343,3 @@ def _find_missing_sequence_items(
         if not found:
             missing.append(_format_requirement_label(req))
     return missing
-
-
-def _get_value_at_path_local(obj: dict[str, Any], path: str | None) -> Any:
-    """Helper to get value at path (mini-duplicate of runner.py to avoid circular dep).
-
-    Supports dotted paths with simple array indexing like ``candidates[0].content.parts[0].text``.
-    """
-    if not path:
-        return None
-    parts = path.split(".")
-    current: Any = obj
-
-    for part in parts:
-        # Handle array index, e.g. "candidates[0]"
-        match = re.match(r"(\w+)\[(\d+)\]", part)
-        if match:
-            key, idx_str = match.groups()
-            if not (isinstance(current, dict) and key in current):
-                return None
-            current = current[key]
-            if not isinstance(current, list):
-                return None
-            idx = int(idx_str)
-            if idx >= len(current):
-                return None
-            current = current[idx]
-            continue
-
-        if isinstance(current, dict) and part in current:
-            current = current[part]
-            continue
-
-        return None
-
-    return current

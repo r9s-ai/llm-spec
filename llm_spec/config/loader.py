@@ -6,7 +6,6 @@ import tomllib
 from pathlib import Path
 
 from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class LogConfig(BaseModel):
@@ -36,12 +35,8 @@ class ProviderConfig(BaseModel):
     timeout: float = 30.0
 
 
-class AppConfig(BaseSettings):
+class AppConfig(BaseModel):
     """App configuration."""
-
-    model_config = SettingsConfigDict(
-        extra="allow",  # allow extra sections (provider configs)
-    )
 
     log: LogConfig = Field(default_factory=LogConfig)
     report: ReportConfig = Field(default_factory=ReportConfig)
@@ -108,10 +103,6 @@ class AppConfig(BaseSettings):
         return list(self.provider_configs.keys())
 
 
-# Global config (lazy-loaded)
-_global_config: AppConfig | None = None
-
-
 def load_config(config_path: Path | str = "llm-spec.toml") -> AppConfig:
     """Load global configuration.
 
@@ -121,20 +112,4 @@ def load_config(config_path: Path | str = "llm-spec.toml") -> AppConfig:
     Returns:
         AppConfig instance
     """
-    global _global_config
-    _global_config = AppConfig.from_toml(config_path)
-    return _global_config
-
-
-def get_config() -> AppConfig:
-    """Get the global configuration instance.
-
-    Returns:
-        AppConfig instance
-
-    Raises:
-        RuntimeError: if config hasn't been loaded
-    """
-    if _global_config is None:
-        raise RuntimeError("Config is not loaded. Call load_config() first.")
-    return _global_config
+    return AppConfig.from_toml(config_path)

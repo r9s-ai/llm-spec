@@ -73,6 +73,11 @@ class RequestLogger:
             file_handler.setFormatter(formatter)
             logger.addHandler(file_handler)
 
+        if self.config.console:
+            console_handler = logging.StreamHandler()
+            console_handler.setFormatter(formatter)
+            logger.addHandler(console_handler)
+
         return logger
 
     def generate_request_id(self) -> str:
@@ -84,23 +89,33 @@ class RequestLogger:
         return str(uuid.uuid4())
 
     def _truncate_body(self, body: Any) -> Any:
-        """Format request/response body (no truncation).
+        """Format request/response body with max length enforcement.
 
         Args:
             body: request/response body
 
         Returns:
-            formatted data preserving original types (dict/list/str)
+            formatted payload (dict/list when small, otherwise truncated string)
         """
         if body is None:
             return ""
 
-        # Keep dict/list values as-is; json.dumps at the outer layer will serialize them.
+        max_len = max(0, int(self.config.max_body_length))
         if isinstance(body, (dict, list)):
-            return body
+            try:
+                serialized = json.dumps(body, ensure_ascii=False)
+            except Exception:
+                serialized = str(body)
+            if len(serialized) <= max_len or max_len == 0:
+                return body if max_len != 0 else ""
+            return serialized[:max_len] + "...(truncated)"
 
-        # Fallback: stringify other types
-        return str(body)
+        text = str(body)
+        if max_len == 0:
+            return ""
+        if len(text) > max_len:
+            return text[:max_len] + "...(truncated)"
+        return text
 
     def log_request(
         self,

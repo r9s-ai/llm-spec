@@ -16,7 +16,7 @@
 
 🚀 [Getting Started](#getting-started) - 🔧 [Configuration](#configuration) - 💻 [CLI Usage](#cli-usage) - 📊 [Reports](#reports) - 🛣️ [Roadmap](#roadmap)
 
-`llm-spec` turns the question **"does this parameter work, how well does it work, and where does it break?"** into repeatable, aggregatable tests. It provides a complete **evidence chain**: `Request -> Response -> Verdict -> Aggregated Report`.
+`llm-spec` turns the question **"does this parameter work, how well does it work, and where does it break?"** into repeatable, aggregatable tests. It provides a complete **evidence chain**: `Request -> Response -> Verdict -> Run Result / Aggregated Report`.
 
 ## 🧭 Vision: Accuracy & Stability
 
@@ -101,9 +101,6 @@ Suites are defined in JSON5, allowing for comments and flexible syntax. Each sui
 ## 💻 CLI Usage
 
 ```bash
-# List all discoverable tests
-uv run python -m llm_spec list
-
 # Execute all tests
 uv run python -m llm_spec run
 
@@ -115,12 +112,13 @@ uv run python -m llm_spec run -k "chat/completions"
 ## 📊 Reports
 
 Every run generates a unique `run_id` directory in `reports/` containing:
-- `report.json`: Machine-readable results.
-- `report.md`: Human-readable summary tables.
-- `report.html`: Visual report with failure details.
+- `run_result.json`: Stable run-level structure (`providers[] -> endpoints[] -> tests[]`).
+- `report.md`: Human-readable run-level report rendered from `run_result.json`.
+- `report.html`: Visual run-level report rendered from `run_result.json`.
 
 > [!TIP]
-> Use the `--aggregate` flag to generate a capability matrix across multiple endpoints for a single provider.
+> `run_result.json` is the single source of truth; report files are view projections.
+> Each `tests[]` item records execution outcome (`result.status`) and failure reason (`result.reason`).
 
 ## 🗺️ Roadmap
 

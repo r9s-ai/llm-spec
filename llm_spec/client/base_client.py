@@ -81,6 +81,8 @@ class BaseHTTPClient(ABC):
         url: str,
         headers: Headers | None = None,
         json: JSONValue | None = None,
+        data: Any | None = None,
+        files: Any | None = None,
         timeout: float | None = None,
     ) -> Iterator[bytes]:
         """Send a synchronous streaming request (Server-Sent Events).
@@ -92,6 +94,8 @@ class BaseHTTPClient(ABC):
             url: request URL
             headers: request headers
             json: JSON request body
+            data: form data
+            files: upload files
             timeout: timeout in seconds
 
         Yields:
@@ -109,6 +113,8 @@ class BaseHTTPClient(ABC):
         url: str,
         headers: Headers | None = None,
         json: JSONValue | None = None,
+        data: Any | None = None,
+        files: Any | None = None,
         timeout: float | None = None,
     ) -> AsyncIterator[bytes]:
         """Send an asynchronous streaming request (Server-Sent Events).
@@ -120,6 +126,8 @@ class BaseHTTPClient(ABC):
             url: request URL
             headers: request headers
             json: JSON request body
+            data: form data
+            files: upload files
             timeout: timeout in seconds
 
         Yields:

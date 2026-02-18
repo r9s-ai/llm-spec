@@ -3,15 +3,16 @@
 This CLI is intentionally small:
 - Discover suites from a directory (default: ./suites)
 - Run suites against real providers using llm-spec.toml
-- Write per-endpoint reports, and optional per-provider aggregated reports
+- Write a cross-provider `run_result.json` and render run-level reports
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from llm_spec.adapters.anthropic import AnthropicAdapter
@@ -21,8 +22,9 @@ from llm_spec.adapters.xai import XAIAdapter
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import AppConfig, load_config
 from llm_spec.logger import RequestLogger
-from llm_spec.reporting.aggregator import AggregatedReportCollector
-from llm_spec.reporting.collector import ReportCollector
+from llm_spec.reporting.collector import EndpointResultBuilder
+from llm_spec.reporting.report_types import ReportData
+from llm_spec.reporting.run_result_formatter import RunResultFormatter
 from llm_spec.runners import ConfigDrivenTestRunner, SpecTestSuite, load_test_suite
 
 
@@ -33,9 +35,6 @@ class RunOptions:
     output_root: Path | None
     provider_filter: set[str] | None
     k: str | None
-    dry_run: bool
-    fail_fast: bool
-    aggregate: bool
 
 
 def _discover_suite_files(suites_dir: Path) -> list[Path]:
@@ -72,25 +71,16 @@ def _make_client(provider: str, app_config: AppConfig):
 
 
 def _run_one_suite(
-    suite_path: Path,
     suite: SpecTestSuite,
     *,
     client,
-    output_dir: Path,
     k: str | None,
-    dry_run: bool,
-    fail_fast: bool,
-) -> tuple[bool, Path | None]:
+) -> tuple[bool, ReportData | None]:
     selected = list(_iter_selected_tests(suite, k))
     if not selected:
         return True, None
 
-    if dry_run:
-        for _test, full_name in selected:
-            print(full_name)
-        return True, None
-
-    collector = ReportCollector(
+    collector = EndpointResultBuilder(
         provider=suite.provider,
         endpoint=suite.endpoint,
         base_url=client.get_base_url(),
@@ -103,13 +93,91 @@ def _run_one_suite(
         if not success:
             ok = False
             print(f"FAIL {full_name}")
-            if fail_fast:
-                break
         else:
             print(f"PASS {full_name}")
 
-    report_json_path = Path(collector.finalize(str(output_dir)))
-    return ok, report_json_path
+    return ok, collector.build_report_data()
+
+
+def _build_run_result(
+    *,
+    run_id: str,
+    started_at: str,
+    finished_at: str,
+    reports_by_provider: dict[str, list[ReportData]],
+) -> dict:
+    providers: list[dict] = []
+    total_tests = 0
+    passed_tests = 0
+    failed_tests = 0
+    skipped_tests = 0
+
+    for provider in sorted(reports_by_provider.keys()):
+        endpoint_nodes: list[dict] = []
+        provider_total = 0
+        provider_passed = 0
+        provider_failed = 0
+        provider_skipped = 0
+        provider_base_url = ""
+
+        for report_data in reports_by_provider[provider]:
+            summary = report_data.get("test_summary", {})
+            endpoint_total = int(summary.get("total_tests", 0))
+            endpoint_passed = int(summary.get("passed", 0))
+            endpoint_failed = int(summary.get("failed", 0))
+            endpoint_skipped = int(summary.get("skipped", 0))
+
+            provider_total += endpoint_total
+            provider_passed += endpoint_passed
+            provider_failed += endpoint_failed
+            provider_skipped += endpoint_skipped
+
+            provider_base_url = provider_base_url or str(report_data.get("base_url", ""))
+            endpoint_nodes.append(
+                {
+                    "endpoint": str(report_data.get("endpoint", "unknown")),
+                    "tests": report_data.get("tests", []),
+                    "summary": {
+                        "total": endpoint_total,
+                        "passed": endpoint_passed,
+                        "failed": endpoint_failed,
+                        "skipped": endpoint_skipped,
+                    },
+                }
+            )
+
+        total_tests += provider_total
+        passed_tests += provider_passed
+        failed_tests += provider_failed
+        skipped_tests += provider_skipped
+
+        providers.append(
+            {
+                "provider": provider,
+                "base_url": provider_base_url,
+                "endpoints": endpoint_nodes,
+                "summary": {
+                    "total": provider_total,
+                    "passed": provider_passed,
+                    "failed": provider_failed,
+                    "skipped": provider_skipped,
+                },
+            }
+        )
+
+    return {
+        "schema_version": "1.0",
+        "run_id": run_id,
+        "started_at": started_at,
+        "finished_at": finished_at,
+        "providers": providers,
+        "summary": {
+            "total": total_tests,
+            "passed": passed_tests,
+            "failed": failed_tests,
+            "skipped": skipped_tests,
+        },
+    }
 
 
 def run_command(opts: RunOptions) -> int:
@@ -127,6 +195,7 @@ def run_command(opts: RunOptions) -> int:
         else Path("./reports")
     )
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_started_at = datetime.now(UTC).isoformat()
     output_dir = report_root / run_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -136,7 +205,7 @@ def run_command(opts: RunOptions) -> int:
         return 2
 
     clients: dict[str, tuple[object, HTTPClient]] = {}
-    report_files_by_provider: dict[str, list[Path]] = {}
+    reports_by_provider: dict[str, list[ReportData]] = {}
     overall_ok = True
 
     try:
@@ -161,29 +230,29 @@ def run_command(opts: RunOptions) -> int:
                     continue
 
             client, _http_client = clients[suite.provider]
-            ok, report_path = _run_one_suite(
-                suite_path,
+            ok, report_data = _run_one_suite(
                 suite,
                 client=client,
-                output_dir=output_dir,
                 k=opts.k,
-                dry_run=opts.dry_run,
-                fail_fast=opts.fail_fast,
             )
             overall_ok = overall_ok and ok
-            if report_path is not None:
-                report_files_by_provider.setdefault(suite.provider, []).append(report_path)
+            if report_data is not None:
+                reports_by_provider.setdefault(suite.provider, []).append(report_data)
 
-        if opts.dry_run:
-            return 0
+        run_finished_at = datetime.now(UTC).isoformat()
+        run_result = _build_run_result(
+            run_id=run_id,
+            started_at=run_started_at,
+            finished_at=run_finished_at,
+            reports_by_provider=reports_by_provider,
+        )
+        run_result_path = output_dir / "run_result.json"
+        with open(run_result_path, "w", encoding="utf-8") as f:
+            json.dump(run_result, f, indent=2, ensure_ascii=False)
 
-        if opts.aggregate:
-            for provider, report_files in report_files_by_provider.items():
-                if len(report_files) <= 1:
-                    continue
-                aggregator = AggregatedReportCollector(provider)
-                aggregator.merge_reports(report_files)
-                aggregator.finalize(str(output_dir))
+        formatter = RunResultFormatter(run_result)
+        formatter.save_markdown(str(output_dir))
+        formatter.save_html(str(output_dir))
 
     finally:
         for _provider, (_client, http_client) in clients.items():
@@ -214,25 +283,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help='Substring filter (like pytest -k), matches "provider/endpoint::test_name"',
     )
-    run_p.add_argument(
-        "--dry-run", action="store_true", help="Only list selected tests, do not run"
-    )
-    run_p.add_argument("--fail-fast", action="store_true", help="Stop on first failure")
-    run_p.add_argument("--no-aggregate", action="store_true", help="Disable aggregated reports")
     run_p.set_defaults(_subcmd="run")
-
-    list_p = sub.add_parser("list", help="List all tests discoverable from suites")
-    list_p.add_argument("--suites", default="suites", help="Suite directory (JSON5)")
-    list_p.add_argument(
-        "--provider", action="append", default=None, help="Only list a provider (repeatable)"
-    )
-    list_p.add_argument(
-        "-k",
-        dest="k",
-        default=None,
-        help='Substring filter (like pytest -k), matches "provider/endpoint::test_name"',
-    )
-    list_p.set_defaults(_subcmd="list")
 
     return parser
 
@@ -241,22 +292,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    if args._subcmd == "list":
-        suites_dir = Path(args.suites)
-        provider_filter = set(args.provider) if args.provider else None
-        suite_files = _discover_suite_files(suites_dir)
-        for suite_path in suite_files:
-            try:
-                suite = load_test_suite(suite_path)
-            except Exception as e:
-                print(f"Skip {suite_path}: failed to load suite: {e}", file=sys.stderr)
-                continue
-            if provider_filter and suite.provider not in provider_filter:
-                continue
-            for _test, full_name in _iter_selected_tests(suite, args.k):
-                print(full_name)
-        return 0
-
     if args._subcmd == "run":
         opts = RunOptions(
             config_path=Path(args.config),
@@ -264,9 +299,6 @@ def main(argv: list[str] | None = None) -> int:
             output_root=Path(args.output_root) if args.output_root else None,
             provider_filter=set(args.provider) if args.provider else None,
             k=args.k,
-            dry_run=bool(args.dry_run),
-            fail_fast=bool(args.fail_fast),
-            aggregate=not bool(args.no_aggregate),
         )
         return run_command(opts)
 

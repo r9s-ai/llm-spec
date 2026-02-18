@@ -16,7 +16,6 @@ from llm_spec.adapters.xai import XAIAdapter
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import AppConfig, load_config
 from llm_spec.logger import RequestLogger
-from llm_spec.reporting.aggregator import AggregatedReportCollector
 from tests.integration.mock_loader import MockDataLoader
 
 
@@ -178,9 +177,6 @@ def xai_client(
     http_client.close()
 
 
-# Aggregated report tracking
-_aggregated_reports: dict[str, list[Path]] = {}
-
 # Report root dir for this pytest run (avoid mixing with historical runs)
 _RUN_REPORTS_DIR: Path | None = None
 
@@ -208,123 +204,38 @@ def pytest_configure(config):
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """Pytest hook: finalize per-endpoint and aggregated reports.
+    """Pytest hook: print run-level report summary.
 
     Usage:
     1. Run config-driven suites: pytest tests/integration/test_suite_runner.py
-       → per-endpoint reports + aggregated reports (when multiple endpoints exist)
+       → run_result.json + run-level report.md/html
     """
     global _RUN_REPORTS_DIR
-    # Only scan reports produced in this run
     reports_dir = _RUN_REPORTS_DIR or Path("./reports")
-
     if not reports_dir.exists():
         return
 
-    # Group reports by provider
-    provider_reports = {}
+    run_result_json = reports_dir / "run_result.json"
+    if not run_result_json.exists():
+        return
 
-    for report_subdir in reports_dir.iterdir():
-        if not report_subdir.is_dir():
-            continue
-
-        # Skip already-aggregated reports
-        if "aggregated" in report_subdir.name:
-            continue
-
-        report_json = report_subdir / "report.json"
-        if not report_json.exists():
-            continue
-
-        try:
-            with open(report_json, encoding="utf-8") as f:
-                report_data = json.load(f)
-                provider = report_data.get("provider", "unknown")
-
-                if provider not in provider_reports:
-                    provider_reports[provider] = []
-
-                provider_reports[provider].append(report_json)
-        except (OSError, json.JSONDecodeError):
-            continue
-
-    # Finalize for each provider
-    for provider, report_files in provider_reports.items():
-        if len(report_files) == 1:
-            # Single report
-            _print_single_report_info(report_files[0])
-
-        elif len(report_files) > 1:
-            # Multiple reports → aggregated report
-            try:
-                aggregator = AggregatedReportCollector(provider)
-                aggregator.merge_reports(report_files)
-
-                output_dir = getattr(session.config, "run_reports_dir", "./reports")
-                output_paths = aggregator.finalize(output_dir)
-
-                _print_aggregated_report_info(provider, report_files, output_paths)
-            except Exception as e:
-                print(f"⚠️  Failed to generate aggregated report for {provider}: {e}")
-
-
-def _print_single_report_info(report_json: Path) -> None:
-    """Print per-endpoint report info."""
     try:
-        with open(report_json, encoding="utf-8") as f:
-            report = json.load(f)
-
-        endpoint = report.get("endpoint", "unknown")
-        provider = report.get("provider", "unknown")
-        summary = report.get("test_summary", {})
-
-        print(f"\n{'=' * 60}")
-        print(f"✅ {provider.upper()} - {endpoint} report generated:")
-        print(f"  - Total tests: {summary.get('total_tests', 0)}")
+        with open(run_result_json, encoding="utf-8") as f:
+            run_result = json.load(f)
+        summary = run_result.get("summary", {})
+        providers = run_result.get("providers", [])
+        print(f"\n{'=' * 70}")
+        print("📊 run_result.json generated")
+        print(f"{'=' * 70}")
+        print("📈 Summary:")
+        print(f"  - Total tests: {summary.get('total', 0)}")
         print(f"  - Passed: {summary.get('passed', 0)} ✅")
         print(f"  - Failed: {summary.get('failed', 0)} ❌")
-        print(f"  - Report dir: {report_json.parent.name}/")
-        print("    - JSON:     report.json")
-        print("    - Markdown: report.md")
-        print("    - HTML:     report.html")
-        print(f"{'=' * 60}\n")
-    except Exception as e:
-        print(f"⚠️  Failed to read report: {e}")
-
-
-def _print_aggregated_report_info(provider: str, report_files: list, output_paths: dict) -> None:
-    """Print aggregated report info."""
-    try:
-        with open(output_paths["json"], encoding="utf-8") as f:
-            aggregated = json.load(f)
-
-        summary = aggregated.get("summary", {})
-
-        print(f"\n{'=' * 70}")
-        print(f"📊 {provider.upper()} aggregated report generated ({len(report_files)} endpoints)")
-        print(f"{'=' * 70}")
-        print("")
-        print("📈 Summary:")
-        print(f"  - Total tests: {summary.get('test_summary', {}).get('total_tests', 0)}")
-        print(f"  - Passed: {summary.get('test_summary', {}).get('passed', 0)} ✅")
-        print(f"  - Failed: {summary.get('test_summary', {}).get('failed', 0)} ❌")
-        print(f"  - Pass rate: {summary.get('test_summary', {}).get('pass_rate', 'N/A')}")
-        print("")
-        print(f"🔗 Endpoint ({len(report_files)}):")
-        for endpoint in summary.get("endpoints", []):
-            print(f"  - {endpoint}")
-        print("")
-        print("📋 Parameters:")
-        params = summary.get("parameters", {})
-        print(f"  - Total unique: {params.get('total_unique', 0)}")
-        print(f"  - Fully supported: {params.get('fully_supported', 0)}")
-        print(f"  - Partially supported: {params.get('partially_supported', 0)}")
-        print(f"  - Unsupported: {params.get('unsupported', 0)}")
-        print("")
+        print(f"  - Providers: {len(providers)}")
         print("📄 Files:")
-        print(f"  - JSON:     {output_paths['json']}")
-        print(f"  - Markdown: {output_paths['markdown']}")
-        print(f"  - HTML:     {output_paths['html']}")
+        print(f"  - JSON:     {reports_dir / 'run_result.json'}")
+        print(f"  - Markdown: {reports_dir / 'report.md'}")
+        print(f"  - HTML:     {reports_dir / 'report.html'}")
         print(f"{'=' * 70}\n")
     except Exception as e:
-        print(f"⚠️  Failed to print aggregated report info: {e}")
+        print(f"⚠️  Failed to print run_result report info: {e}")

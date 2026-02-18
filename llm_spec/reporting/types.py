@@ -6,19 +6,27 @@ Prefer importing from `llm_spec.reporting.report_types`.
 from __future__ import annotations
 
 from llm_spec.reporting.report_types import (  # noqa: F401
-    ParameterSupportInfo,
     ReportData,
-    ReportParameters,
-    SupportedParameter,
+    TestedParameter,
+    TestExecutionResult,
+    TestParameterRecord,
+    TestRecord,
+    TestRequestRecord,
+    TestResultRecord,
     TestSummary,
-    UnsupportedParameter,
+    TestTimestampsRecord,
+    TestValidationRecord,
 )
 
 __all__ = [
-    "UnsupportedParameter",
-    "SupportedParameter",
-    "ParameterSupportInfo",
-    "ReportParameters",
+    "TestedParameter",
+    "TestParameterRecord",
+    "TestRequestRecord",
+    "TestValidationRecord",
+    "TestResultRecord",
+    "TestTimestampsRecord",
+    "TestRecord",
+    "TestExecutionResult",
     "TestSummary",
     "ReportData",
 ]

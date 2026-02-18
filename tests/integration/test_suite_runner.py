@@ -25,7 +25,10 @@ import pytest
 import respx
 
 from llm_spec.adapters.base import ProviderAdapter
-from llm_spec.reporting.collector import ReportCollector
+from llm_spec.cli import _build_run_result
+from llm_spec.reporting.collector import EndpointResultBuilder
+from llm_spec.reporting.report_types import ReportData
+from llm_spec.reporting.run_result_formatter import RunResultFormatter
 from llm_spec.runners import ConfigDrivenTestRunner, SpecTestCase, SpecTestSuite, load_test_suite
 from tests.integration.mock_loader import MockDataLoader
 
@@ -41,7 +44,7 @@ SUITES_DIR = REPO_ROOT / "suites"
 
 # Cache loaded suites and collectors
 _SUITE_CACHE: dict[Path, SpecTestSuite] = {}
-_COLLECTORS: dict[Path, ReportCollector] = {}
+_COLLECTORS: dict[Path, EndpointResultBuilder] = {}
 
 
 def _get_suite(config_path: Path) -> SpecTestSuite:
@@ -51,11 +54,11 @@ def _get_suite(config_path: Path) -> SpecTestSuite:
     return _SUITE_CACHE[config_path]
 
 
-def _get_collector(config_path: Path, client: ProviderAdapter) -> ReportCollector:
-    """Get or create a ReportCollector (cached by suite path)."""
+def _get_collector(config_path: Path, client: ProviderAdapter) -> EndpointResultBuilder:
+    """Get or create a EndpointResultBuilder (cached by suite path)."""
     if config_path not in _COLLECTORS:
         suite = _get_suite(config_path)
-        _COLLECTORS[config_path] = ReportCollector(
+        _COLLECTORS[config_path] = EndpointResultBuilder(
             provider=suite.provider,
             endpoint=suite.endpoint,
             base_url=client.get_base_url(),
@@ -126,7 +129,7 @@ def test_from_config(
         pytest.skip(f"Client fixture '{client_fixture_name}' not found")
         return
 
-    # Shared ReportCollector per suite config
+    # Shared EndpointResultBuilder per suite config
     collector = _get_collector(config_path, client)
 
     # Find the target test case
@@ -157,9 +160,7 @@ def test_from_config(
     runner = ConfigDrivenTestRunner(suite, client, collector, logger)
     success = runner.run_test(test_case)
 
-    # Report generation is handled at session end (see conftest.py)
-    # output_dir = getattr(request.config, "run_reports_dir", "./reports")
-    # collector.finalize(output_dir)
+    # Run-level report generation is handled at session end (see conftest.py)
 
     # Assert
     assert success, f"Test '{test_name}' failed"
@@ -282,7 +283,7 @@ class TestGeminiFromConfig:
 
 @pytest.fixture(scope="session", autouse=True)
 def finalize_config_reports(request: pytest.FixtureRequest) -> Generator[None, None, None]:
-    """Finalize per-suite reports at session end."""
+    """Finalize run_result + run-level views at session end."""
     yield
 
     output_dir = getattr(request.config, "run_reports_dir", "./reports")
@@ -290,10 +291,32 @@ def finalize_config_reports(request: pytest.FixtureRequest) -> Generator[None, N
     if not _COLLECTORS:
         return
 
-    print(f"\nFinalizing config-driven reports (to {output_dir})...")
+    print(f"\nFinalizing run_result reports (to {output_dir})...")
+    reports_by_provider: dict[str, list[ReportData]] = {}
     for collector in _COLLECTORS.values():
-        try:
-            report_path = collector.finalize(output_dir)
-            print(f"✅ Report generated: {report_path}")
-        except Exception as e:
-            print(f"Warning: Failed to finalize report for {collector.endpoint}: {e}")
+        report_data = collector.build_report_data()
+        provider = str(report_data.get("provider", "unknown"))
+        reports_by_provider.setdefault(provider, []).append(report_data)
+
+    run_id = Path(output_dir).name
+    run_result = _build_run_result(
+        run_id=run_id,
+        started_at="N/A",
+        finished_at="N/A",
+        reports_by_provider=reports_by_provider,
+    )
+
+    output_dir_path = Path(output_dir)
+    run_result_path = output_dir_path / "run_result.json"
+    import json
+
+    run_result_path.write_text(
+        json.dumps(run_result, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    formatter = RunResultFormatter(run_result)
+    md_path = formatter.save_markdown(output_dir)
+    html_path = formatter.save_html(output_dir)
+    print(f"✅ run_result generated: {run_result_path}")
+    print(f"✅ markdown generated: {md_path}")
+    print(f"✅ html generated: {html_path}")

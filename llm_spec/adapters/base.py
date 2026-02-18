@@ -165,6 +165,7 @@ class ProviderAdapter(ABC):
         params: JSONValue,
         additional_headers: Headers | None = None,
         method: str = "POST",
+        files: Any | None = None,
     ) -> Iterator[bytes]:
         """Send a synchronous streaming request.
 
@@ -173,12 +174,24 @@ class ProviderAdapter(ABC):
             params: request params
             additional_headers: extra headers
             method: HTTP method
+            files: multipart/form-data files
 
         Yields:
             response byte chunks
         """
         url = self.get_base_url().rstrip("/") + endpoint
         headers = self.prepare_headers(additional_headers)
+
+        if files:
+            headers = {k: v for k, v in headers.items() if k.lower() != "content-type"}
+            return self.http_client.stream(
+                method=method,
+                url=url,
+                headers=headers,
+                data=_serialize_form_data(params),
+                files=files,
+                timeout=self.config.timeout,
+            )
 
         return self.http_client.stream(
             method=method,
@@ -194,6 +207,7 @@ class ProviderAdapter(ABC):
         params: JSONValue,
         additional_headers: Headers | None = None,
         method: str = "POST",
+        files: Any | None = None,
     ) -> AsyncIterator[bytes]:
         """Send an asynchronous streaming request.
 
@@ -202,12 +216,24 @@ class ProviderAdapter(ABC):
             params: request params
             additional_headers: extra headers
             method: HTTP method
+            files: multipart/form-data files
 
         Yields:
             response byte chunks
         """
         url = self.get_base_url().rstrip("/") + endpoint
         headers = self.prepare_headers(additional_headers)
+
+        if files:
+            headers = {k: v for k, v in headers.items() if k.lower() != "content-type"}
+            return self.http_client.stream_async(
+                method=method,
+                url=url,
+                headers=headers,
+                data=_serialize_form_data(params),
+                files=files,
+                timeout=self.config.timeout,
+            )
 
         return self.http_client.stream_async(
             method=method,

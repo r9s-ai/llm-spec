@@ -3,39 +3,71 @@ from __future__ import annotations
 from typing import Any, TypedDict
 
 
-class UnsupportedParameter(TypedDict, total=False):
-    parameter: str
-    reason: str
-    error_type: str
+class TestedParameter(TypedDict):
+    name: str
+    value: Any
+
+
+class TestParameterRecord(TypedDict):
+    name: str
+    value: Any
+    value_type: str
+
+
+class TestRequestRecord(TypedDict, total=False):
+    ok: bool
+    http_status: int
+    latency_ms: int
+
+
+class TestValidationRecord(TypedDict, total=False):
+    schema_ok: bool
+    required_fields_ok: bool
+    stream_rules_ok: bool
+    missing_fields: list[str]
+    missing_events: list[str]
+
+
+class TestResultRecord(TypedDict, total=False):
+    status: str
+    fail_stage: str | None
+    reason_code: str | None
+    reason: str | None
+
+
+class TestTimestampsRecord(TypedDict, total=False):
+    started_at: str
+    finished_at: str
+
+
+class TestRecord(TypedDict, total=False):
+    test_id: str
+    test_name: str
+    parameter: TestParameterRecord
+    request: TestRequestRecord
+    validation: TestValidationRecord
+    result: TestResultRecord
+    timestamps: TestTimestampsRecord
+
+
+class TestExecutionResult(TypedDict, total=False):
+    test_name: str
+    params: dict[str, Any]
     status_code: int
-    test_name: str
-    value: Any
-
-
-class SupportedParameter(TypedDict):
-    parameter: str
-
-
-class ParameterSupportInfo(TypedDict, total=False):
-    parameter: str
-    request_ok: bool  # whether the request succeeded (HTTP 2xx)
-    request_error: str | None  # request error message (e.g. "HTTP 400 (Bad Request)")
-    validation_ok: bool  # whether schema/stream validation succeeded
-    validation_error: (
-        str | None
-    )  # validation error message (e.g. "Missing fields: usage.total_tokens")
-    http_status_code: int  # HTTP status code
-    missing_fields: list[str]  # list of missing field paths
-    test_name: str
-    value: Any
-    variant_value: str | None  # parameterized variant value (e.g. "image/webp", "512x512")
-
-
-class ReportParameters(TypedDict, total=False):
-    tested: list[str]
-    untested: list[str]
-    supported: list[SupportedParameter]
-    unsupported: list[UnsupportedParameter]
+    response_body: Any
+    error: str | None
+    missing_fields: list[str]
+    expected_fields: list[str]
+    tested_param: TestedParameter | None
+    is_baseline: bool
+    request_ok: bool
+    schema_ok: bool
+    required_fields_ok: bool
+    stream_rules_ok: bool
+    missing_events: list[str]
+    started_at: str
+    finished_at: str
+    latency_ms: int
 
 
 class TestSummary(TypedDict, total=False):
@@ -50,20 +82,23 @@ class ReportData(TypedDict, total=False):
     endpoint: str
     test_time: str
     base_url: str
-    parameters: ReportParameters
     test_summary: TestSummary
     response_fields: dict[str, Any]
     errors: list[dict[str, Any]]
-    parameter_support_details: list[ParameterSupportInfo]
+    tests: list[TestRecord]
     # allow forward/backward compatible extra keys
     details: dict[str, Any]
 
 
 __all__ = [
-    "UnsupportedParameter",
-    "SupportedParameter",
-    "ParameterSupportInfo",
-    "ReportParameters",
+    "TestedParameter",
+    "TestParameterRecord",
+    "TestRequestRecord",
+    "TestValidationRecord",
+    "TestResultRecord",
+    "TestTimestampsRecord",
+    "TestRecord",
+    "TestExecutionResult",
     "TestSummary",
     "ReportData",
 ]
