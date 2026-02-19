@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+      "Noto Color Emoji";
+  }
+
+  body {
+    font-family: var(--font-sans);
+    @apply m-0 bg-gradient-to-br from-white via-violet-50 to-white text-slate-900;
+  }
+}

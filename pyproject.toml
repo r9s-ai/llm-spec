@@ -39,8 +39,15 @@ dev = [
 
 yaml = ["pyyaml>=6.0.0"]
 
+web = [
+    "fastapi>=0.115.0",
+    "sqlalchemy>=2.0.30",
+    "psycopg[binary]>=3.2.0",
+    "uvicorn>=0.30.0",
+]
+
 all = [
-    "llm-spec[dev,yaml]",
+    "llm-spec[dev,yaml,web]",
 ]
 
 [project.urls]

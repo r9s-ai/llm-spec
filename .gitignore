@@ -95,3 +95,4 @@ Thumbs.db
 config.yaml
 config.local.yaml
 *.log
+frontend/node_modules/
