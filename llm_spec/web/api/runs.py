@@ -4,26 +4,30 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import UTC, datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from llm_spec.web.config import settings
-from llm_spec.web.db import SessionLocal, get_db
-from llm_spec.web.models import RunEvent, RunJob, RunResult, RunTestResult, SuiteVersion
-from llm_spec.web.schemas import RunCreateRequest, RunEventResponse, RunJobResponse
-from llm_spec.web.services import execute_run_job
+from llm_spec.web.api.deps import get_db, get_run_service
+from llm_spec.web.core.db import SessionLocal
+from llm_spec.web.models.run import RunJob
+from llm_spec.web.schemas.run import RunCreateRequest, RunEventResponse, RunJobResponse
+from llm_spec.web.services.run_service import RunService
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 
 
 def _execute_in_background(run_id: str) -> None:
+    """Execute a run in background.
+
+    Args:
+        run_id: Run job ID.
+    """
     db = SessionLocal()
     try:
-        execute_run_job(db, run_id)
+        service = RunService()
+        service.execute_run(db, run_id)
     finally:
         db.close()
 
@@ -33,63 +37,87 @@ def create_run(
     payload: RunCreateRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-) -> RunJob:
-    suite_version = db.get(SuiteVersion, payload.suite_version_id)
-    if suite_version is None:
-        raise HTTPException(status_code=404, detail="suite_version not found")
-    provider = str(suite_version.parsed_json.get("provider"))
-    endpoint = str(suite_version.parsed_json.get("endpoint"))
+    service: RunService = Depends(get_run_service),
+) -> RunJobResponse:
+    """Create a new run job.
 
-    resolved_mode = payload.mode or ("mock" if settings.mock_mode else "real")
+    Args:
+        payload: Run creation request.
+        background_tasks: FastAPI background tasks.
+        db: Database session.
+        service: Run service.
 
-    run = RunJob(
-        status="queued",
-        mode=resolved_mode,
-        provider=provider,
-        endpoint=endpoint,
-        suite_version_id=suite_version.id,
-        config_snapshot={"selected_tests": payload.selected_tests or []},
+    Returns:
+        Created run job.
+    """
+    run = service.create_run(
+        db,
+        suite_version_id=payload.suite_version_id,
+        mode=payload.mode,
+        selected_tests=payload.selected_tests,
     )
-    db.add(run)
-    db.commit()
-    db.refresh(run)
-
     background_tasks.add_task(_execute_in_background, run.id)
-    return run
+    return RunJobResponse.model_validate(run)
 
 
 @router.get("", response_model=list[RunJobResponse])
 def list_runs(
     status_filter: str | None = Query(default=None, alias="status"),
     db: Session = Depends(get_db),
-) -> list[RunJob]:
-    stmt = select(RunJob).order_by(RunJob.started_at.desc().nulls_last(), RunJob.id.desc())
-    if status_filter:
-        stmt = stmt.where(RunJob.status == status_filter)
-    return list(db.execute(stmt).scalars().all())
+    service: RunService = Depends(get_run_service),
+) -> list[RunJobResponse]:
+    """List all run jobs.
+
+    Args:
+        status_filter: Filter by status.
+        db: Database session.
+        service: Run service.
+
+    Returns:
+        List of run jobs.
+    """
+    runs = service.list_runs(db, status_filter=status_filter)
+    return [RunJobResponse.model_validate(r) for r in runs]
 
 
 @router.get("/{run_id}", response_model=RunJobResponse)
-def get_run(run_id: str, db: Session = Depends(get_db)) -> RunJob:
-    row = db.get(RunJob, run_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="run not found")
-    return row
+def get_run(
+    run_id: str,
+    db: Session = Depends(get_db),
+    service: RunService = Depends(get_run_service),
+) -> RunJobResponse:
+    """Get a run job by ID.
+
+    Args:
+        run_id: Run job ID.
+        db: Database session.
+        service: Run service.
+
+    Returns:
+        Run job details.
+    """
+    run = service.get_run(db, run_id)
+    return RunJobResponse.model_validate(run)
 
 
 @router.post("/{run_id}/cancel", response_model=RunJobResponse)
-def cancel_run(run_id: str, db: Session = Depends(get_db)) -> RunJob:
-    row = db.get(RunJob, run_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="run not found")
-    if row.status in {"success", "failed", "cancelled"}:
-        return row
-    row.status = "cancelled"
-    row.finished_at = datetime.now(UTC)
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return row
+def cancel_run(
+    run_id: str,
+    db: Session = Depends(get_db),
+    service: RunService = Depends(get_run_service),
+) -> RunJobResponse:
+    """Cancel a run job.
+
+    Args:
+        run_id: Run job ID.
+        db: Database session.
+        service: Run service.
+
+    Returns:
+        Cancelled run job.
+    """
+    run = service.cancel_run(db, run_id)
+    return RunJobResponse.model_validate(run)
 
 
 @router.get("/{run_id}/events", response_model=list[RunEventResponse])
@@ -97,13 +125,21 @@ def list_run_events(
     run_id: str,
     after_seq: int = Query(default=0),
     db: Session = Depends(get_db),
-) -> list[RunEvent]:
-    stmt = (
-        select(RunEvent)
-        .where(RunEvent.run_id == run_id, RunEvent.seq > after_seq)
-        .order_by(RunEvent.seq.asc())
-    )
-    return list(db.execute(stmt).scalars().all())
+    service: RunService = Depends(get_run_service),
+) -> list[RunEventResponse]:
+    """List events for a run.
+
+    Args:
+        run_id: Run job ID.
+        after_seq: Only return events with seq > after_seq.
+        db: Database session.
+        service: Run service.
+
+    Returns:
+        List of run events.
+    """
+    events = service.list_events(db, run_id, after_seq=after_seq)
+    return [RunEventResponse.model_validate(e) for e in events]
 
 
 @router.get("/{run_id}/events/stream")
@@ -111,6 +147,16 @@ async def stream_run_events(
     run_id: str,
     after_seq: int = Query(default=0),
 ) -> StreamingResponse:
+    """Stream events for a run using Server-Sent Events.
+
+    Args:
+        run_id: Run job ID.
+        after_seq: Only return events with seq > after_seq.
+
+    Returns:
+        SSE stream of run events.
+    """
+
     async def event_generator():
         next_seq = after_seq + 1
         while True:
@@ -120,6 +166,10 @@ async def stream_run_events(
                 if run is None:
                     yield 'event: error\ndata: {"error":"run not found"}\n\n'
                     return
+
+                from sqlalchemy import select
+
+                from llm_spec.web.models.run import RunEvent
 
                 stmt = (
                     select(RunEvent)
@@ -159,19 +209,38 @@ async def stream_run_events(
 
 
 @router.get("/{run_id}/result")
-def get_run_result(run_id: str, db: Session = Depends(get_db)) -> dict:
-    row = db.get(RunResult, run_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="run_result not found")
-    return row.run_result_json
+def get_run_result(
+    run_id: str,
+    db: Session = Depends(get_db),
+    service: RunService = Depends(get_run_service),
+) -> dict:
+    """Get the result for a run.
+
+    Args:
+        run_id: Run job ID.
+        db: Database session.
+        service: Run service.
+
+    Returns:
+        Run result JSON.
+    """
+    return service.get_result(db, run_id)
 
 
 @router.get("/{run_id}/tests")
-def list_run_tests(run_id: str, db: Session = Depends(get_db)) -> list[dict]:
-    stmt = (
-        select(RunTestResult)
-        .where(RunTestResult.run_id == run_id)
-        .order_by(RunTestResult.test_name.asc())
-    )
-    rows = db.execute(stmt).scalars().all()
-    return [r.raw_record for r in rows]
+def list_run_tests(
+    run_id: str,
+    db: Session = Depends(get_db),
+    service: RunService = Depends(get_run_service),
+) -> list[dict]:
+    """List test results for a run.
+
+    Args:
+        run_id: Run job ID.
+        db: Database session.
+        service: Run service.
+
+    Returns:
+        List of test result records.
+    """
+    return service.list_test_results(db, run_id)

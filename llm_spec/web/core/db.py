@@ -15,7 +15,18 @@ Base = declarative_base()
 
 
 def get_db() -> Generator[Session, None, None]:
-    """FastAPI dependency for DB session."""
+    """FastAPI dependency for DB session.
+
+    Yields:
+        Session: SQLAlchemy session instance.
+
+    Example:
+        ```python
+        @router.get("/items")
+        def list_items(db: Session = Depends(get_db)):
+            return db.query(Item).all()
+        ```
+    """
     db = SessionLocal()
     try:
         yield db

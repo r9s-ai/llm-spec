@@ -10,9 +10,9 @@ from pathlib import Path
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from llm_spec.web.db import Base
+from llm_spec.web.core.db import Base
 from llm_spec.web.models import ProviderConfigModel, Suite, SuiteVersion
-from llm_spec.web.services import create_suite_version, create_suite_with_initial_version
+from llm_spec.web.services.suite_service import SuiteService
 
 
 def parse_args() -> argparse.Namespace:
@@ -72,6 +72,8 @@ def latest_version(db: Session, suite_id: str) -> SuiteVersion | None:
 
 
 def migrate_suites(db: Session, suites_dir: Path, created_by: str) -> None:
+    service = SuiteService()
+
     for suite_path in sorted(suites_dir.rglob("*.json5")):
         raw = suite_path.read_text(encoding="utf-8")
         provider, endpoint = _extract_provider_endpoint(raw, suite_path)
@@ -83,7 +85,7 @@ def migrate_suites(db: Session, suites_dir: Path, created_by: str) -> None:
         ).scalar_one_or_none()
 
         if suite is None:
-            suite = create_suite_with_initial_version(
+            suite = service.create_suite(
                 db,
                 provider=provider,
                 endpoint=endpoint,
@@ -99,7 +101,7 @@ def migrate_suites(db: Session, suites_dir: Path, created_by: str) -> None:
             print(f"[skip] unchanged {suite_path}")
             continue
 
-        sv = create_suite_version(db, suite=suite, raw_json5=raw, created_by=created_by)
+        sv = service.create_version(db, suite_id=suite.id, raw_json5=raw, created_by=created_by)
         print(f"[version] {suite_path} -> v{sv.version}")
 
 

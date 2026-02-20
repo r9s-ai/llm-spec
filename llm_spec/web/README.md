@@ -1,4 +1,53 @@
-# llm-spec Web Backend (MVP)
+# llm-spec Web Backend
+
+A FastAPI-based web API for managing and executing llm-spec test suites.
+
+## Architecture
+
+The web backend follows a layered architecture:
+
+```
+llm_spec/web/
+├── api/                    # API route layer (Controller)
+│   ├── deps.py            # Dependency injection
+│   ├── suites.py          # Suite routes
+│   ├── runs.py            # Run routes
+│   ├── provider_configs.py # Provider config routes
+│   └── settings.py        # Settings routes
+│
+├── core/                   # Core functionality
+│   ├── db.py              # Database connection
+│   ├── exceptions.py      # Custom exceptions
+│   ├── error_handler.py   # Global exception handler
+│   └── utils.py           # Utility functions
+│
+├── models/                 # SQLAlchemy ORM models
+│   ├── suite.py           # Suite, SuiteVersion
+│   ├── run.py             # RunJob, RunEvent, RunResult
+│   └── provider.py        # ProviderConfigModel
+│
+├── schemas/                # Pydantic request/response models
+│   ├── suite.py
+│   ├── run.py
+│   ├── provider.py
+│   └── settings.py
+│
+├── services/               # Business logic layer
+│   ├── suite_service.py
+│   ├── run_service.py
+│   └── provider_service.py
+│
+├── repositories/           # Data access layer
+│   ├── suite_repo.py
+│   ├── run_repo.py
+│   └── provider_repo.py
+│
+├── adapters/               # Adapters
+│   └── mock_adapter.py    # Mock adapter
+│
+├── main.py                 # FastAPI application entry
+└── config.py               # Configuration management
+```
 
 ## Install
 
@@ -18,7 +67,11 @@ psql postgresql://postgres:postgres@localhost:5432/llm_spec -f llm_spec/web/sche
 ## Run
 
 ```bash
+# Using uvicorn directly
 uv run uvicorn llm_spec.web.main:app --reload --port 8000
+
+# Or run as module
+uv run python -m llm_spec.web.main
 ```
 
 OpenAPI spec file:
@@ -52,3 +105,23 @@ uv run python scripts/migrate_suites_to_web.py \
 - `GET/PUT /api/settings/toml`
 
 `POST /api/runs` can omit `mode`; backend will use `LLM_SPEC_WEB_MOCK_MODE`.
+
+## Error Handling
+
+All errors follow a consistent format:
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Suite not found: abc123"
+  }
+}
+```
+
+Error codes:
+- `NOT_FOUND` (404): Resource not found
+- `VALIDATION_ERROR` (400): Invalid input data
+- `DUPLICATE` (409): Resource already exists
+- `CONFIGURATION_ERROR` (500): Configuration issue
+- `EXECUTION_ERROR` (500): Run execution failure
