@@ -34,7 +34,7 @@ export function createSuite(input: {
 
 export function updateSuite(
   suiteId: string,
-  input: { name?: string; status?: "active" | "archived" },
+  input: { name?: string; status?: "active" | "archived" }
 ): Promise<Suite> {
   return request<Suite>(`/api/suites/${suiteId}`, {
     method: "PUT",
@@ -52,7 +52,7 @@ export function listVersions(suiteId: string): Promise<SuiteVersion[]> {
 
 export function createVersion(
   suiteId: string,
-  input: { raw_json5: string; created_by: string },
+  input: { raw_json5: string; created_by: string }
 ): Promise<SuiteVersion> {
   return request<SuiteVersion>(`/api/suites/${suiteId}/versions`, {
     method: "POST",

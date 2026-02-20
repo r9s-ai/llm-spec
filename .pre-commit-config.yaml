@@ -46,6 +46,30 @@ repos:
           pytest,
         ]
 
+  # ESLint - TypeScript/JavaScript linter (using local installation)
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd frontend && pnpm exec eslint --fix $(echo "$@" | sed "s|frontend/||g")' --
+        language: system
+        files: ^frontend/src/.*\.[jt]sx?$
+        types: [file]
+        exclude: ^frontend/dist/
+        pass_filenames: true
+
+  # Prettier - Code formatter (using local installation)
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier
+        entry: bash -c 'cd frontend && pnpm exec prettier --write $(echo "$@" | sed "s|frontend/||g")' --
+        language: system
+        files: ^frontend/src/.*\.(ts|tsx|css)$
+        types: [file]
+        exclude: ^frontend/dist/
+        pass_filenames: true
+
   # Local hooks for project-specific checks
   - repo: local
     hooks:

@@ -6,7 +6,8 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 ![Python Version](https://img.shields.io/badge/python-3.11+-blue)
-[![Built with uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+![TypeScript](https://img.shields.io/badge/typescript-5.6+-blue)
+![FastAPI](https://img.shields.io/badge/fastapi-0.115+-green)
 
 
 
@@ -14,7 +15,7 @@
 
 ---
 
-🚀 [Getting Started](#getting-started) - 🔧 [Configuration](#configuration) - 💻 [CLI Usage](#cli-usage) - 📊 [Reports](#reports) - 🛣️ [Roadmap](#roadmap)
+🚀 [Getting Started](#getting-started) - 🔧 [Configuration](#configuration) - 💻 [CLI Usage](#cli-usage) - 🌐 [Web UI](#web-ui) - 📊 [Reports](#reports) - 🛣️ [Roadmap](#roadmap)
 
 `llm-spec` turns the question **"does this parameter work, how well does it work, and where does it break?"** into repeatable, aggregatable tests. It provides a complete **evidence chain**: `Request -> Response -> Verdict -> Run Result / Aggregated Report`.
 
@@ -108,6 +109,83 @@ uv run python -m llm_spec run
 uv run python -m llm_spec run --provider openai
 uv run python -m llm_spec run -k "chat/completions"
 ```
+
+## 🌐 Web UI
+
+`llm-spec` provides a modern web interface for managing suites, running tests, and viewing results visually.
+
+### Features
+
+- **Suite Management**: Create, update, delete suites and manage JSON5 versions through a visual editor
+- **Testing Dashboard**: Select providers/routes/tests, execute batch runs, and monitor progress in real-time
+- **Settings Editor**: Edit runtime TOML configuration for providers and report behavior
+- **Run History**: View past runs with detailed results and event streams
+
+### Tech Stack
+
+- **Backend**: FastAPI (Python) with PostgreSQL
+- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
+
+### Installation
+
+```bash
+# Install with web extra
+uv sync --extra dev --extra web
+
+# Install frontend dependencies
+cd frontend && pnpm install
+```
+
+### Database Setup
+
+```bash
+export LLM_SPEC_WEB_DATABASE_URL='postgresql+psycopg://postgres:postgres@localhost:5432/llm_spec'
+export LLM_SPEC_WEB_APP_TOML_PATH='llm-spec.toml'
+export LLM_SPEC_WEB_MOCK_MODE='false'
+
+# Initialize database schema
+psql postgresql://postgres:postgres@localhost:5432/llm_spec -f llm_spec/web/schema.sql
+```
+
+### Running the Server
+
+```bash
+# Start backend server
+uv run uvicorn llm_spec.web.main:app --reload --port 8000
+
+# Start frontend dev server (in another terminal)
+cd frontend && pnpm dev
+```
+
+### Import Existing Suites
+
+```bash
+uv run python scripts/migrate_suites_to_web.py \
+  --database-url 'postgresql+psycopg://postgres:postgres@localhost:5432/llm_spec' \
+  --config llm-spec.toml \
+  --suites suites
+```
+
+### API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /healthz` | Health check |
+| `GET/POST/PUT/DELETE /api/suites` | Suite CRUD operations |
+| `GET/POST /api/suites/{suite_id}/versions` | Suite version management |
+| `GET /api/provider-configs` | List provider configurations |
+| `PUT /api/provider-configs/{provider}` | Update provider config |
+| `POST /api/runs` | Create a new test run |
+| `GET /api/runs` | List runs |
+| `GET /api/runs/{run_id}` | Get run details |
+| `POST /api/runs/{run_id}/cancel` | Cancel a running test |
+| `GET /api/runs/{run_id}/events` | Get run events (polling) |
+| `GET /api/runs/{run_id}/events/stream` | SSE event stream |
+| `GET /api/runs/{run_id}/result` | Get run result |
+| `GET/PUT /api/settings/toml` | TOML configuration |
+
+> [!TIP]
+> OpenAPI spec is available at `llm_spec/web/openapi.yaml` (OpenAPI 3.1.0).
 
 ## 📊 Reports
 

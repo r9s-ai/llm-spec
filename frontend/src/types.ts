@@ -1,5 +1,10 @@
+// Page types
 export type PageKey = "testing" | "suites" | "settings";
 
+// Run mode
+export type RunMode = "real" | "mock";
+
+// Suite types
 export type Suite = {
   id: string;
   provider: string;
@@ -21,6 +26,7 @@ export type SuiteVersion = {
   parsed_json: Record<string, unknown>;
 };
 
+// Run types
 export type RunJob = {
   id: string;
   status: string;
@@ -46,8 +52,52 @@ export type RunEvent = {
   created_at: string;
 };
 
+// Settings types
 export type TomlSettings = {
   path: string;
   content: string;
   exists: boolean;
+};
+
+// Test types
+export type TestRow = {
+  name: string;
+  paramName: string;
+  valueText: string;
+};
+
+// Selection types
+export type TestSelectionMap = Record<string, Set<string>>;
+export type VersionsMap = Record<string, SuiteVersion[]>;
+
+// Run result summary
+export type RunSummary = {
+  total?: number;
+  passed?: number;
+  failed?: number;
+};
+
+// API request types
+export type CreateSuiteInput = {
+  provider: string;
+  endpoint: string;
+  name: string;
+  raw_json5: string;
+  created_by: string;
+};
+
+export type UpdateSuiteInput = {
+  name?: string;
+  status?: "active" | "archived";
+};
+
+export type CreateVersionInput = {
+  raw_json5: string;
+  created_by: string;
+};
+
+export type CreateRunInput = {
+  suite_version_id: string;
+  mode?: RunMode;
+  selected_tests?: string[];
 };
