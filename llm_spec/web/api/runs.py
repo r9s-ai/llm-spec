@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from llm_spec.web.api.deps import get_db, get_run_service
 from llm_spec.web.core.db import SessionLocal
-from llm_spec.web.models.run import RunJob
+from llm_spec.web.core.event_bus import event_bus
+from llm_spec.web.models.run import RunEvent, RunJob
 from llm_spec.web.schemas.run import RunCreateRequest, RunEventResponse, RunJobResponse
 from llm_spec.web.services.run_service import RunService
 
@@ -149,57 +150,83 @@ async def stream_run_events(
 ) -> StreamingResponse:
     """Stream events for a run using Server-Sent Events.
 
+    Uses in-memory event bus for real-time updates without database polling.
+
     Args:
         run_id: Run job ID.
-        after_seq: Only return events with seq > after_seq.
+        after_seq: Only return events with seq > after_seq (for reconnection).
 
     Returns:
         SSE stream of run events.
     """
 
     async def event_generator():
-        next_seq = after_seq + 1
-        while True:
-            db = SessionLocal()
-            try:
-                run = db.get(RunJob, run_id)
-                if run is None:
-                    yield 'event: error\ndata: {"error":"run not found"}\n\n'
-                    return
+        # First, check if run exists and get any historical events from database
+        db = SessionLocal()
+        try:
+            run = db.get(RunJob, run_id)
+            if run is None:
+                yield 'event: error\ndata: {"error":"run not found"}\n\n'
+                return
 
-                from sqlalchemy import select
-
-                from llm_spec.web.models.run import RunEvent
-
+            # If run is already finished, return terminal event from database
+            if run.status in {"success", "failed", "cancelled"}:
+                # Get the terminal event from database
                 stmt = (
                     select(RunEvent)
-                    .where(RunEvent.run_id == run_id, RunEvent.seq >= next_seq)
+                    .where(RunEvent.run_id == run_id, RunEvent.seq > after_seq)
                     .order_by(RunEvent.seq.asc())
                 )
                 events = list(db.execute(stmt).scalars().all())
                 for event in events:
                     payload = {
-                        "id": event.id,
                         "run_id": event.run_id,
-                        "seq": event.seq,
                         "event_type": event.event_type,
                         "payload": event.payload,
                         "created_at": event.created_at.isoformat(),
                     }
                     yield (
-                        f"id: {event.seq}\n"
                         f"event: {event.event_type}\n"
                         f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
                     )
-                    next_seq = event.seq + 1
+                terminal = {"run_id": run.id, "status": run.status}
+                yield f"event: done\ndata: {json.dumps(terminal, ensure_ascii=False)}\n\n"
+                return
+        finally:
+            db.close()
 
-                if run.status in {"success", "failed", "cancelled"}:
-                    terminal = {"run_id": run.id, "status": run.status}
-                    yield f"event: done\ndata: {json.dumps(terminal, ensure_ascii=False)}\n\n"
-                    return
-            finally:
-                db.close()
-            await asyncio.sleep(0.8)
+        # Subscribe to in-memory event bus for real-time updates
+        seq = 0
+        async for event in event_bus.subscribe(run_id, timeout=30.0):
+            # Skip heartbeat events in SSE output
+            if event["event_type"] == "heartbeat":
+                yield ": heartbeat\n\n"
+                continue
+
+            seq += 1
+            payload = {
+                "run_id": run_id,
+                "seq": seq,
+                "event_type": event["event_type"],
+                "payload": event["payload"],
+                "created_at": event["created_at"],
+            }
+            yield (
+                f"event: {event['event_type']}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            )
+
+            # Terminal event, send done and exit
+            if event["event_type"] in ("run_finished", "run_failed", "run_cancelled"):
+                # Get final status from database
+                db = SessionLocal()
+                try:
+                    run = db.get(RunJob, run_id)
+                    if run:
+                        terminal = {"run_id": run.id, "status": run.status}
+                        yield f"event: done\ndata: {json.dumps(terminal, ensure_ascii=False)}\n\n"
+                finally:
+                    db.close()
+                return
 
     return StreamingResponse(
         event_generator(),

@@ -99,8 +99,6 @@ class RunResult(Base):
     Attributes:
         run_id: Run job ID (primary key).
         run_result_json: Full result data as JSON.
-        report_md: Markdown report.
-        report_html: HTML report.
         created_at: Creation timestamp.
     """
 
@@ -112,8 +110,6 @@ class RunResult(Base):
         primary_key=True,
     )
     run_result_json: Mapped[dict] = mapped_column(JSON, nullable=False)
-    report_md: Mapped[str] = mapped_column(Text, nullable=False)
-    report_html: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     def __repr__(self) -> str:

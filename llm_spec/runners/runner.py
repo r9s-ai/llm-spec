@@ -286,23 +286,23 @@ def replace_parameter_references(obj: Any, ref_name: str, ref_value: Any) -> Non
                 replace_parameter_references(obj[i], ref_name, ref_value)
 
 
-def load_test_suite(config_path: Path) -> SpecTestSuite:
-    """Load a suite configuration file (JSON5).
+def load_test_suite_from_dict(
+    data: dict[str, Any], config_path: Path | None = None
+) -> SpecTestSuite:
+    """Load a suite configuration from a dictionary.
 
     Args:
-        config_path: JSON5 config file path
+        data: Parsed suite configuration dictionary.
+        config_path: Optional config file path for reference.
 
     Returns:
         Parsed SpecTestSuite
     """
-    with open(config_path, encoding="utf-8") as f:
-        raw_data = json5.load(f)
-
-    data = _RawSuite.model_validate(raw_data)
+    raw_suite = _RawSuite.model_validate(data)
 
     tests: list[SpecTestCase] = []
 
-    for t in data.tests:
+    for t in raw_suite.tests:
         t_dict = t.model_dump()
         # Expand parameterized tests
         if t.parameterize:
@@ -327,17 +327,32 @@ def load_test_suite(config_path: Path) -> SpecTestSuite:
             )
 
     return SpecTestSuite(
-        provider=data.provider,
-        endpoint=data.endpoint,
-        schemas=data.schemas,
-        base_params=data.base_params,
+        provider=raw_suite.provider,
+        endpoint=raw_suite.endpoint,
+        schemas=raw_suite.schemas,
+        base_params=raw_suite.base_params,
         tests=tests,
-        required_fields=data.required_fields,
-        stream_rules=data.stream_rules,
+        required_fields=raw_suite.required_fields,
+        stream_rules=raw_suite.stream_rules,
         config_path=config_path,
-        method=data.method,
-        suite_name=data.suite_name,
+        method=raw_suite.method,
+        suite_name=raw_suite.suite_name,
     )
+
+
+def load_test_suite(config_path: Path) -> SpecTestSuite:
+    """Load a suite configuration file (JSON5).
+
+    Args:
+        config_path: JSON5 config file path
+
+    Returns:
+        Parsed SpecTestSuite
+    """
+    with open(config_path, encoding="utf-8") as f:
+        raw_data = json5.load(f)
+
+    return load_test_suite_from_dict(raw_data, config_path)
 
 
 class ConfigDrivenTestRunner:

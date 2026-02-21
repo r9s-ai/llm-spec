@@ -62,8 +62,6 @@ create table if not exists run_event (
 create table if not exists run_result (
     run_id varchar(36) primary key references run_job(id) on delete cascade,
     run_result_json jsonb not null,
-    report_md text not null,
-    report_html text not null,
     created_at timestamptz not null default now()
 );
 

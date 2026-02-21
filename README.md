@@ -126,36 +126,71 @@ uv run python -m llm_spec run -k "chat/completions"
 - **Backend**: FastAPI (Python) with PostgreSQL
 - **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
 
+### Environment Requirements
+
+- Python >= 3.11
+- PostgreSQL >= 14
+- Node.js >= 18
+- pnpm >= 9
+- uv (Python package manager)
+
 ### Installation
 
 ```bash
-# Install with web extra
+# Install Python dependencies (including web extra)
 uv sync --extra dev --extra web
 
 # Install frontend dependencies
-cd frontend && pnpm install
+cd frontend && pnpm install && cd ..
 ```
 
 ### Database Setup
 
+#### Create PostgreSQL Database
+
 ```bash
-export LLM_SPEC_WEB_DATABASE_URL='postgresql+psycopg://postgres:postgres@localhost:5432/llm_spec'
-export LLM_SPEC_WEB_APP_TOML_PATH='llm-spec.toml'
-export LLM_SPEC_WEB_MOCK_MODE='false'
+# Create database
+createdb llm_spec
+
+# Or using psql
+psql -U postgres -c "CREATE DATABASE llm_spec;"
 
 # Initialize database schema
-psql postgresql://postgres:postgres@localhost:5432/llm_spec -f llm_spec/web/schema.sql
+psql -U postgres -d llm_spec -f llm_spec/web/schema.sql
 ```
+
+### Environment Variables
+
+Create a `.env` file or export environment variables:
+
+```bash
+# Copy example config
+cp llm_spec/web/env.example .env
+```
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LLM_SPEC_WEB_DATABASE_URL` | PostgreSQL connection string | `postgresql+psycopg://postgres:postgres@localhost:5432/llm_spec` |
+| `LLM_SPEC_WEB_APP_TOML_PATH` | Path to llm-spec.toml | `llm-spec.toml` |
+| `LLM_SPEC_WEB_MOCK_MODE` | Enable mock mode for testing | `false` |
+| `LLM_SPEC_WEB_MOCK_BASE_DIR` | Mock data directory | `tests/integration/mocks` |
+| `LLM_SPEC_WEB_CORS_ORIGINS` | CORS allowed origins | `["*"]` |
 
 ### Running the Server
 
 ```bash
 # Start backend server
+uv run python -m llm_spec.web.main
+
+# Or using uvicorn directly
 uv run uvicorn llm_spec.web.main:app --reload --port 8000
 
 # Start frontend dev server (in another terminal)
 cd frontend && pnpm dev
 ```
+
+- Backend: `http://localhost:8000`
+- Frontend: `http://localhost:5173`
 
 ### Import Existing Suites
 
@@ -166,6 +201,49 @@ uv run python scripts/migrate_suites_to_web.py \
   --suites suites
 ```
 
+### Database Schema
+
+#### suite - Test Suites
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | varchar(36) | Primary key UUID |
+| provider | varchar(32) | Provider name (openai, anthropic, gemini, xai) |
+| endpoint | varchar(255) | API endpoint path |
+| name | varchar(255) | Suite name |
+| status | varchar(16) | Status (active/archived) |
+| latest_version | integer | Latest version number |
+
+#### suite_version - Suite Versions
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | varchar(36) | Primary key UUID |
+| suite_id | varchar(36) | Foreign key to suite |
+| version | integer | Version number |
+| raw_json5 | text | Original JSON5 content |
+| parsed_json | jsonb | Parsed JSON data |
+
+#### run_job - Execution Jobs
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | varchar(36) | Primary key UUID |
+| status | varchar(16) | Status (queued/running/success/failed/cancelled) |
+| mode | varchar(16) | Mode (real/mock) |
+| provider | varchar(32) | Provider name |
+| progress_total | integer | Total tests |
+| progress_passed | integer | Passed count |
+| progress_failed | integer | Failed count |
+
+#### run_result - Execution Results
+
+| Field | Type | Description |
+|-------|------|-------------|
+| run_id | varchar(36) | Primary key, foreign key to run_job |
+| run_result_json | jsonb | Full result JSON data |
+| created_at | timestamptz | Creation timestamp |
+
 ### API Endpoints
 
 | Endpoint | Description |
@@ -173,7 +251,9 @@ uv run python scripts/migrate_suites_to_web.py \
 | `GET /healthz` | Health check |
 | `GET/POST/PUT/DELETE /api/suites` | Suite CRUD operations |
 | `GET/POST /api/suites/{suite_id}/versions` | Suite version management |
+| `GET /api/suite-versions/{version_id}` | Get suite version details |
 | `GET /api/provider-configs` | List provider configurations |
+| `GET /api/provider-configs/{provider}` | Get provider config |
 | `PUT /api/provider-configs/{provider}` | Update provider config |
 | `POST /api/runs` | Create a new test run |
 | `GET /api/runs` | List runs |
@@ -181,11 +261,56 @@ uv run python scripts/migrate_suites_to_web.py \
 | `POST /api/runs/{run_id}/cancel` | Cancel a running test |
 | `GET /api/runs/{run_id}/events` | Get run events (polling) |
 | `GET /api/runs/{run_id}/events/stream` | SSE event stream |
-| `GET /api/runs/{run_id}/result` | Get run result |
+| `GET /api/runs/{run_id}/result` | Get run result JSON |
+| `GET /api/runs/{run_id}/tests` | Get test results list |
 | `GET/PUT /api/settings/toml` | TOML configuration |
 
 > [!TIP]
 > OpenAPI spec is available at `llm_spec/web/openapi.yaml` (OpenAPI 3.1.0).
+
+### Real-time Progress Updates
+
+The web backend uses an in-memory event bus for real-time progress updates:
+
+1. **Event Bus**: Events are pushed to memory queues instead of frequent database writes
+2. **SSE (Server-Sent Events)**: Frontend subscribes via `/api/runs/{run_id}/events/stream`
+3. **Database Persistence**: Only terminal events (run_finished, run_failed) are saved to database for history
+
+Event types:
+- `run_started` - Run begins execution
+- `test_started` - Individual test begins
+- `test_finished` - Individual test completes (with progress info)
+- `run_finished` / `run_failed` / `run_cancelled` - Terminal events
+
+### Error Handling
+
+All errors follow a consistent format:
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Suite not found: abc123"
+  }
+}
+```
+
+Error codes:
+- `NOT_FOUND` (404): Resource not found
+- `VALIDATION_ERROR` (400): Invalid input data
+- `DUPLICATE` (409): Resource already exists
+- `CONFIGURATION_ERROR` (500): Configuration issue
+- `EXECUTION_ERROR` (500): Run execution failure
+
+### Mock Mode
+
+Mock mode allows testing without actual API calls:
+
+```bash
+export LLM_SPEC_WEB_MOCK_MODE=true
+```
+
+Mock data is stored in `tests/integration/mocks/`.
 
 ## 📊 Reports
 
@@ -197,6 +322,27 @@ Every run generates a unique `run_id` directory in `reports/` containing:
 > [!TIP]
 > `run_result.json` is the single source of truth; report files are view projections.
 > Each `tests[]` item records execution outcome (`result.status`) and failure reason (`result.reason`).
+
+## 🛠️ Development
+
+### Run Tests
+
+```bash
+uv run pytest
+```
+
+### Code Formatting
+
+```bash
+uv run ruff format .
+uv run ruff check . --fix
+```
+
+### Type Checking
+
+```bash
+uv run pyright
+```
 
 ## 🗺️ Roadmap
 

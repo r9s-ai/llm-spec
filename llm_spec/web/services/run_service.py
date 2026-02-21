@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import tempfile
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -19,12 +17,13 @@ from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import LogConfig, ProviderConfig
 from llm_spec.logger import RequestLogger
 from llm_spec.reporting.collector import EndpointResultBuilder
-from llm_spec.reporting.run_result_formatter import RunResultFormatter
-from llm_spec.runners import ConfigDrivenTestRunner, load_test_suite
+from llm_spec.runners import ConfigDrivenTestRunner, SpecTestSuite, load_test_suite_from_dict
 from llm_spec.web.config import settings
+from llm_spec.web.core.event_bus import event_bus
 from llm_spec.web.core.exceptions import NotFoundError
 from llm_spec.web.models.run import RunEvent, RunJob, RunResult, RunTestResult
 from llm_spec.web.models.suite import SuiteVersion
+from llm_spec.web.repositories.provider_repo import ProviderRepository
 from llm_spec.web.repositories.run_repo import RunRepository
 from llm_spec.web.repositories.suite_repo import SuiteRepository
 
@@ -76,7 +75,7 @@ def create_provider_client(
     return adapter_class(config, http_client, logger)
 
 
-def load_suite_from_version(version: SuiteVersion):
+def load_suite_from_version(version: SuiteVersion) -> SpecTestSuite:
     """Load test suite from a SuiteVersion.
 
     Args:
@@ -85,15 +84,7 @@ def load_suite_from_version(version: SuiteVersion):
     Returns:
         Loaded test suite.
     """
-    tmp_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile("w", suffix=".json5", encoding="utf-8", delete=False) as f:
-            f.write(version.raw_json5)
-            tmp_path = Path(f.name)
-        return load_test_suite(tmp_path)
-    finally:
-        if tmp_path and tmp_path.exists():
-            tmp_path.unlink()
+    return load_test_suite_from_dict(version.parsed_json)
 
 
 class RunService:
@@ -297,9 +288,6 @@ class RunService:
             db.commit()
             return
 
-        # Get provider config
-        from llm_spec.web.repositories.provider_repo import ProviderRepository
-
         provider_repo = ProviderRepository(db)
         provider_config = provider_repo.get_by_provider(run_job.provider)
         if provider_config is None:
@@ -314,8 +302,11 @@ class RunService:
         run_job.status = "running"
         run_job.started_at = datetime.now(UTC)
         run_repo.update(run_job)
-        run_repo.append_event(run_id, "run_started", {"mode": run_job.mode})
         db.commit()
+
+        # Mark run as active in event bus and push start event
+        event_bus.start_run(run_id)
+        event_bus.push(run_id, "run_started", {"mode": run_job.mode})
 
         client = None
         http_client = None
@@ -361,6 +352,15 @@ class RunService:
             for idx, test in enumerate(tests, start=1):
                 db.refresh(run_job)
                 if run_job.status == "cancelled":
+                    event_bus.push(
+                        run_id,
+                        "run_cancelled",
+                        {
+                            "progress_done": run_job.progress_done,
+                            "progress_total": run_job.progress_total,
+                        },
+                    )
+                    # Save terminal event to database for history
                     run_repo.append_event(
                         run_id,
                         "run_cancelled",
@@ -370,12 +370,11 @@ class RunService:
                         },
                     )
                     db.commit()
+                    event_bus.end_run(run_id)
                     return
 
-                run_repo.append_event(
-                    run_id, "test_started", {"test_name": test.name, "index": idx}
-                )
-                db.commit()
+                # Push test start event to memory
+                event_bus.push(run_id, "test_started", {"test_name": test.name, "index": idx})
 
                 runner.run_test(test)
                 test_record = collector.tests[-1]
@@ -386,7 +385,7 @@ class RunService:
                 else:
                     run_job.progress_failed += 1
 
-                # Save test result
+                # Save test result to database
                 run_test_row = RunTestResult(
                     run_id=run_id,
                     test_id=str(test_record.get("test_id", "")),
@@ -401,7 +400,10 @@ class RunService:
                 )
                 run_repo.add_test_result(run_test_row)
                 run_repo.update(run_job)
-                run_repo.append_event(
+                db.commit()
+
+                # Push test finish event to memory
+                event_bus.push(
                     run_id,
                     "test_finished",
                     {
@@ -411,7 +413,6 @@ class RunService:
                         "progress_total": run_job.progress_total,
                     },
                 )
-                db.commit()
 
             # Build and save result
             report_data = collector.build_report_data()
@@ -421,13 +422,10 @@ class RunService:
                 finished_at=datetime.now(UTC).isoformat(),
                 reports_by_provider={run_job.provider: [report_data]},
             )
-            formatter = RunResultFormatter(run_result)
             run_repo.save_result(
                 RunResult(
                     run_id=run_id,
                     run_result_json=run_result,
-                    report_md=formatter.generate_markdown(),
-                    report_html=formatter.generate_html(),
                 )
             )
 
@@ -435,6 +433,8 @@ class RunService:
             run_job.finished_at = datetime.now(UTC)
             run_job.status = "success" if run_job.progress_failed == 0 else "failed"
             run_repo.update(run_job)
+
+            # Save terminal event to database for history
             run_repo.append_event(
                 run_id,
                 "run_finished",
@@ -446,13 +446,33 @@ class RunService:
             )
             db.commit()
 
+            # Push terminal event to memory and cleanup
+            event_bus.push(
+                run_id,
+                "run_finished",
+                {
+                    "status": run_job.status,
+                    "passed": run_job.progress_passed,
+                    "failed": run_job.progress_failed,
+                },
+            )
+            event_bus.end_run(run_id)
+
         except Exception as exc:
             run_job.status = "failed"
             run_job.error_message = str(exc)
             run_job.finished_at = datetime.now(UTC)
             run_repo.update(run_job)
+
+            # Save terminal event to database
             run_repo.append_event(run_id, "run_failed", {"error": str(exc)})
             db.commit()
+
+            # Push terminal event to memory
+            event_bus.push(run_id, "run_failed", {"error": str(exc)})
+            event_bus.end_run(run_id)
         finally:
             if http_client is not None and isinstance(http_client, HTTPClient):
                 http_client.close()
+            # Cleanup event bus resources after a delay (allow client to receive terminal event)
+            event_bus.cleanup(run_id)

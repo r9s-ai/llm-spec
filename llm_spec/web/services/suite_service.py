@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import tempfile
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Any
 
 import json5
 from sqlalchemy.orm import Session
 
-from llm_spec.runners import load_test_suite
+from llm_spec.runners import load_test_suite_from_dict
 from llm_spec.web.core.exceptions import DuplicateError, NotFoundError, ValidationError
 from llm_spec.web.models.suite import Suite, SuiteVersion
 from llm_spec.web.repositories.suite_repo import SuiteRepository
@@ -48,26 +46,19 @@ def parse_suite_json5(raw_json5: str) -> dict[str, Any]:
     return parsed
 
 
-def validate_suite_by_runner(raw_json5: str) -> None:
+def validate_suite_by_runner(parsed_json: dict[str, Any]) -> None:
     """Validate suite using existing loader.
 
     Args:
-        raw_json5: Raw JSON5 content.
+        parsed_json: Parsed JSON5 data.
 
     Raises:
         ValidationError: If the suite is invalid.
     """
-    tmp_path: Path | None = None
     try:
-        with tempfile.NamedTemporaryFile("w", suffix=".json5", encoding="utf-8", delete=False) as f:
-            f.write(raw_json5)
-            tmp_path = Path(f.name)
-        load_test_suite(tmp_path)
+        load_test_suite_from_dict(parsed_json)
     except Exception as exc:
         raise ValidationError(f"Suite validation failed: {exc}") from exc
-    finally:
-        if tmp_path and tmp_path.exists():
-            tmp_path.unlink()
 
 
 class SuiteService:
@@ -112,7 +103,7 @@ class SuiteService:
 
         # Parse and validate
         parsed = parse_suite_json5(raw_json5)
-        validate_suite_by_runner(raw_json5)
+        validate_suite_by_runner(parsed)
 
         # Create suite
         suite = Suite(
@@ -258,7 +249,7 @@ class SuiteService:
 
         # Parse and validate
         parsed = parse_suite_json5(raw_json5)
-        validate_suite_by_runner(raw_json5)
+        validate_suite_by_runner(parsed)
 
         # Create new version
         next_version = suite.latest_version + 1
