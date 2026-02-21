@@ -10,6 +10,43 @@ from sqlalchemy.orm import Mapped, mapped_column
 from llm_spec.web.models.base import Base, new_id, now_utc
 
 
+class RunBatch(Base):
+    """Run batch model.
+
+    Represents a test task containing multiple runs.
+
+    Attributes:
+        id: Unique identifier (UUID).
+        name: User-defined name for the batch.
+        status: Batch status ("running", "completed", "cancelled").
+        mode: Execution mode ("real" or "mock").
+        total_runs: Total number of runs in this batch.
+        completed_runs: Number of completed runs.
+        passed_runs: Number of runs that passed all tests.
+        failed_runs: Number of runs that had failures.
+        started_at: Execution start timestamp.
+        finished_at: Execution finish timestamp.
+        created_at: Creation timestamp.
+    """
+
+    __tablename__ = "run_batch"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, default="Task")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="running", index=True)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False, default="real")
+    total_runs: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completed_runs: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    passed_runs: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_runs: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    def __repr__(self) -> str:
+        return f"<RunBatch {self.id}:{self.status}>"
+
+
 class RunJob(Base):
     """Run job model.
 
@@ -39,6 +76,12 @@ class RunJob(Base):
     mode: Mapped[str] = mapped_column(String(16), nullable=False, default="real")
     provider: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     endpoint: Mapped[str] = mapped_column(String(255), nullable=False)
+    batch_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("run_batch.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     suite_version_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("suite_version.id", ondelete="SET NULL"),

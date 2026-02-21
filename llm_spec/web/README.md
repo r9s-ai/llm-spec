@@ -37,7 +37,11 @@ psql -U postgres -c "CREATE DATABASE llm_spec;"
 #### 初始化数据库表结构
 
 ```bash
+# 方式1: 全新安装
 psql -U postgres -d llm_spec -f llm_spec/web/schema.sql
+
+# 方式2: 从旧版本升级（保留现有数据）
+psql -U postgres -d llm_spec -f llm_spec/web/migrations/001_add_run_batch.sql
 ```
 
 ### 3. 配置环境变量
@@ -136,6 +140,21 @@ pnpm dev
 | created_by | varchar(128) | 创建者 |
 | created_at | timestamptz | 创建时间 |
 
+### run_batch - 测试任务批次
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | varchar(36) | 主键 UUID |
+| status | varchar(16) | 状态 (running/completed/cancelled) |
+| mode | varchar(16) | 执行模式 (real/mock) |
+| total_runs | integer | 总运行数 |
+| completed_runs | integer | 已完成数 |
+| passed_runs | integer | 通过数 |
+| failed_runs | integer | 失败数 |
+| started_at | timestamptz | 开始时间 |
+| finished_at | timestamptz | 结束时间 |
+| created_at | timestamptz | 创建时间 |
+
 ### run_job - 执行任务
 
 | 字段 | 类型 | 说明 |
@@ -145,6 +164,7 @@ pnpm dev
 | mode | varchar(16) | 执行模式 (real/mock) |
 | provider | varchar(32) | Provider 名称 |
 | endpoint | varchar(255) | API 端点 |
+| batch_id | varchar(36) | 外键关联 run_batch |
 | suite_version_id | varchar(36) | 外键关联 suite_version |
 | config_snapshot | jsonb | 配置快照 |
 | started_at | timestamptz | 开始时间 |
@@ -199,8 +219,15 @@ pnpm dev
 - `GET /api/provider-configs/{provider}` - 获取单个 Provider 配置
 - `PUT /api/provider-configs/{provider}` - 更新 Provider 配置
 
+### 批次管理
+- `POST /api/batches` - 创建批次（多个路由同时执行）
+- `GET /api/batches` - 列出批次
+- `GET /api/batches/{batch_id}` - 获取批次详情（含运行列表）
+- `DELETE /api/batches/{batch_id}` - 删除批次及其运行
+- `GET /api/batches/{batch_id}/runs` - 获取批次下的运行列表
+
 ### 执行管理
-- `POST /api/runs` - 创建并启动执行任务
+- `POST /api/runs` - 创建并启动单个执行任务
 - `GET /api/runs` - 列出执行任务
 - `GET /api/runs/{run_id}` - 获取执行详情
 - `POST /api/runs/{run_id}/cancel` - 取消执行
@@ -221,6 +248,7 @@ llm_spec/web/
 │   ├── deps.py            # 依赖注入
 │   ├── suites.py          # 套件路由
 │   ├── runs.py            # 执行路由
+│   ├── batches.py         # 批次路由
 │   ├── provider_configs.py # Provider 配置路由
 │   └── settings.py        # 设置路由
 │
@@ -232,7 +260,7 @@ llm_spec/web/
 │
 ├── models/                 # SQLAlchemy ORM 模型
 │   ├── suite.py           # Suite, SuiteVersion
-│   ├── run.py             # RunJob, RunEvent, RunResult, RunTestResult
+│   ├── run.py             # RunBatch, RunJob, RunEvent, RunResult, RunTestResult
 │   └── provider.py        # ProviderConfigModel
 │
 ├── schemas/                # Pydantic 请求/响应模型

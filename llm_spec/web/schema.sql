@@ -32,12 +32,31 @@ create table if not exists provider_config (
     updated_at timestamptz not null default now()
 );
 
+-- Run batch table (represents a test task containing multiple runs)
+create table if not exists run_batch (
+    id varchar(36) primary key,
+    name varchar(255) not null default 'Task',
+    status varchar(16) not null default 'running',
+    mode varchar(16) not null default 'real',
+    total_runs integer not null default 0,
+    completed_runs integer not null default 0,
+    passed_runs integer not null default 0,
+    failed_runs integer not null default 0,
+    started_at timestamptz null,
+    finished_at timestamptz null,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists ix_run_batch_status on run_batch(status);
+create index if not exists ix_run_batch_created_at on run_batch(created_at desc);
+
 create table if not exists run_job (
     id varchar(36) primary key,
     status varchar(16) not null default 'queued',
     mode varchar(16) not null default 'real',
     provider varchar(32) not null,
     endpoint varchar(255) not null,
+    batch_id varchar(36) references run_batch(id) on delete cascade,
     suite_version_id varchar(36) references suite_version(id) on delete set null,
     config_snapshot jsonb not null default '{}'::jsonb,
     started_at timestamptz null,
@@ -48,6 +67,8 @@ create table if not exists run_job (
     progress_failed integer not null default 0,
     error_message text null
 );
+
+create index if not exists ix_run_job_batch_id on run_job(batch_id);
 
 create table if not exists run_event (
     id bigserial primary key,

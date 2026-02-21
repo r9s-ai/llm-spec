@@ -81,33 +81,33 @@ export function TestSelector({
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex-shrink-0 space-y-3 pb-3">
+      <div className="flex-shrink-0 space-y-2 pb-2">
         {/* Row 1: Run controls */}
         <div className="flex items-center gap-2">
           {/* Mode selector */}
-          <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
+          <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
             <button
               onClick={() => onRunModeChange("real")}
               disabled={isRunning}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
                 runMode === "real"
                   ? "bg-white text-slate-900 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               } ${isRunning ? "cursor-not-allowed opacity-50" : ""}`}
             >
-              <span className="h-2 w-2 rounded-full bg-green-500" />
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
               Real
             </button>
             <button
               onClick={() => onRunModeChange("mock")}
               disabled={isRunning}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
                 runMode === "mock"
                   ? "bg-white text-slate-900 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               } ${isRunning ? "cursor-not-allowed opacity-50" : ""}`}
             >
-              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
               Mock
             </button>
           </div>
@@ -116,7 +116,7 @@ export function TestSelector({
           <button
             onClick={onRun}
             disabled={selectedTestCount === 0 || isRunning}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition-all ${
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
               selectedTestCount > 0 && !isRunning
                 ? "bg-violet-600 text-white shadow-lg shadow-violet-200 hover:bg-violet-700 active:scale-[0.98]"
                 : "cursor-not-allowed bg-slate-200 text-slate-400"
@@ -124,7 +124,7 @@ export function TestSelector({
           >
             {isRunning ? (
               <>
-                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle
                     className="opacity-25"
                     cx="12"
@@ -143,7 +143,7 @@ export function TestSelector({
               </>
             ) : (
               <>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -157,33 +157,33 @@ export function TestSelector({
                     d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
-                Run {selectedTestCount} test{selectedTestCount !== 1 ? "s" : ""}
+                Run {selectedTestCount}
               </>
             )}
           </button>
         </div>
 
         {/* Row 2: Stats - centered with bold numbers */}
-        <div className="text-center text-sm text-slate-600">
+        <div className="text-center text-xs text-slate-600">
           <span className="font-bold text-slate-900">{providers.length}</span> providers ·{" "}
           <span className="font-bold text-slate-900">{routeCount}</span> routes ·{" "}
-          <span className="font-bold text-slate-900">{selectedTestCount}</span> tests selected
+          <span className="font-bold text-slate-900">{selectedTestCount}</span> selected
         </div>
 
         {/* Row 3: Search + Buttons (same height) */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <div className="flex-1">
             <SearchInput value={searchQuery} onChange={handleSearchChange} />
           </div>
           <button
             onClick={onSelectAll}
-            className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            className="h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
           >
             All
           </button>
           <button
             onClick={onClearAll}
-            className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            className="h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
           >
             Clear
           </button>
@@ -194,7 +194,7 @@ export function TestSelector({
       <div className="border-b border-slate-200" />
 
       {/* Provider List */}
-      <div className="flex-1 overflow-auto pt-3">
+      <div className="flex-1 overflow-auto pt-2">
         {providers.sort().map((provider) => {
           const providerSuites = suitesByProvider[provider] ?? [];
           if (searchQuery && providerSuites.length === 0) return null;

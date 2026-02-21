@@ -1,4 +1,12 @@
-import type { RunEvent, RunJob, Suite, SuiteVersion, TomlSettings } from "./types";
+import type {
+  RunBatch,
+  RunBatchWithRuns,
+  RunEvent,
+  RunJob,
+  Suite,
+  SuiteVersion,
+  TomlSettings,
+} from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -60,6 +68,52 @@ export function createVersion(
   });
 }
 
+// Batch API functions
+export function createBatch(input: {
+  suite_version_ids: string[];
+  mode?: "real" | "mock";
+  selected_tests_by_suite?: Record<string, string[]>;
+  name?: string;
+}): Promise<RunBatchWithRuns> {
+  return request<RunBatchWithRuns>("/api/batches", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function getBatches(options?: {
+  status?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<RunBatch[]> {
+  const params = new URLSearchParams();
+  if (options?.status) params.set("status", options.status);
+  if (options?.limit) params.set("limit", String(options.limit));
+  if (options?.offset) params.set("offset", String(options.offset));
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return request<RunBatch[]>(`/api/batches${query}`);
+}
+
+export function getBatch(batchId: string): Promise<RunBatchWithRuns> {
+  return request<RunBatchWithRuns>(`/api/batches/${batchId}`);
+}
+
+export function updateBatch(batchId: string, name: string): Promise<RunBatch> {
+  return request<RunBatch>(`/api/batches/${batchId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function deleteBatch(batchId: string): Promise<void> {
+  return request<void>(`/api/batches/${batchId}`, { method: "DELETE" });
+}
+
+export function getBatchRuns(batchId: string): Promise<RunJob[]> {
+  return request<RunJob[]>(`/api/batches/${batchId}/runs`);
+}
+
+// Run API functions
 export function createRun(input: {
   suite_version_id: string;
   mode?: "real" | "mock";

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
-import { useRuns, useSettings, useSuites } from "../hooks";
+import { useBatches, useRuns, useSettings, useSuites } from "../hooks";
 import type { PageKey, RunMode } from "../types";
 
 interface AppContextValue {
@@ -14,8 +14,11 @@ interface AppContextValue {
   // Suites
   suites: ReturnType<typeof useSuites>;
 
-  // Runs
+  // Runs (legacy, kept for backward compatibility)
   runs: ReturnType<typeof useRuns>;
+
+  // Batches (new)
+  batches: ReturnType<typeof useBatches>;
 
   // Settings
   settings: ReturnType<typeof useSettings>;
@@ -30,6 +33,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const suites = useSuites();
   const runs = useRuns();
+  const batches = useBatches();
   const settings = useSettings();
 
   const value: AppContextValue = {
@@ -41,6 +45,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setRunMode,
     suites,
     runs,
+    batches,
     settings,
   };
 

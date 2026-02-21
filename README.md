@@ -155,8 +155,11 @@ createdb llm_spec
 # Or using psql
 psql -U postgres -c "CREATE DATABASE llm_spec;"
 
-# Initialize database schema
+# Initialize database schema (for new installation)
 psql -U postgres -d llm_spec -f llm_spec/web/schema.sql
+
+# Or upgrade from previous version (preserves existing data)
+psql -U postgres -d llm_spec -f llm_spec/web/migrations/001_add_run_batch.sql
 ```
 
 ### Environment Variables
@@ -224,6 +227,21 @@ uv run python scripts/migrate_suites_to_web.py \
 | raw_json5 | text | Original JSON5 content |
 | parsed_json | jsonb | Parsed JSON data |
 
+#### run_batch - Test Task Batch
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | varchar(36) | Primary key UUID |
+| status | varchar(16) | Status (running/completed/cancelled) |
+| mode | varchar(16) | Mode (real/mock) |
+| total_runs | integer | Total number of runs |
+| completed_runs | integer | Completed run count |
+| passed_runs | integer | Passed run count |
+| failed_runs | integer | Failed run count |
+| started_at | timestamptz | Start timestamp |
+| finished_at | timestamptz | Finish timestamp |
+| created_at | timestamptz | Creation timestamp |
+
 #### run_job - Execution Jobs
 
 | Field | Type | Description |
@@ -232,6 +250,7 @@ uv run python scripts/migrate_suites_to_web.py \
 | status | varchar(16) | Status (queued/running/success/failed/cancelled) |
 | mode | varchar(16) | Mode (real/mock) |
 | provider | varchar(32) | Provider name |
+| batch_id | varchar(36) | Foreign key to run_batch |
 | progress_total | integer | Total tests |
 | progress_passed | integer | Passed count |
 | progress_failed | integer | Failed count |
@@ -255,7 +274,12 @@ uv run python scripts/migrate_suites_to_web.py \
 | `GET /api/provider-configs` | List provider configurations |
 | `GET /api/provider-configs/{provider}` | Get provider config |
 | `PUT /api/provider-configs/{provider}` | Update provider config |
-| `POST /api/runs` | Create a new test run |
+| `POST /api/batches` | Create a new test batch (multiple runs) |
+| `GET /api/batches` | List batches |
+| `GET /api/batches/{batch_id}` | Get batch details with runs |
+| `DELETE /api/batches/{batch_id}` | Delete a batch and its runs |
+| `GET /api/batches/{batch_id}/runs` | Get runs in a batch |
+| `POST /api/runs` | Create a new test run (single) |
 | `GET /api/runs` | List runs |
 | `GET /api/runs/{run_id}` | Get run details |
 | `POST /api/runs/{run_id}/cancel` | Cancel a running test |

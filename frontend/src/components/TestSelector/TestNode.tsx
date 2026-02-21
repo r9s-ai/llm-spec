@@ -19,22 +19,25 @@ export function TestNode({
 }: TestNodeProps) {
   return (
     <div
-      className={`group flex items-center gap-2 px-2 py-1.5 transition-colors hover:bg-slate-50 ${
+      className={`group flex items-center gap-1 px-1.5 py-0.5 hover:bg-slate-50 ${
         isHighlighted ? "bg-yellow-50" : ""
       }`}
-      style={{ paddingLeft: "32px" }}
+      style={{ paddingLeft: "24px" }}
     >
       <Checkbox checked={isSelected} onChange={(e) => onToggle(e.target.checked)} />
 
-      <div className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-slate-700" title={testName}>
-          {paramName}
-        </span>
-      </div>
+      {/* Test name - allow more space */}
+      <span
+        className="min-w-0 flex-1 truncate text-xs text-slate-600"
+        title={`${testName} - ${paramName}`}
+      >
+        {paramName}
+      </span>
 
+      {/* Value badge - compact */}
       {valueText && (
         <span
-          className="max-w-[120px] truncate rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500"
+          className="max-w-[80px] shrink-0 truncate rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-500"
           title={valueText}
         >
           {valueText}

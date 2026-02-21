@@ -94,16 +94,16 @@ export function ProviderNode({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white mb-2">
-      {/* Provider Header */}
-      <div className="flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-slate-50">
+    <div className="rounded-lg border border-slate-200 bg-white mb-1.5 overflow-hidden">
+      {/* Provider Header - Compact */}
+      <div className="flex items-center gap-1.5 px-2 py-1.5 bg-slate-50 border-b border-slate-100">
         {/* Expand Button */}
         <button
           onClick={onToggleExpanded}
-          className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          className="flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600"
         >
           <svg
-            className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+            className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -119,21 +119,27 @@ export function ProviderNode({
           onChange={(e) => handleCheckboxChange(e.target.checked)}
         />
 
-        {/* Provider Name */}
+        {/* Provider Name - Large, black, bold */}
         <span className="text-base font-bold text-slate-900">{provider}</span>
 
         {/* Count Badge */}
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+        <span
+          className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${
+            isIndeterminate || isAllSelected
+              ? "bg-violet-100 text-violet-700"
+              : "bg-slate-100 text-slate-500"
+          }`}
+        >
           {selectedTests}/{totalTests}
         </span>
 
-        {/* Suite Count */}
-        <span className="ml-auto text-xs text-slate-500">{suites.length} routes</span>
+        {/* Route Count */}
+        <span className="ml-auto text-xs text-slate-400">{suites.length} routes</span>
       </div>
 
-      {/* Suites List */}
+      {/* Suites List - More compact */}
       {isExpanded && filteredSuites.length > 0 && (
-        <div className="space-y-1 border-t border-slate-100 p-2">
+        <div className="space-y-0.5 p-1">
           {filteredSuites
             .sort((a, b) => a.endpoint.localeCompare(b.endpoint))
             .map((suite) => {

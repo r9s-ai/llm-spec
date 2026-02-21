@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import random
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -14,6 +16,10 @@ from llm_spec.config.loader import ProviderConfig
 from llm_spec.json_types import Headers, JSONValue
 from llm_spec.logger import current_test_name
 from tests.integration.mock_loader import MockDataLoader
+
+# Mock delay configuration
+MOCK_MIN_DELAY = 1  # Minimum delay in seconds
+MOCK_MAX_DELAY = 3  # Maximum delay in seconds
 
 
 class MockProviderAdapter(ProviderAdapter):
@@ -92,6 +98,9 @@ class MockProviderAdapter(ProviderAdapter):
             TypeError: If mock response is not a dict.
         """
         del params, additional_headers, method, files
+        # Simulate network latency
+        delay = random.uniform(MOCK_MIN_DELAY, MOCK_MAX_DELAY)
+        time.sleep(delay)
         data = self.loader.load_response(
             provider=self.provider_name,
             endpoint=endpoint,
@@ -130,6 +139,9 @@ class MockProviderAdapter(ProviderAdapter):
             TypeError: If mock response is not an iterator.
         """
         del params, additional_headers, method, files
+        # Simulate initial connection latency
+        delay = random.uniform(MOCK_MIN_DELAY, MOCK_MAX_DELAY)
+        time.sleep(delay)
         data = self.loader.load_response(
             provider=self.provider_name,
             endpoint=endpoint,
@@ -138,4 +150,12 @@ class MockProviderAdapter(ProviderAdapter):
         )
         if isinstance(data, dict):
             raise TypeError(f"Expected iterator mock response, got {type(data)}")
-        return data
+
+        def delayed_stream() -> Iterator[bytes]:
+            """Wrap stream with delays between chunks."""
+            for chunk in data:
+                # Small delay between chunks to simulate streaming
+                time.sleep(random.uniform(0.01, 0.05))
+                yield chunk
+
+        return delayed_stream()

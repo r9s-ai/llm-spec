@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from llm_spec.web.models.run import RunEvent, RunJob, RunResult, RunTestResult
+from llm_spec.web.models.run import RunBatch, RunEvent, RunJob, RunResult, RunTestResult
 
 
 class RunRepository:
@@ -22,6 +22,106 @@ class RunRepository:
 
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    # ==================== RunBatch Operations ====================
+
+    def get_batch_by_id(self, batch_id: str) -> RunBatch | None:
+        """Get a run batch by ID.
+
+        Args:
+            batch_id: Run batch ID.
+
+        Returns:
+            RunBatch instance or None if not found.
+        """
+        return self.db.get(RunBatch, batch_id)
+
+    def create_batch(self, batch: RunBatch) -> RunBatch:
+        """Create a new run batch.
+
+        Args:
+            batch: RunBatch instance to create.
+
+        Returns:
+            Created RunBatch instance.
+        """
+        self.db.add(batch)
+        self.db.flush()
+        return batch
+
+    def update_batch(self, batch: RunBatch) -> RunBatch:
+        """Update an existing run batch.
+
+        Args:
+            batch: RunBatch instance to update.
+
+        Returns:
+            Updated RunBatch instance.
+        """
+        self.db.add(batch)
+        self.db.flush()
+        return batch
+
+    def delete_batch(self, batch_id: str) -> bool:
+        """Delete a run batch and all associated runs.
+
+        Args:
+            batch_id: Run batch ID.
+
+        Returns:
+            True if deleted, False if not found.
+        """
+        batch = self.get_batch_by_id(batch_id)
+        if batch is None:
+            return False
+        self.db.delete(batch)
+        self.db.flush()
+        return True
+
+    def list_batches(
+        self,
+        status_filter: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[Sequence[RunBatch], int]:
+        """List run batches with pagination.
+
+        Args:
+            status_filter: Filter by status.
+            limit: Maximum number of results.
+            offset: Offset for pagination.
+
+        Returns:
+            Tuple of (list of RunBatch instances, total count).
+        """
+        stmt = select(RunBatch).order_by(RunBatch.created_at.desc())
+        if status_filter:
+            stmt = stmt.where(RunBatch.status == status_filter)
+
+        # Get total count
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.execute(count_stmt).scalar_one()
+
+        # Get paginated results
+        stmt = stmt.limit(limit).offset(offset)
+        batches = self.db.execute(stmt).scalars().all()
+        return batches, total
+
+    def list_runs_by_batch(self, batch_id: str) -> Sequence[RunJob]:
+        """List all runs in a batch.
+
+        Args:
+            batch_id: Run batch ID.
+
+        Returns:
+            List of RunJob instances.
+        """
+        stmt = (
+            select(RunJob)
+            .where(RunJob.batch_id == batch_id)
+            .order_by(RunJob.started_at.desc().nulls_last())
+        )
+        return self.db.execute(stmt).scalars().all()
 
     # ==================== RunJob Operations ====================
 

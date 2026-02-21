@@ -21,7 +21,7 @@ from llm_spec.runners import ConfigDrivenTestRunner, SpecTestSuite, load_test_su
 from llm_spec.web.config import settings
 from llm_spec.web.core.event_bus import event_bus
 from llm_spec.web.core.exceptions import NotFoundError
-from llm_spec.web.models.run import RunEvent, RunJob, RunResult, RunTestResult
+from llm_spec.web.models.run import RunBatch, RunEvent, RunJob, RunResult, RunTestResult
 from llm_spec.web.models.suite import SuiteVersion
 from llm_spec.web.repositories.provider_repo import ProviderRepository
 from llm_spec.web.repositories.run_repo import RunRepository
@@ -301,24 +301,30 @@ class RunService:
         # Start run
         run_job.status = "running"
         run_job.started_at = datetime.now(UTC)
+
+        # Load suite and set progress_total before starting
+        suite = load_suite_from_version(suite_version)
+        selected = set(run_job.config_snapshot.get("selected_tests") or [])
+        tests = [t for t in suite.tests if not selected or t.name in selected]
+        run_job.progress_total = len(tests)
+
         run_repo.update(run_job)
         db.commit()
 
         # Mark run as active in event bus and push start event
         event_bus.start_run(run_id)
-        event_bus.push(run_id, "run_started", {"mode": run_job.mode})
+        event_bus.push(
+            run_id,
+            "run_started",
+            {
+                "mode": run_job.mode,
+                "progress_total": run_job.progress_total,
+            },
+        )
 
         client = None
         http_client = None
         try:
-            # Load suite
-            suite = load_suite_from_version(suite_version)
-            selected = set(run_job.config_snapshot.get("selected_tests") or [])
-            tests = [t for t in suite.tests if not selected or t.name in selected]
-            run_job.progress_total = len(tests)
-            run_repo.update(run_job)
-            db.commit()
-
             # Create client
             config = ProviderConfig(
                 api_key=provider_config.api_key,
@@ -402,7 +408,7 @@ class RunService:
                 run_repo.update(run_job)
                 db.commit()
 
-                # Push test finish event to memory
+                # Push test finish event to memory with full test result
                 event_bus.push(
                     run_id,
                     "test_finished",
@@ -411,6 +417,15 @@ class RunService:
                         "status": status,
                         "progress_done": run_job.progress_done,
                         "progress_total": run_job.progress_total,
+                        "progress_passed": run_job.progress_passed,
+                        "progress_failed": run_job.progress_failed,
+                        "test_result": {
+                            "test_name": test_record.get("test_name", test.name),
+                            "parameter": test_record.get("parameter"),
+                            "request": test_record.get("request"),
+                            "result": test_record.get("result"),
+                            "validation": test_record.get("validation"),
+                        },
                     },
                 )
 
@@ -476,3 +491,223 @@ class RunService:
                 http_client.close()
             # Cleanup event bus resources after a delay (allow client to receive terminal event)
             event_bus.cleanup(run_id)
+
+    # ==================== Batch Operations ====================
+
+    def create_batch(
+        self,
+        db: Session,
+        suite_version_ids: list[str],
+        mode: str | None = None,
+        selected_tests_by_suite: dict[str, list[str]] | None = None,
+        name: str | None = None,
+    ) -> tuple[RunBatch, list[RunJob]]:
+        """Create a new batch with multiple runs.
+
+        Args:
+            db: Database session.
+            suite_version_ids: List of suite version IDs to run.
+            mode: Execution mode ("real" or "mock").
+            selected_tests_by_suite: Map of suite_id to list of test names.
+            name: User-defined name for the batch.
+
+        Returns:
+            Tuple of (RunBatch instance, list of RunJob instances).
+
+        Raises:
+            NotFoundError: If any suite version not found.
+        """
+        suite_repo = SuiteRepository(db)
+        run_repo = RunRepository(db)
+
+        # Resolve mode
+        resolved_mode = mode or ("mock" if settings.mock_mode else "real")
+
+        # Create batch
+        batch = RunBatch(
+            name=name or "Task",
+            status="running",
+            mode=resolved_mode,
+            total_runs=len(suite_version_ids),
+            started_at=datetime.now(UTC),
+        )
+        run_repo.create_batch(batch)
+        db.flush()
+
+        # Create runs for each suite version
+        runs: list[RunJob] = []
+        for suite_version_id in suite_version_ids:
+            suite_version = suite_repo.get_version_by_id(suite_version_id)
+            if suite_version is None:
+                raise NotFoundError("SuiteVersion", suite_version_id)
+
+            provider = str(suite_version.parsed_json.get("provider"))
+            endpoint = str(suite_version.parsed_json.get("endpoint"))
+
+            # Get selected tests for this suite
+            suite_id = suite_version.suite_id
+            selected_tests = None
+            if selected_tests_by_suite and suite_id in selected_tests_by_suite:
+                selected_tests = selected_tests_by_suite[suite_id]
+
+            # Create run job
+            run = RunJob(
+                status="queued",
+                mode=resolved_mode,
+                provider=provider,
+                endpoint=endpoint,
+                batch_id=batch.id,
+                suite_version_id=suite_version.id,
+                config_snapshot={"selected_tests": selected_tests or []},
+            )
+            run_repo.create(run)
+            runs.append(run)
+
+        db.commit()
+        db.refresh(batch)
+        for run in runs:
+            db.refresh(run)
+        return batch, runs
+
+    def get_batch(self, db: Session, batch_id: str) -> RunBatch:
+        """Get a batch by ID.
+
+        Args:
+            db: Database session.
+            batch_id: Batch ID.
+
+        Returns:
+            RunBatch instance.
+
+        Raises:
+            NotFoundError: If batch not found.
+        """
+        run_repo = RunRepository(db)
+        batch = run_repo.get_batch_by_id(batch_id)
+        if batch is None:
+            raise NotFoundError("RunBatch", batch_id)
+        return batch
+
+    def get_batch_with_runs(self, db: Session, batch_id: str) -> tuple[RunBatch, Sequence[RunJob]]:
+        """Get a batch with its runs.
+
+        Args:
+            db: Database session.
+            batch_id: Batch ID.
+
+        Returns:
+            Tuple of (RunBatch instance, list of RunJob instances).
+
+        Raises:
+            NotFoundError: If batch not found.
+        """
+        run_repo = RunRepository(db)
+        batch = run_repo.get_batch_by_id(batch_id)
+        if batch is None:
+            raise NotFoundError("RunBatch", batch_id)
+        runs = run_repo.list_runs_by_batch(batch_id)
+        return batch, runs
+
+    def list_batches(
+        self,
+        db: Session,
+        status_filter: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[Sequence[RunBatch], int]:
+        """List batches with pagination.
+
+        Args:
+            db: Database session.
+            status_filter: Filter by status.
+            limit: Maximum number of results.
+            offset: Offset for pagination.
+
+        Returns:
+            Tuple of (list of RunBatch instances, total count).
+        """
+        run_repo = RunRepository(db)
+        return run_repo.list_batches(status_filter=status_filter, limit=limit, offset=offset)
+
+    def update_batch(self, db: Session, batch_id: str, name: str) -> RunBatch:
+        """Update a batch's name.
+
+        Args:
+            db: Database session.
+            batch_id: Batch ID.
+            name: New name for the batch.
+
+        Returns:
+            Updated RunBatch instance.
+
+        Raises:
+            NotFoundError: If batch not found.
+        """
+        run_repo = RunRepository(db)
+        batch = run_repo.get_batch_by_id(batch_id)
+        if batch is None:
+            raise NotFoundError("RunBatch", batch_id)
+        batch.name = name
+        run_repo.update_batch(batch)
+        db.commit()
+        db.refresh(batch)
+        return batch
+
+    def delete_batch(self, db: Session, batch_id: str) -> bool:
+        """Delete a batch and all its runs.
+
+        Args:
+            db: Database session.
+            batch_id: Batch ID.
+
+        Returns:
+            True if deleted, False if not found.
+        """
+        run_repo = RunRepository(db)
+        result = run_repo.delete_batch(batch_id)
+        if result:
+            db.commit()
+        return result
+
+    def update_batch_status(self, db: Session, batch_id: str) -> RunBatch:
+        """Update batch status based on its runs.
+
+        Args:
+            db: Database session.
+            batch_id: Batch ID.
+
+        Returns:
+            Updated RunBatch instance.
+        """
+        run_repo = RunRepository(db)
+        batch = run_repo.get_batch_by_id(batch_id)
+        if batch is None:
+            raise NotFoundError("RunBatch", batch_id)
+
+        runs = run_repo.list_runs_by_batch(batch_id)
+
+        # Count completed runs
+        completed = 0
+        passed = 0
+        failed = 0
+        for run in runs:
+            if run.status in {"success", "failed", "cancelled"}:
+                completed += 1
+                if run.status == "success":
+                    passed += 1
+                elif run.status == "failed":
+                    failed += 1
+
+        batch.completed_runs = completed
+        batch.passed_runs = passed
+        batch.failed_runs = failed
+
+        # Check if all runs are done
+        if completed >= batch.total_runs:
+            batch.status = "completed"
+            batch.finished_at = datetime.now(UTC)
+
+        run_repo.update_batch(batch)
+        db.commit()
+        db.refresh(batch)
+        return batch

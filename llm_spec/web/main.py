@@ -6,6 +6,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from llm_spec.web.api.batches import router as batches_router
 from llm_spec.web.api.provider_configs import router as provider_config_router
 from llm_spec.web.api.runs import router as runs_router
 from llm_spec.web.api.settings import router as settings_router
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(suite_versions_router)
     app.include_router(provider_config_router)
     app.include_router(runs_router)
+    app.include_router(batches_router)
     app.include_router(settings_router)
 
     return app

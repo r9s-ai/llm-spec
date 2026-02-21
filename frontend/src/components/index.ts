@@ -23,6 +23,7 @@ export { RunButton } from "./RunControl";
 export { ProgressBar } from "./RunCards";
 export { ActiveRunCard } from "./RunCards";
 export { CompletedRunCard } from "./RunCards";
+export { TaskCard } from "./RunCards";
 
 // ResultPanel components
 export { RunResultPanel } from "./ResultPanel";
