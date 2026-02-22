@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   createBatch,
   deleteBatch,
@@ -145,24 +146,70 @@ export function useBatches() {
         }
       };
 
-      ["run_started", "test_started", "test_finished", "run_failed", "run_cancelled"].forEach(
-        (name) => {
-          source.addEventListener(name, (event) => {
-            void onDataEvent(event as MessageEvent);
-          });
-        }
-      );
+      [
+        "run_started",
+        "test_started",
+        "test_finished",
+        "run_failed",
+        "run_cancelled",
+        "run_finished",
+      ].forEach((name) => {
+        source.addEventListener(name, (event) => {
+          void onDataEvent(event as MessageEvent);
+        });
+      });
 
-      source.addEventListener("run_finished", async () => {
+      source.addEventListener("run_finished", async (event) => {
+        // Parse the run_finished event to get the status
+        const runEvent = JSON.parse((event as MessageEvent).data);
+        const status = runEvent?.payload?.status as string | undefined;
+
         source.close();
-        // Load run result
-        await loadRunResult(runId);
-        // Refresh batch to get updated stats
+
+        // Load run result FIRST before updating batch state
+        // Use flushSync to ensure the result is available immediately
         try {
-          const updatedBatch = await getBatch(batchId);
-          upsertBatch(updatedBatch);
+          const result = await getRunResult(runId);
+          flushSync(() => {
+            setRunResultById((prev) => ({ ...prev, [runId]: result }));
+          });
         } catch {
           // Ignore errors
+        }
+
+        // Now update the run status and batch state
+        if (status) {
+          setBatches((prev) => {
+            const batch = prev.find((b) => b.id === batchId);
+            if (!batch) return prev;
+            const runIdx = batch.runs.findIndex((r) => r.id === runId);
+            if (runIdx < 0) return prev;
+            const newRuns = [...batch.runs];
+            newRuns[runIdx] = {
+              ...newRuns[runIdx],
+              status: status === "success" ? "success" : "failed",
+              finished_at: new Date().toISOString(),
+            };
+
+            // Check if all runs are complete
+            const completedRuns = newRuns.filter(
+              (r) => r.status === "success" || r.status === "failed" || r.status === "cancelled"
+            ).length;
+            const allComplete = completedRuns >= newRuns.length;
+
+            const idx = prev.findIndex((b) => b.id === batchId);
+            const next = [...prev];
+            next[idx] = {
+              ...batch,
+              runs: newRuns,
+              completed_runs: completedRuns,
+              passed_runs: newRuns.filter((r) => r.status === "success").length,
+              failed_runs: newRuns.filter((r) => r.status === "failed").length,
+              status: allComplete ? "completed" : "running",
+              finished_at: allComplete ? new Date().toISOString() : batch.finished_at,
+            };
+            return next;
+          });
         }
       });
 
@@ -174,7 +221,7 @@ export function useBatches() {
         source.close();
       };
     },
-    [pushEvent, upsertBatch, loadRunResult]
+    [pushEvent]
   );
 
   // Start a new batch run
@@ -183,7 +230,8 @@ export function useBatches() {
       suiteVersionIds: string[],
       mode: RunMode,
       selectedTestsBySuite: TestSelectionMap,
-      onNotice: (msg: string) => void
+      onNotice: (msg: string) => void,
+      maxConcurrent?: number
     ): Promise<void> => {
       if (suiteVersionIds.length === 0) {
         onNotice("Pick at least one route to run.");
@@ -204,6 +252,7 @@ export function useBatches() {
         suite_version_ids: suiteVersionIds,
         mode,
         selected_tests_by_suite: selectedTestsBySuiteStr,
+        max_concurrent: maxConcurrent,
       });
 
       upsertBatch(batch);

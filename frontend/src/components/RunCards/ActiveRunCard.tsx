@@ -46,18 +46,25 @@ export function ActiveRunCard({ run, events }: ActiveRunCardProps) {
   // Build test results from events
   const testResults: TestResultRow[] = [];
   const runningTests = new Set<string>();
+  const finishedTests = new Set<string>();
 
-  // Process events in order
-  for (const event of events) {
+  // Process events in reverse order (oldest first) since events are stored newest first
+  const sortedEvents = [...events].reverse();
+
+  for (const event of sortedEvents) {
     if (event.event_type === "test_started") {
       const testName = (event.payload.test_name as string) || "Unknown";
-      runningTests.add(testName);
+      // Only add to running if not already finished
+      if (!finishedTests.has(testName)) {
+        runningTests.add(testName);
+      }
     } else if (event.event_type === "test_finished") {
       const testName = (event.payload.test_name as string) || "Unknown";
       const status = (event.payload.status as string) || "fail";
       const testResult = event.payload.test_result as Record<string, unknown> | undefined;
 
       runningTests.delete(testName);
+      finishedTests.add(testName);
 
       testResults.push({
         test_name: testName,
@@ -78,18 +85,8 @@ export function ActiveRunCard({ run, events }: ActiveRunCardProps) {
     });
   }
 
-  // Add pending tests (we don't know the names until they start)
-  const completedCount = run.progress_done;
-  const totalCount = run.progress_total;
-  const pendingCount = totalCount - completedCount - runningTests.size;
-
-  // Show pending tests as placeholder rows
-  for (let i = 0; i < pendingCount; i++) {
-    testResults.push({
-      test_name: `Test ${completedCount + runningTests.size + i + 1}`,
-      status: "pending",
-    });
-  }
+  // Don't show placeholder pending tests - they are confusing and not useful
+  // The progress bar in the header shows the overall progress
 
   return (
     <div className="border-b border-slate-100 last:border-b-0">

@@ -13,6 +13,7 @@ interface TestSelectorProps {
   expandedSuites: Set<string>;
   selectedTestCount: number;
   runMode: RunMode;
+  maxConcurrent: number;
   isRunning: boolean;
   onToggleProvider: (provider: string) => void;
   onToggleProviderExpanded: (provider: string) => void;
@@ -22,6 +23,7 @@ interface TestSelectorProps {
   onSelectAll: () => void;
   onClearAll: () => void;
   onRunModeChange: (mode: RunMode) => void;
+  onMaxConcurrentChange: (max: number) => void;
   onRun: () => void;
 }
 
@@ -35,6 +37,7 @@ export function TestSelector({
   expandedSuites,
   selectedTestCount,
   runMode,
+  maxConcurrent,
   isRunning,
   onToggleProviderExpanded,
   onToggleSuiteExpanded,
@@ -43,6 +46,7 @@ export function TestSelector({
   onSelectAll,
   onClearAll,
   onRunModeChange,
+  onMaxConcurrentChange,
   onRun,
 }: TestSelectorProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -110,6 +114,25 @@ export function TestSelector({
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
               Mock
             </button>
+          </div>
+
+          {/* Concurrent selector */}
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-slate-500">Concurrent:</span>
+            <select
+              value={maxConcurrent}
+              onChange={(e) => onMaxConcurrentChange(Number(e.target.value))}
+              disabled={isRunning}
+              className={`h-7 rounded-md border border-slate-200 bg-white px-1.5 text-xs font-medium text-slate-700 ${
+                isRunning ? "cursor-not-allowed opacity-50" : ""
+              }`}
+            >
+              <option value={1}>1</option>
+              <option value={3}>3</option>
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+            </select>
           </div>
 
           {/* Run button */}

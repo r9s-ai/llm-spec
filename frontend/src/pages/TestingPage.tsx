@@ -1,9 +1,10 @@
-import { useMemo, useCallback, useEffect } from "react";
+import { useMemo, useCallback, useEffect, useState } from "react";
 import { TestSelector, TaskCard } from "../components";
 import { useAppContext } from "../context";
 
 export function TestingPage() {
   const { runMode, setRunMode, setNotice, suites, batches } = useAppContext();
+  const [maxConcurrent, setMaxConcurrent] = useState(5);
   const {
     providers,
     suites: suiteList,
@@ -70,8 +71,22 @@ export function TestingPage() {
       }
     });
 
-    await startBatchRun(selectedSuiteVersionIds, runMode, selectedTestsBySuite, setNotice);
-  }, [suiteList, selectedTestsBySuite, selectedVersionBySuite, runMode, startBatchRun, setNotice]);
+    await startBatchRun(
+      selectedSuiteVersionIds,
+      runMode,
+      selectedTestsBySuite,
+      setNotice,
+      maxConcurrent
+    );
+  }, [
+    suiteList,
+    selectedTestsBySuite,
+    selectedVersionBySuite,
+    runMode,
+    startBatchRun,
+    setNotice,
+    maxConcurrent,
+  ]);
 
   // Toggle tests for a suite
   const handleToggleTests = useCallback(
@@ -119,8 +134,8 @@ export function TestingPage() {
   return (
     <div className="flex h-[calc(100vh-57px)]">
       {/* Left Panel - Test Selector (with Run controls) */}
-      <div className="w-[400px] flex-shrink-0 border-r border-slate-200 bg-slate-50">
-        <div className="h-full overflow-auto p-4">
+      <div className="w-[500px] flex-shrink-0 border-r border-slate-200 bg-slate-50">
+        <div className="h-full overflow-auto p-1.5">
           <TestSelector
             providers={providers}
             suites={suiteList}
@@ -132,6 +147,7 @@ export function TestingPage() {
             selectedTestCount={selectedTestCount}
             runMode={runMode}
             isRunning={isRunning}
+            maxConcurrent={maxConcurrent}
             onToggleProvider={toggleProvider}
             onToggleProviderExpanded={toggleProviderPanel}
             onToggleSuiteExpanded={toggleSuitePanel}
@@ -140,6 +156,7 @@ export function TestingPage() {
             onSelectAll={handleSelectAll}
             onClearAll={handleClearAll}
             onRunModeChange={setRunMode}
+            onMaxConcurrentChange={setMaxConcurrent}
             onRun={() => void handleStartBatchRun()}
           />
         </div>
@@ -147,7 +164,7 @@ export function TestingPage() {
 
       {/* Right Panel - Task Cards */}
       <div className="flex-1 overflow-auto bg-slate-50">
-        <div className="p-4 space-y-4">
+        <div className="p-1.5 space-y-4">
           {/* Empty State */}
           {batchList.length === 0 && (
             <div className="border border-slate-200 rounded-lg bg-white p-8 text-center">

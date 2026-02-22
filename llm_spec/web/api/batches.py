@@ -19,16 +19,17 @@ from llm_spec.web.services.run_service import RunService
 router = APIRouter(prefix="/api/batches", tags=["batches"])
 
 
-def _execute_run_in_background(run_id: str) -> None:
+def _execute_run_in_background(run_id: str, max_concurrent: int = 5) -> None:
     """Execute a run in background.
 
     Args:
         run_id: Run job ID.
+        max_concurrent: Maximum number of concurrent tests.
     """
     db = SessionLocal()
     try:
         service = RunService()
-        service.execute_run(db, run_id)
+        service.execute_run(db, run_id, max_concurrent=max_concurrent)
         # Update batch status after run completes
         run = service.get_run(db, run_id)
         if run.batch_id:
@@ -63,9 +64,12 @@ def create_batch(
         name=payload.name,
     )
 
+    # Get max_concurrent from payload (default to 5)
+    max_concurrent = payload.max_concurrent or 5
+
     # Schedule all runs for background execution
     for run in runs:
-        background_tasks.add_task(_execute_run_in_background, run.id)
+        background_tasks.add_task(_execute_run_in_background, run.id, max_concurrent)
 
     return RunBatchWithRunsResponse(
         id=batch.id,

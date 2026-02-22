@@ -30,6 +30,7 @@ class BatchCreateRequest(BaseModel):
         mode: Execution mode ("real" or "mock").
         selected_tests_by_suite: Map of suite_id to list of test names.
         name: User-defined name for the batch.
+        max_concurrent: Maximum number of tests to run concurrently per run job.
     """
 
     suite_version_ids: list[str] = Field(..., min_length=1)
@@ -39,6 +40,9 @@ class BatchCreateRequest(BaseModel):
     )
     name: str | None = Field(
         default=None, max_length=255, description="User-defined name for the batch"
+    )
+    max_concurrent: int | None = Field(
+        default=None, ge=1, le=50, description="Maximum concurrent tests per run (1-50)"
     )
 
 

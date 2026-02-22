@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -254,14 +255,27 @@ class RunService:
         results = run_repo.list_test_results(run_id)
         return [r.raw_record for r in results]
 
-    def execute_run(self, db: Session, run_id: str) -> None:
-        """Execute a queued run job.
+    def execute_run(self, db: Session, run_id: str, max_concurrent: int = 5) -> None:
+        """Execute a queued run job with concurrent test execution.
 
         This method is designed to be called in a background task.
+        Uses asyncio for concurrent test execution.
 
         Args:
             db: Database session.
             run_id: Run job ID.
+            max_concurrent: Maximum number of concurrent tests.
+        """
+        # Run the async implementation in an event loop
+        asyncio.run(self._execute_run_async(db, run_id, max_concurrent))
+
+    async def _execute_run_async(self, db: Session, run_id: str, max_concurrent: int) -> None:
+        """Async implementation of execute_run.
+
+        Args:
+            db: Database session.
+            run_id: Run job ID.
+            max_concurrent: Maximum number of concurrent tests.
         """
         suite_repo = SuiteRepository(db)
         run_repo = RunRepository(db)
@@ -319,10 +333,10 @@ class RunService:
             {
                 "mode": run_job.mode,
                 "progress_total": run_job.progress_total,
+                "max_concurrent": max_concurrent,
             },
         )
 
-        client = None
         http_client = None
         try:
             # Create client
@@ -344,93 +358,198 @@ class RunService:
                 run_job.provider, config, run_job.mode, logger, http_client
             )
 
-            # Create collector and runner
-            collector = EndpointResultBuilder(
+            # Progress tracking (no locks needed in async)
+            progress_done = 0
+            progress_passed = 0
+            progress_failed = 0
+            cancelled = False
+
+            # Collector list for test results
+            test_results: list[dict[str, Any]] = []
+
+            # Semaphore for controlling concurrency
+            semaphore = asyncio.Semaphore(max_concurrent)
+
+            async def run_single_test(test: Any, idx: int) -> dict[str, Any]:
+                """Run a single test and return the result."""
+                nonlocal progress_done, progress_passed, progress_failed, cancelled
+
+                # Check for cancellation
+                if cancelled:
+                    return {"test": test, "status": "skipped", "idx": idx}
+
+                async with semaphore:
+                    if cancelled:
+                        return {"test": test, "status": "skipped", "idx": idx}
+
+                    # Create a collector for this test
+                    local_collector = EndpointResultBuilder(
+                        provider=suite.provider,
+                        endpoint=suite.endpoint,
+                        base_url=client.get_base_url(),
+                    )
+                    local_runner = ConfigDrivenTestRunner(
+                        suite=suite, client=client, collector=local_collector, logger=None
+                    )
+
+                    # Push test start event
+                    event_bus.push(run_id, "test_started", {"test_name": test.name, "index": idx})
+
+                    try:
+                        await local_runner.run_test_async(test)
+                        test_record = local_collector.tests[-1]
+                        status = str((test_record.get("result") or {}).get("status", "fail"))
+                    except Exception as e:
+                        status = "fail"
+                        test_record = {
+                            "test_name": test.name,
+                            "result": {"status": "fail", "reason": str(e)},
+                        }
+
+                    # Update progress (no lock needed in async)
+                    if cancelled:
+                        return {"test": test, "status": "skipped", "idx": idx}
+                    progress_done += 1
+                    if status == "pass":
+                        progress_passed += 1
+                    else:
+                        progress_failed += 1
+
+                    # Store result
+                    test_results.append(
+                        {
+                            "test": test,
+                            "test_record": test_record,
+                            "status": status,
+                            "idx": idx,
+                        }
+                    )
+
+                    # Push test finish event
+                    event_bus.push(
+                        run_id,
+                        "test_finished",
+                        {
+                            "test_name": test.name,
+                            "status": status,
+                            "progress_done": progress_done,
+                            "progress_total": len(tests),
+                            "progress_passed": progress_passed,
+                            "progress_failed": progress_failed,
+                            "test_result": {
+                                "test_name": test_record.get("test_name", test.name),
+                                "parameter": test_record.get("parameter"),
+                                "request": test_record.get("request"),
+                                "result": test_record.get("result"),
+                                "validation": test_record.get("validation"),
+                            },
+                        },
+                    )
+
+                    return {"test": test, "status": status, "idx": idx}
+
+            # Create tasks for all tests
+            tasks = [
+                asyncio.create_task(run_single_test(test, idx))
+                for idx, test in enumerate(tests, start=1)
+            ]
+
+            # Wait for all tasks to complete, checking for cancellation
+            try:
+                for coro in asyncio.as_completed(tasks):
+                    try:
+                        await coro
+                        # Check for cancellation periodically
+                        db.refresh(run_job)
+                        if run_job.status == "cancelled":
+                            cancelled = True
+                            # Cancel remaining tasks
+                            for t in tasks:
+                                if not t.done():
+                                    t.cancel()
+                            break
+                    except asyncio.CancelledError:
+                        progress_done += 1
+                        progress_failed += 1
+                    except Exception as e:
+                        # Handle test execution error
+                        progress_done += 1
+                        progress_failed += 1
+                        event_bus.push(
+                            run_id,
+                            "test_finished",
+                            {
+                                "test_name": "unknown",
+                                "status": "fail",
+                                "progress_done": progress_done,
+                                "progress_total": len(tests),
+                                "progress_passed": progress_passed,
+                                "progress_failed": progress_failed,
+                                "error": str(e),
+                            },
+                        )
+            except asyncio.CancelledError:
+                cancelled = True
+
+            # Check if cancelled
+            db.refresh(run_job)
+            if run_job.status == "cancelled" or cancelled:
+                event_bus.push(
+                    run_id,
+                    "run_cancelled",
+                    {
+                        "progress_done": progress_done,
+                        "progress_total": len(tests),
+                    },
+                )
+                run_repo.append_event(
+                    run_id,
+                    "run_cancelled",
+                    {
+                        "progress_done": progress_done,
+                        "progress_total": len(tests),
+                    },
+                )
+                db.commit()
+                event_bus.end_run(run_id)
+                return
+
+            # Build final result from all test results
+            final_collector = EndpointResultBuilder(
                 provider=suite.provider,
                 endpoint=suite.endpoint,
                 base_url=client.get_base_url(),
             )
-            runner = ConfigDrivenTestRunner(
-                suite=suite, client=client, collector=collector, logger=None
-            )
 
-            # Run tests
-            for idx, test in enumerate(tests, start=1):
-                db.refresh(run_job)
-                if run_job.status == "cancelled":
-                    event_bus.push(
-                        run_id,
-                        "run_cancelled",
-                        {
-                            "progress_done": run_job.progress_done,
-                            "progress_total": run_job.progress_total,
-                        },
-                    )
-                    # Save terminal event to database for history
-                    run_repo.append_event(
-                        run_id,
-                        "run_cancelled",
-                        {
-                            "progress_done": run_job.progress_done,
-                            "progress_total": run_job.progress_total,
-                        },
-                    )
-                    db.commit()
-                    event_bus.end_run(run_id)
-                    return
-
-                # Push test start event to memory
-                event_bus.push(run_id, "test_started", {"test_name": test.name, "index": idx})
-
-                runner.run_test(test)
-                test_record = collector.tests[-1]
-                status = str((test_record.get("result") or {}).get("status", "fail"))
-                run_job.progress_done += 1
-                if status == "pass":
-                    run_job.progress_passed += 1
-                else:
-                    run_job.progress_failed += 1
-
+            # Sort results by idx and add to collector
+            test_results.sort(key=lambda x: x["idx"])
+            for result in test_results:
+                test_record = result["test_record"]
                 # Save test result to database
                 run_test_row = RunTestResult(
                     run_id=run_id,
                     test_id=str(test_record.get("test_id", "")),
-                    test_name=str(test_record.get("test_name", test.name)),
+                    test_name=str(test_record.get("test_name", result["test"].name)),
                     parameter_name=str((test_record.get("parameter") or {}).get("name", "")),
                     parameter_value=(test_record.get("parameter") or {}).get("value"),
-                    status=status,
+                    status=result["status"],
                     fail_stage=(test_record.get("result") or {}).get("fail_stage"),
                     reason_code=(test_record.get("result") or {}).get("reason_code"),
                     latency_ms=(test_record.get("request") or {}).get("latency_ms"),
                     raw_record=test_record,
                 )
                 run_repo.add_test_result(run_test_row)
-                run_repo.update(run_job)
-                db.commit()
 
-                # Push test finish event to memory with full test result
-                event_bus.push(
-                    run_id,
-                    "test_finished",
-                    {
-                        "test_name": test.name,
-                        "status": status,
-                        "progress_done": run_job.progress_done,
-                        "progress_total": run_job.progress_total,
-                        "progress_passed": run_job.progress_passed,
-                        "progress_failed": run_job.progress_failed,
-                        "test_result": {
-                            "test_name": test_record.get("test_name", test.name),
-                            "parameter": test_record.get("parameter"),
-                            "request": test_record.get("request"),
-                            "result": test_record.get("result"),
-                            "validation": test_record.get("validation"),
-                        },
-                    },
-                )
+                # Add to final collector for report
+                final_collector.tests.append(test_record)
+
+            # Update run job with final progress
+            run_job.progress_done = progress_done
+            run_job.progress_passed = progress_passed
+            run_job.progress_failed = progress_failed
 
             # Build and save result
-            report_data = collector.build_report_data()
+            report_data = final_collector.build_report_data()
             run_result = _build_run_result(
                 run_id=run_id,
                 started_at=run_job.started_at.isoformat() if run_job.started_at else "",
@@ -488,7 +607,7 @@ class RunService:
             event_bus.end_run(run_id)
         finally:
             if http_client is not None and isinstance(http_client, HTTPClient):
-                http_client.close()
+                await http_client.close_async()
             # Cleanup event bus resources after a delay (allow client to receive terminal event)
             event_bus.cleanup(run_id)
 

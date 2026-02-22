@@ -74,6 +74,7 @@ export function createBatch(input: {
   mode?: "real" | "mock";
   selected_tests_by_suite?: Record<string, string[]>;
   name?: string;
+  max_concurrent?: number;
 }): Promise<RunBatchWithRuns> {
   return request<RunBatchWithRuns>("/api/batches", {
     method: "POST",

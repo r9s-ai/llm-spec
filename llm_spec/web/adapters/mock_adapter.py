@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import random
-import time
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -100,7 +100,50 @@ class MockProviderAdapter(ProviderAdapter):
         del params, additional_headers, method, files
         # Simulate network latency
         delay = random.uniform(MOCK_MIN_DELAY, MOCK_MAX_DELAY)
+        import time
+
         time.sleep(delay)
+        data = self.loader.load_response(
+            provider=self.provider_name,
+            endpoint=endpoint,
+            test_name=self._resolve_test_name(),
+            is_stream=False,
+        )
+        if not isinstance(data, dict):
+            raise TypeError(f"Expected dict mock response, got {type(data)}")
+        return httpx.Response(
+            status_code=int(data.get("status_code", 200)),
+            headers=dict(data.get("headers", {})),
+            json=data.get("body"),
+        )
+
+    async def request_async(
+        self,
+        endpoint: str,
+        params: JSONValue,
+        additional_headers: Headers | None = None,
+        method: str = "POST",
+        files: Any | None = None,
+    ) -> httpx.Response:
+        """Make an async mock request.
+
+        Args:
+            endpoint: API endpoint path.
+            params: Request parameters (ignored in mock mode).
+            additional_headers: Additional headers (ignored in mock mode).
+            method: HTTP method (ignored in mock mode).
+            files: Files to upload (ignored in mock mode).
+
+        Returns:
+            Mock HTTP response.
+
+        Raises:
+            TypeError: If mock response is not a dict.
+        """
+        del params, additional_headers, method, files
+        # Simulate network latency (async)
+        delay = random.uniform(MOCK_MIN_DELAY, MOCK_MAX_DELAY)
+        await asyncio.sleep(delay)
         data = self.loader.load_response(
             provider=self.provider_name,
             endpoint=endpoint,
@@ -141,6 +184,8 @@ class MockProviderAdapter(ProviderAdapter):
         del params, additional_headers, method, files
         # Simulate initial connection latency
         delay = random.uniform(MOCK_MIN_DELAY, MOCK_MAX_DELAY)
+        import time
+
         time.sleep(delay)
         data = self.loader.load_response(
             provider=self.provider_name,
@@ -159,3 +204,44 @@ class MockProviderAdapter(ProviderAdapter):
                 yield chunk
 
         return delayed_stream()
+
+    async def stream_async(
+        self,
+        endpoint: str,
+        params: JSONValue,
+        additional_headers: Headers | None = None,
+        method: str = "POST",
+        files: Any | None = None,
+    ) -> AsyncIterator[bytes]:
+        """Make an async mock streaming request.
+
+        Args:
+            endpoint: API endpoint path.
+            params: Request parameters (ignored in mock mode).
+            additional_headers: Additional headers (ignored in mock mode).
+            method: HTTP method (ignored in mock mode).
+            files: Files to upload (ignored in mock mode).
+
+        Returns:
+            Mock streaming response async iterator.
+
+        Raises:
+            TypeError: If mock response is not an iterator.
+        """
+        del params, additional_headers, method, files
+        # Simulate initial connection latency (async)
+        delay = random.uniform(MOCK_MIN_DELAY, MOCK_MAX_DELAY)
+        await asyncio.sleep(delay)
+        data = self.loader.load_response(
+            provider=self.provider_name,
+            endpoint=endpoint,
+            test_name=self._resolve_test_name(),
+            is_stream=True,
+        )
+        if isinstance(data, dict):
+            raise TypeError(f"Expected iterator mock response, got {type(data)}")
+
+        for chunk in data:
+            # Small delay between chunks to simulate streaming (async)
+            await asyncio.sleep(random.uniform(0.01, 0.05))
+            yield chunk
