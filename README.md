@@ -35,8 +35,8 @@ Built-in suite configurations are located in `suites/`.
 | Provider | Status | Default Model | Endpoints |
 |----------|--------|---------------|-----------|
 | **OpenAI** | ✅ | `gpt-4o-mini` | Chat, Embeddings, Images, Audio, etc. |
-| **Anthropic** | ✅ | `claude-3-5-haiku` | Messages |
-| **Gemini** | ✅ | `gemini-2.0-flash` | GenerateContent, Embed, etc. |
+| **Anthropic** | ✅ | `claude-haiku-4.5` | Messages |
+| **Gemini** | ✅ | `gemini-3-flash-preview` | GenerateContent, StreamGenerateContent |
 | **xAI** | ✅ | `grok-beta` | Chat (OpenAI-compatible) |
 
 ## 🪴 Getting Started
@@ -83,8 +83,8 @@ Suites are defined in JSON5, allowing for comments and flexible syntax. Each sui
     stream_chunk: "anthropic.AnthropicStreamChunk",
   },
   base_params: {
-    model: "claude-3-5-haiku-20241022",
-    max_tokens: 1024,
+    model: "claude-haiku-4.5",
+    max_tokens: 256,
     messages: [{ role: "user", content: "Hello" }],
   },
   tests: [
@@ -93,7 +93,7 @@ Suites are defined in JSON5, allowing for comments and flexible syntax. Each sui
       name: "test_param_temperature",
       params: { temperature: 0.7 },
       test_param: { name: "temperature", value: 0.7 },
-      required_fields: ["choices[0].message.content"]
+      required_fields: ["content[0].text"]
     }
   ]
 }
@@ -154,12 +154,14 @@ createdb llm_spec
 
 # Or using psql
 psql -U postgres -c "CREATE DATABASE llm_spec;"
+```
 
-# Initialize database schema (for new installation)
+#### Initialize / Migrate Database Schema
+
+```bash
+# This file is idempotent: it creates tables if missing, applies minimal schema upgrades,
+# and seeds built-in suites into the DB.
 psql -U postgres -d llm_spec -f llm_spec/web/schema.sql
-
-# Or upgrade from previous version (preserves existing data)
-psql -U postgres -d llm_spec -f llm_spec/web/migrations/001_add_run_batch.sql
 ```
 
 ### Environment Variables
@@ -179,6 +181,25 @@ cp llm_spec/web/env.example .env
 | `LLM_SPEC_WEB_MOCK_BASE_DIR` | Mock data directory | `tests/integration/mocks` |
 | `LLM_SPEC_WEB_CORS_ORIGINS` | CORS allowed origins | `["*"]` |
 
+### Provider Configuration
+
+The web backend reads runtime provider settings from `llm-spec.toml` via `LLM_SPEC_WEB_APP_TOML_PATH`.
+
+Provider configs are required for `real` runs. For `mock` runs, the backend can execute without provider
+credentials.
+
+```toml
+[openai]
+api_key = "sk-..."
+base_url = "https://api.openai.com"
+timeout = 30.0
+
+[anthropic]
+api_key = "sk-ant-..."
+base_url = "https://api.anthropic.com"
+timeout = 30.0
+```
+
 ### Running the Server
 
 ```bash
@@ -195,14 +216,11 @@ cd frontend && pnpm dev
 - Backend: `http://localhost:8000`
 - Frontend: `http://localhost:5173`
 
-### Import Existing Suites
+### Suites In DB
 
-```bash
-uv run python scripts/migrate_suites_to_web.py \
-  --database-url 'postgresql+psycopg://postgres:postgres@localhost:5432/llm_spec' \
-  --config llm-spec.toml \
-  --suites suites
-```
+The initial web schema (`llm_spec/web/schema.sql`) seeds the built-in suites from `suites/` into the
+database (via `suite` + `suite_version`). For custom suites, use the Web UI (or call the `/api/suites`
+endpoints) to create and version them.
 
 ### Database Schema
 
@@ -262,6 +280,44 @@ uv run python scripts/migrate_suites_to_web.py \
 | run_id | varchar(36) | Primary key, foreign key to run_job |
 | run_result_json | jsonb | Full result JSON data |
 | created_at | timestamptz | Creation timestamp |
+
+#### provider_config - Provider Configurations
+
+| Field | Type | Description |
+|-------|------|-------------|
+| provider | varchar(32) | Primary key (provider name) |
+| base_url | varchar(512) | API base URL |
+| timeout | double precision | Request timeout seconds |
+| api_key | text | API key |
+| extra_config | jsonb | Extra per-provider config |
+| updated_at | timestamptz | Last update timestamp |
+
+#### run_event - Run Events
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | bigserial | Primary key |
+| run_id | varchar(36) | Foreign key to run_job |
+| seq | integer | Sequence number (unique per run_id) |
+| event_type | varchar(64) | Event type |
+| payload | jsonb | Event payload |
+| created_at | timestamptz | Creation timestamp |
+
+#### run_test_result - Individual Test Results
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | varchar(36) | Primary key UUID |
+| run_id | varchar(36) | Foreign key to run_job |
+| test_id | varchar(512) | Stable test id |
+| test_name | varchar(255) | Test name |
+| parameter_name | varchar(255) | Parameter under test |
+| parameter_value | jsonb | Tested value |
+| status | varchar(16) | pass/fail |
+| fail_stage | varchar(32) | request/schema/required_fields/stream_rules |
+| reason_code | varchar(64) | Failure reason code |
+| latency_ms | integer | Latency in milliseconds |
+| raw_record | jsonb | Full test record |
 
 ### API Endpoints
 
@@ -335,6 +391,20 @@ export LLM_SPEC_WEB_MOCK_MODE=true
 ```
 
 Mock data is stored in `tests/integration/mocks/`.
+
+### Architecture
+
+Web backend layout (high-level):
+
+```text
+llm_spec/web/
+├── api/           # FastAPI routers/controllers
+├── core/          # DB wiring, exceptions, event bus
+├── models/        # SQLAlchemy ORM models
+├── schemas/       # Pydantic request/response models
+├── services/      # Business logic
+└── repositories/  # Data access
+```
 
 ## 📊 Reports
 

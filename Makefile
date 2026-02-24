@@ -57,3 +57,7 @@ test-mock-openai:
 	uv run pytest tests/integration/test_suite_runner.py --mock -k "openai" -v
 test-mock-anthropic:
 	uv run pytest tests/integration/test_suite_runner.py --mock -k "anthropic" -v
+
+# --- Web backend helpers ---
+web-backend:
+	uv run python -m llm_spec.web.main

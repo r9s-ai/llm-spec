@@ -304,7 +304,8 @@ class RunService:
 
         provider_repo = ProviderRepository(db)
         provider_config = provider_repo.get_by_provider(run_job.provider)
-        if provider_config is None:
+        if provider_config is None and run_job.mode != "mock":
+            # In real mode we need credentials/base_url to reach the upstream provider.
             run_job.status = "failed"
             run_job.error_message = f"provider config missing: {run_job.provider}"
             run_job.finished_at = datetime.now(UTC)
@@ -340,11 +341,15 @@ class RunService:
         http_client = None
         try:
             # Create client
-            config = ProviderConfig(
-                api_key=provider_config.api_key,
-                base_url=provider_config.base_url,
-                timeout=provider_config.timeout,
-            )
+            if provider_config is None:
+                # Mock mode can run without persisted provider configs.
+                config = ProviderConfig(api_key="", base_url="", timeout=30.0)
+            else:
+                config = ProviderConfig(
+                    api_key=provider_config.api_key,
+                    base_url=provider_config.base_url,
+                    timeout=provider_config.timeout,
+                )
             logger = RequestLogger(
                 LogConfig(
                     enabled=True,
