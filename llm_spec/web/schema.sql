@@ -25,12 +25,21 @@ create table if not exists suite_version (
 
 create table if not exists provider_config (
     provider varchar(32) primary key,
+    api_type varchar(32) not null default 'openai',
     base_url varchar(512) not null,
     timeout double precision not null default 30.0,
     api_key text not null,
     extra_config jsonb not null default '{}'::jsonb,
     updated_at timestamptz not null default now()
 );
+
+-- Initial provider configurations from llm-spec.toml
+INSERT INTO provider_config (provider, api_type, base_url, timeout, api_key) VALUES
+    ('openai', 'openai', 'https://api.huamedia.tv', 300.0, 'sk-PTGBWXMWPEfcvivlEd5b4189041c4fE89e455b274e9d86Ab'),
+    ('anthropic', 'anthropic', 'https://api.huamedia.tv', 30.0, 'sk-PTGBWXMWPEfcvivlEd5b4189041c4fE89e455b274e9d86Ab'),
+    ('gemini', 'gemini', 'https://api.huamedia.tv', 300.0, 'sk-PTGBWXMWPEfcvivlEd5b4189041c4fE89e455b274e9d86Ab'),
+    ('xai', 'xai', 'https://api.x.ai/v1', 30.0, '...')
+ON CONFLICT (provider) DO NOTHING;
 
 -- Run batch table (represents a test task containing multiple runs)
 create table if not exists run_batch (

@@ -36,4 +36,4 @@ export { TestResultTable } from "./ResultPanel";
 export { SuiteTree, SuiteEditor, CreateSuiteModal } from "./SuiteEditor";
 
 // SettingsEditor components
-export { TomlEditor, ProviderSummary } from "./SettingsEditor";
+export { TomlEditor, ProviderSummary, ProviderConfigCard } from "./SettingsEditor";

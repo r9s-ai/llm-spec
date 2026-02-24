@@ -6,6 +6,8 @@ import type {
   Suite,
   SuiteVersion,
   TomlSettings,
+  ProviderConfig,
+  ProviderConfigUpsert,
 } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
@@ -150,5 +152,30 @@ export function updateTomlSettings(content: string): Promise<TomlSettings> {
   return request<TomlSettings>("/api/settings/toml", {
     method: "PUT",
     body: JSON.stringify({ content }),
+  });
+}
+
+// Provider config API functions
+export function getProviderConfigs(): Promise<ProviderConfig[]> {
+  return request<ProviderConfig[]>("/api/provider-configs");
+}
+
+export function getProviderConfig(provider: string): Promise<ProviderConfig> {
+  return request<ProviderConfig>(`/api/provider-configs/${provider}`);
+}
+
+export function upsertProviderConfig(
+  provider: string,
+  input: ProviderConfigUpsert
+): Promise<ProviderConfig> {
+  return request<ProviderConfig>(`/api/provider-configs/${provider}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteProviderConfig(provider: string): Promise<void> {
+  return request<void>(`/api/provider-configs/${provider}`, {
+    method: "DELETE",
   });
 }

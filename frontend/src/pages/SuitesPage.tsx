@@ -34,11 +34,6 @@ export function SuitesPage() {
     ? (selectedVersionBySuite[selectedSuite.id] ?? null)
     : null;
 
-  // Get existing providers for the create modal
-  const existingProviders = useMemo(() => {
-    return [...new Set(suiteList.map((s) => s.provider))];
-  }, [suiteList]);
-
   // Handle suite selection
   const handleSelectSuite = useCallback(
     async (suiteId: string) => {
@@ -76,7 +71,7 @@ export function SuitesPage() {
 
       await createSuite({ provider, endpoint, name, raw_json5: raw, created_by: "web-ui" });
       await loadSuites();
-      setNotice("Suite created.");
+      setNotice("Suite created successfully.");
     },
     [loadSuites, setNotice]
   );
@@ -145,8 +140,8 @@ export function SuitesPage() {
   return (
     <div className="flex h-[calc(100vh-57px)]">
       {/* Left Panel - Suite Tree */}
-      <div className="w-[360px] flex-shrink-0 border-r border-slate-200 bg-slate-50">
-        <div className="h-full overflow-auto p-4">
+      <div className="w-[320px] flex-shrink-0 border-r border-slate-200 bg-slate-50">
+        <div className="h-full overflow-auto p-1.5">
           <SuiteTree
             suites={suiteList}
             selectedSuiteId={selectedSuiteId}
@@ -159,8 +154,8 @@ export function SuitesPage() {
       </div>
 
       {/* Right Panel - Suite Editor */}
-      <div className="flex-1 overflow-auto bg-slate-50">
-        <div className="h-full p-4">
+      <div className="flex-1 flex flex-col bg-slate-50">
+        <div className="flex-1 min-h-0 p-1.5">
           <SuiteEditor
             suite={selectedSuite}
             versions={versions}
@@ -178,7 +173,6 @@ export function SuitesPage() {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateSuite}
-        existingProviders={existingProviders}
       />
     </div>
   );

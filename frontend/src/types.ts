@@ -79,6 +79,26 @@ export type TomlSettings = {
   exists: boolean;
 };
 
+// Provider config types
+export type ApiType = "openai" | "anthropic" | "gemini" | "xai";
+
+export type ProviderConfig = {
+  provider: string;
+  api_type: ApiType;
+  base_url: string;
+  timeout: number;
+  extra_config: Record<string, unknown>;
+  updated_at: string;
+};
+
+export type ProviderConfigUpsert = {
+  api_type?: ApiType;
+  base_url: string;
+  timeout?: number;
+  api_key?: string; // Optional for updates - if not provided, keep existing
+  extra_config?: Record<string, unknown>;
+};
+
 // Test types
 export type TestRow = {
   name: string;

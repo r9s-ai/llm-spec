@@ -17,6 +17,7 @@ class ProviderConfigModel(Base):
 
     Attributes:
         provider: Provider name (primary key).
+        api_type: API type (openai, anthropic, gemini, xai, etc.).
         base_url: API base URL.
         timeout: Request timeout in seconds.
         api_key: API key for authentication.
@@ -27,6 +28,7 @@ class ProviderConfigModel(Base):
     __tablename__ = "provider_config"
 
     provider: Mapped[str] = mapped_column(String(32), primary_key=True)
+    api_type: Mapped[str] = mapped_column(String(32), nullable=False, default="openai")
     base_url: Mapped[str] = mapped_column(String(512), nullable=False)
     timeout: Mapped[float] = mapped_column(nullable=False, default=30.0)
     api_key: Mapped[str] = mapped_column(Text, nullable=False)
