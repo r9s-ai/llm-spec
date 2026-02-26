@@ -1,0 +1,205 @@
+{
+  endpoint: "/v1/audio/transcriptions",
+  schemas: {
+    response: "openai.AudioTranscriptionResponse",
+    stream_chunk: "openai.AudioStreamEvent",
+  },
+  base_params: {
+  },
+  tests: [
+    {
+      name: "test_baseline",
+      description: "Baseline test: only required parameters",
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      is_baseline: true,
+    },
+    {
+      name: "test_param_language",
+      description: "Test language parameter",
+      params: {
+        language: "en",
+      },
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "language",
+        value: "en",
+      },
+    },
+    {
+      name: "test_param_temperature",
+      description: "Test temperature parameter",
+      params: {
+        temperature: 0.0,
+      },
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "temperature",
+        value: 0.0,
+      },
+    },
+    {
+      name: "test_response_format_variants",
+      description: "Test response_format parameter (all formats)",
+      parameterize: {
+        response_format: [
+          "json",
+          "text",
+          "verbose_json",
+          "srt",
+          "vtt",
+        ],
+      },
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        response_format: "$response_format",
+      },
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "response_format",
+        value: "$response_format",
+      },
+    },
+    {
+      name: "test_prompt",
+      description: "Test prompt parameter",
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        prompt: "Please transcribe in a friendly style.",
+      },
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "prompt",
+        value: "Please transcribe in a friendly style.",
+      },
+    },
+    {
+      name: "test_chunking_strategy_auto",
+      description: "Test chunking_strategy = auto",
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        chunking_strategy: "auto",
+      },
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "chunking_strategy",
+        value: "auto",
+      },
+    },
+    {
+      name: "test_chunking_strategy_server_vad",
+      description: "Test chunking_strategy = server_vad object",
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        chunking_strategy: {
+          type: "server_vad",
+        },
+      },
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "chunking_strategy",
+        value: {
+          type: "server_vad",
+        },
+      },
+    },
+    {
+      name: "test_include_logprobs",
+      description: "Test include=logprobs",
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        include: [
+          "logprobs",
+        ],
+        response_format: "json",
+      },
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "include",
+        value: [
+          "logprobs",
+        ],
+      },
+      required_fields: ["logprobs"],
+    },
+    {
+      name: "test_known_speakers",
+      description: "Test known_speaker_names + known_speaker_references",
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        known_speaker_names: [
+          "speaker_a",
+          "speaker_b",
+        ],
+        known_speaker_references: [
+          "data:audio/mpeg;base64,...",
+          "data:audio/mpeg;base64,...",
+        ],
+      },
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "known_speaker_names",
+        value: [
+          "speaker_a",
+          "speaker_b",
+        ],
+      },
+    },
+    {
+      name: "test_timestamp_granularities",
+      description: "Test timestamp_granularities with verbose_json",
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        response_format: "verbose_json",
+        timestamp_granularities: [
+          "word",
+          "segment",
+        ],
+      },
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "timestamp_granularities",
+        value: [
+          "word",
+          "segment",
+        ],
+      },
+      required_fields: ["duration", "language", "segments", "words"],
+    },
+    {
+      name: "test_stream_flag",
+      description: "Test stream=true",
+      params: {
+        model: "gpt-4o-mini-transcribe",
+        stream: true,
+      },
+      stream: true,
+      files: {
+        file: "assets/audio/hello_en.mp3",
+      },
+      test_param: {
+        name: "stream",
+        value: true,
+      },
+    },
+  ],
+}
