@@ -147,8 +147,8 @@
           "speaker_b",
         ],
         known_speaker_references: [
-          "data:audio/mpeg;base64,...",
-          "data:audio/mpeg;base64,...",
+          "$asset_data_uri(assets/audio/speaker_a.mp3,audio/mpeg)",
+          "$asset_data_uri(assets/audio/speaker_b.mp3,audio/mpeg)",
         ],
       },
       files: {

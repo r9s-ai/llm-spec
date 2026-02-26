@@ -19,6 +19,9 @@ providers/<provider>/
 - OpenAI-compatible providers can inherit routes with `routes_from = "openai"`.
 - Shared file assets live in `suites-registry/assets/` (for `tests[].files`).
 - Provider-only assets can be put in `providers/<provider>/assets/`.
+- For JSON fields that require inline file content, use:
+  - `$asset_base64(path)` -> base64 string
+  - `$asset_data_uri(path,mime)` -> `data:<mime>;base64,...`
 
 ## Validate by Running
 

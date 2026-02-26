@@ -96,9 +96,13 @@ config.yaml
 config.local.yaml
 *.log
 # JS/Frontend (monorepo)
-packages/web/node_modules/
+node_modules/
 packages/web/dist/
 packages/web/.vite/
 packages/web/tsconfig.tsbuildinfo
 packages/web/.env
 packages/web/.env.*
+.pnpm-store/
+
+# Web API (local data)
+packages/web-api/src/llm_spec_web/.data/
