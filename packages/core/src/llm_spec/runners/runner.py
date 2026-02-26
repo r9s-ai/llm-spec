@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import copy
+import mimetypes
+import re
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -390,6 +393,7 @@ class ConfigDrivenTestRunner:
         self.client = client
         self.collector = collector
         self.logger = logger
+        self._asset_bytes_cache: dict[Path, bytes] = {}
 
         # Resolve schema classes
         self.response_schema: type[BaseModel] | None = get_schema(suite.schemas.get("response"))
@@ -410,7 +414,59 @@ class ConfigDrivenTestRunner:
         test_params = copy.deepcopy(test.params)
         base.update(test_params)
 
-        return base
+        return self._resolve_asset_placeholders(base)
+
+    @staticmethod
+    def _strip_optional_quotes(text: str) -> str:
+        s = text.strip()
+        if len(s) >= 2 and (
+            (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'"))
+        ):
+            return s[1:-1]
+        return s
+
+    def _read_asset_bytes(self, path_str: str) -> tuple[Path, bytes]:
+        resolved = self._resolve_test_file_path(path_str)
+        if not resolved.exists():
+            raise FileNotFoundError(f"Asset file not found: {path_str}")
+        cached = self._asset_bytes_cache.get(resolved)
+        if cached is not None:
+            return resolved, cached
+        data = resolved.read_bytes()
+        self._asset_bytes_cache[resolved] = data
+        return resolved, data
+
+    def _resolve_asset_function_string(self, text: str) -> str:
+        stripped = text.strip()
+
+        m_base64 = re.fullmatch(r"\$asset_base64\((.+)\)", stripped)
+        if m_base64:
+            raw_path = self._strip_optional_quotes(m_base64.group(1))
+            _path, data = self._read_asset_bytes(raw_path)
+            return base64.b64encode(data).decode("ascii")
+
+        m_data_uri = re.fullmatch(r"\$asset_data_uri\((.+)\)", stripped)
+        if m_data_uri:
+            arg_str = m_data_uri.group(1)
+            path_part, sep, mime_part = arg_str.partition(",")
+            raw_path = self._strip_optional_quotes(path_part)
+            resolved, data = self._read_asset_bytes(raw_path)
+            mime = self._strip_optional_quotes(mime_part) if sep else ""
+            if not mime:
+                mime = mimetypes.guess_type(str(resolved))[0] or "application/octet-stream"
+            b64 = base64.b64encode(data).decode("ascii")
+            return f"data:{mime};base64,{b64}"
+
+        return text
+
+    def _resolve_asset_placeholders(self, value: Any) -> Any:
+        if isinstance(value, dict):
+            return {k: self._resolve_asset_placeholders(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [self._resolve_asset_placeholders(v) for v in value]
+        if isinstance(value, str):
+            return self._resolve_asset_function_string(value)
+        return value
 
     def _log_validation_error(
         self,
