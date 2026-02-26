@@ -15,6 +15,8 @@ interface TestSelectorProps {
   runMode: RunMode;
   maxConcurrent: number;
   isRunning: boolean;
+  isLoading: boolean;
+  isRefreshingCache: boolean;
   onToggleProvider: (provider: string) => void;
   onToggleProviderExpanded: (provider: string) => void;
   onToggleSuiteExpanded: (suiteId: string) => void;
@@ -24,6 +26,7 @@ interface TestSelectorProps {
   onClearAll: () => void;
   onRunModeChange: (mode: RunMode) => void;
   onMaxConcurrentChange: (max: number) => void;
+  onRefreshCache: () => void;
   onRun: () => void;
 }
 
@@ -39,6 +42,8 @@ export function TestSelector({
   runMode,
   maxConcurrent,
   isRunning,
+  isLoading,
+  isRefreshingCache,
   onToggleProviderExpanded,
   onToggleSuiteExpanded,
   onToggleTests,
@@ -47,6 +52,7 @@ export function TestSelector({
   onClearAll,
   onRunModeChange,
   onMaxConcurrentChange,
+  onRefreshCache,
   onRun,
 }: TestSelectorProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -199,6 +205,17 @@ export function TestSelector({
             <SearchInput value={searchQuery} onChange={handleSearchChange} />
           </div>
           <button
+            onClick={onRefreshCache}
+            disabled={isRefreshingCache || isLoading}
+            className={`h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-medium ${
+              isRefreshingCache || isLoading
+                ? "cursor-not-allowed text-slate-400"
+                : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            {isRefreshingCache ? "Refreshing..." : "Refresh Memory"}
+          </button>
+          <button
             onClick={onSelectAll}
             className="h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
           >
@@ -218,30 +235,42 @@ export function TestSelector({
 
       {/* Provider List */}
       <div className="flex-1 overflow-auto pt-2">
-        {providers.sort().map((provider) => {
-          const providerSuites = suitesByProvider[provider] ?? [];
-          if (searchQuery && providerSuites.length === 0) return null;
+        {isLoading && (
+          <div className="space-y-2 px-1 py-2">
+            {[0, 1, 2].map((idx) => (
+              <div key={idx} className="animate-pulse rounded-lg border border-slate-200 bg-white p-3">
+                <div className="mb-2 h-3 w-28 rounded bg-slate-200" />
+                <div className="h-2.5 w-44 rounded bg-slate-100" />
+              </div>
+            ))}
+          </div>
+        )}
 
-          return (
-            <ProviderNode
-              key={provider}
-              provider={provider}
-              suites={providerSuites}
-              versionsBySuite={versionsBySuite}
-              selectedVersionBySuite={selectedVersionBySuite}
-              selectedTestsBySuite={selectedTestsBySuite}
-              expandedSuites={expandedSuites}
-              isExpanded={expandedProviders.has(provider)}
-              searchQuery={searchQuery}
-              onToggleExpanded={() => onToggleProviderExpanded(provider)}
-              onToggleSuiteExpanded={onToggleSuiteExpanded}
-              onToggleTests={onToggleTests}
-              onToggleTest={onToggleTest}
-            />
-          );
-        })}
+        {!isLoading &&
+          providers.sort().map((provider) => {
+            const providerSuites = suitesByProvider[provider] ?? [];
+            if (searchQuery && providerSuites.length === 0) return null;
 
-        {providers.length === 0 && (
+            return (
+              <ProviderNode
+                key={provider}
+                provider={provider}
+                suites={providerSuites}
+                versionsBySuite={versionsBySuite}
+                selectedVersionBySuite={selectedVersionBySuite}
+                selectedTestsBySuite={selectedTestsBySuite}
+                expandedSuites={expandedSuites}
+                isExpanded={expandedProviders.has(provider)}
+                searchQuery={searchQuery}
+                onToggleExpanded={() => onToggleProviderExpanded(provider)}
+                onToggleSuiteExpanded={onToggleSuiteExpanded}
+                onToggleTests={onToggleTests}
+                onToggleTest={onToggleTest}
+              />
+            );
+          })}
+
+        {!isLoading && providers.length === 0 && (
           <div className="py-8 text-center text-sm text-slate-500">No suites available</div>
         )}
       </div>

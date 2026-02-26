@@ -1,19 +1,27 @@
 # suites-registry
 
-Community-maintained JSON5 suite registry for `llm-spec`.
+Registry layout follows `DESIGN.md`.
 
-## Layout
+## Structure
 
-- `providers/<provider>/*.json5`: provider suite files.
-- `schemas/`: schema files for suite validation.
-- `scripts/`: registry tooling (lint/validate/format).
+```text
+providers/<provider>/
+  provider.toml
+  routes/*.json5
+  models/*.toml
+```
 
-## Usage
+## Key Rules
 
-By default, `llm-spec` reads suites from:
+- `routes/*.json5` are provider-agnostic route templates.
+- `models/*.toml` declare route coverage (`routes = [...]`) and optional overrides.
+- Runtime expands `route × model` into final suites.
+- OpenAI-compatible providers can inherit routes with `routes_from = "openai"`.
+- Shared file assets live in `suites-registry/assets/` (for `tests[].files`).
+- Provider-only assets can be put in `providers/<provider>/assets/`.
 
-`./suites-registry/providers`
+## Validate by Running
 
-You can override with:
-
-`uv run python -m llm_spec run --suites <path>`
+```bash
+uv run python -m llm_spec run --suites suites-registry/providers -k test_baseline
+```

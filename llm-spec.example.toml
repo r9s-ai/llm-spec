@@ -22,25 +22,25 @@ max_body_length = 1000         # Max body length to log
 output_dir = "./reports"       # Report output directory (actual path: output_dir/<run_id>/...)
 
 
-# Provider configuration (one section per provider)
+# Provider configuration (new style: [providers.<name>])
 # timeout unit: seconds
 
-[openai]
+[providers.openai]
 api_key = "sk-..."
 base_url = "https://api.openai.com"
 timeout = 30.0
 
-[anthropic]
+[providers.anthropic]
 api_key = "sk-ant-..."
 base_url = "https://api.anthropic.com"
 timeout = 30.0
 
-[gemini]
+[providers.gemini]
 api_key = "..."
 base_url = "https://generativelanguage.googleapis.com"
 timeout = 30.0
 
-[xai]
+[providers.xai]
 api_key = "..."
 base_url = "https://api.x.ai/v1"
 timeout = 30.0

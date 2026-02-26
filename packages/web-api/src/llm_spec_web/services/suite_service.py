@@ -1,309 +1,213 @@
-"""Suite service for business logic."""
+"""Suite service backed by suites-registry files (no DB)."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import time
+import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from threading import Lock
 from typing import Any
 
 import json5
 from sqlalchemy.orm import Session
 
+from llm_spec.registry import load_registry_suites
 from llm_spec.runners import load_test_suite_from_dict
-from llm_spec_web.core.exceptions import DuplicateError, NotFoundError, ValidationError
-from llm_spec_web.models.suite import Suite, SuiteVersion
-from llm_spec_web.repositories.suite_repo import SuiteRepository
+from llm_spec_web.core.exceptions import NotFoundError
 
 
-def parse_suite_json5(raw_json5: str) -> dict[str, Any]:
-    """Parse JSON5 content and perform minimum shape checks.
-
-    Args:
-        raw_json5: Raw JSON5 content.
-
-    Returns:
-        Parsed JSON dictionary.
-
-    Raises:
-        ValidationError: If the JSON5 is invalid or missing required fields.
-    """
-    try:
-        parsed = json5.loads(raw_json5)
-    except Exception as exc:
-        raise ValidationError(f"Invalid JSON5: {exc}") from exc
-
-    if not isinstance(parsed, dict):
-        raise ValidationError("Suite JSON5 must be an object")
-
-    if "provider" not in parsed:
-        raise ValidationError("Suite JSON5 missing required field: provider")
-
-    if "endpoint" not in parsed:
-        raise ValidationError("Suite JSON5 missing required field: endpoint")
-
-    if not isinstance(parsed.get("tests"), list):
-        raise ValidationError("Suite JSON5 missing required field: tests (list)")
-
-    return parsed
+@dataclass(frozen=True)
+class RegistrySuite:
+    id: str
+    provider: str
+    route: str
+    model: str
+    endpoint: str
+    name: str
+    status: str
+    latest_version: int
+    created_at: datetime
+    updated_at: datetime
 
 
-def validate_suite_by_runner(parsed_json: dict[str, Any]) -> None:
-    """Validate suite using existing loader.
-
-    Args:
-        parsed_json: Parsed JSON5 data.
-
-    Raises:
-        ValidationError: If the suite is invalid.
-    """
-    try:
-        load_test_suite_from_dict(parsed_json)
-    except Exception as exc:
-        raise ValidationError(f"Suite validation failed: {exc}") from exc
+@dataclass(frozen=True)
+class RegistrySuiteVersion:
+    id: str
+    suite_id: str
+    version: int
+    created_by: str
+    created_at: datetime
+    raw_json5: str
+    parsed_json: dict[str, Any]
 
 
 class SuiteService:
-    """Service for suite-related business logic.
+    """Read-only suite service from registry files."""
 
-    This class orchestrates suite operations and manages transactions.
-    """
-
-    def create_suite(
+    def __init__(
         self,
-        db: Session,
-        *,
-        provider: str,
-        endpoint: str,
-        name: str,
-        raw_json5: str,
-        created_by: str,
-    ) -> Suite:
-        """Create a suite with initial version.
+        registry_dir: Path | str = "suites-registry/providers",
+        cache_ttl_seconds: float = 2.0,
+    ) -> None:
+        self.registry_dir = Path(registry_dir)
+        self._namespace = uuid.UUID("31fb0a3f-845d-4ec8-bf08-1f6a3fd0fc09")
+        self._cache_ttl_seconds = max(cache_ttl_seconds, 0.0)
+        self._cache_lock = Lock()
+        self._cache_suites: dict[str, RegistrySuite] | None = None
+        self._cache_versions: dict[str, RegistrySuiteVersion] | None = None
+        self._cache_registry_signature: tuple[int, int, int] | None = None
+        self._cache_built_at: float = 0.0
 
-        Args:
-            db: Database session.
-            provider: Provider name.
-            endpoint: API endpoint path.
-            name: Suite name.
-            raw_json5: Raw JSON5 content.
-            created_by: Creator identifier.
+    def _suite_id(self, provider: str, route: str, model: str) -> str:
+        return str(uuid.uuid5(self._namespace, f"suite:{provider}:{route}:{model}"))
 
-        Returns:
-            Created Suite instance.
+    def _version_id(self, suite_id: str, version: int) -> str:
+        return str(uuid.uuid5(self._namespace, f"version:{suite_id}:{version}"))
 
-        Raises:
-            DuplicateError: If suite already exists.
-            ValidationError: If JSON5 is invalid.
-        """
-        repo = SuiteRepository(db)
+    def _registry_signature(self) -> tuple[int, int, int]:
+        """Build a cheap signature to detect registry file changes."""
+        if not self.registry_dir.exists():
+            return (0, 0, 0)
+        file_count = 0
+        total_size = 0
+        max_mtime_ns = 0
+        for path in self.registry_dir.rglob("*"):
+            if not path.is_file():
+                continue
+            stat = path.stat()
+            file_count += 1
+            total_size += int(stat.st_size)
+            max_mtime_ns = max(max_mtime_ns, int(stat.st_mtime_ns))
+        return (file_count, total_size, max_mtime_ns)
 
-        # Check if suite already exists
-        existing = repo.get_by_provider_endpoint(provider, endpoint)
-        if existing is not None:
-            raise DuplicateError("Suite", f"{provider}/{endpoint}")
+    def _build_indices(self) -> tuple[dict[str, RegistrySuite], dict[str, RegistrySuiteVersion]]:
+        now_monotonic = time.monotonic()
+        with self._cache_lock:
+            if (
+                self._cache_suites is not None
+                and self._cache_versions is not None
+                and (now_monotonic - self._cache_built_at) <= self._cache_ttl_seconds
+            ):
+                return self._cache_suites, self._cache_versions
 
-        # Parse and validate
-        parsed = parse_suite_json5(raw_json5)
-        validate_suite_by_runner(parsed)
+        signature = self._registry_signature()
+        with self._cache_lock:
+            if (
+                self._cache_suites is not None
+                and self._cache_versions is not None
+                and self._cache_registry_signature == signature
+            ):
+                self._cache_built_at = now_monotonic
+                return self._cache_suites, self._cache_versions
 
-        # Create suite
-        suite = Suite(
-            provider=provider,
-            endpoint=endpoint,
-            name=name,
-            latest_version=1,
-        )
-        repo.create(suite)
+        now = datetime.now(UTC)
+        suites: dict[str, RegistrySuite] = {}
+        versions: dict[str, RegistrySuiteVersion] = {}
 
-        # Create initial version
-        version = SuiteVersion(
-            suite_id=suite.id,
-            version=1,
-            raw_json5=raw_json5,
-            parsed_json=parsed,
-            created_by=created_by,
-        )
-        repo.create_version(version)
+        for expanded in load_registry_suites(self.registry_dir):
+            provider = expanded.provider
+            route = expanded.route
+            model = expanded.model
+            suite_id = self._suite_id(provider, route, model)
+            parsed_json = dict(expanded.suite_dict)
+            raw_json5 = json5.dumps(parsed_json, quote_keys=False, trailing_commas=False)
+            name = str(parsed_json.get("suite_name") or f"{provider} {route} ({model})")
 
-        db.commit()
-        db.refresh(suite)
-        return suite
+            suite = RegistrySuite(
+                id=suite_id,
+                provider=provider,
+                route=route,
+                model=model,
+                endpoint=str(parsed_json.get("endpoint", "")),
+                name=name,
+                status="active",
+                latest_version=1,
+                created_at=now,
+                updated_at=now,
+            )
+            suites[suite_id] = suite
 
-    def get_suite(self, db: Session, suite_id: str) -> Suite:
-        """Get a suite by ID.
+            version = RegistrySuiteVersion(
+                id=self._version_id(suite_id, 1),
+                suite_id=suite_id,
+                version=1,
+                created_by="registry",
+                created_at=now,
+                raw_json5=raw_json5,
+                parsed_json=parsed_json,
+            )
+            versions[version.id] = version
 
-        Args:
-            db: Database session.
-            suite_id: Suite ID.
+        with self._cache_lock:
+            self._cache_suites = suites
+            self._cache_versions = versions
+            self._cache_registry_signature = signature
+            self._cache_built_at = now_monotonic
 
-        Returns:
-            Suite instance.
+        return suites, versions
 
-        Raises:
-            NotFoundError: If suite not found.
-        """
-        repo = SuiteRepository(db)
-        suite = repo.get_by_id(suite_id)
-        if suite is None:
-            raise NotFoundError("Suite", suite_id)
-        return suite
+    def clear_cache(self) -> None:
+        """Clear in-memory registry cache."""
+        with self._cache_lock:
+            self._cache_suites = None
+            self._cache_versions = None
+            self._cache_registry_signature = None
+            self._cache_built_at = 0.0
+
+    def refresh_cache(self) -> tuple[int, int]:
+        """Force rebuild cache and return counts for suites and versions."""
+        self.clear_cache()
+        suites, versions = self._build_indices()
+        return len(suites), len(versions)
 
     def list_suites(
         self,
-        db: Session,
+        _db: Session,
         provider: str | None = None,
+        route: str | None = None,
+        model: str | None = None,
         endpoint: str | None = None,
-    ) -> Sequence[Suite]:
-        """List all suites with optional filters.
+    ) -> list[RegistrySuite]:
+        suites, _ = self._build_indices()
+        rows = list(suites.values())
+        if provider:
+            rows = [s for s in rows if s.provider == provider]
+        if route:
+            rows = [s for s in rows if s.route == route]
+        if model:
+            rows = [s for s in rows if s.model == model]
+        if endpoint:
+            rows = [s for s in rows if s.endpoint == endpoint]
+        return sorted(rows, key=lambda s: (s.provider, s.route, s.model))
 
-        Args:
-            db: Database session.
-            provider: Filter by provider name.
-            endpoint: Filter by endpoint path.
-
-        Returns:
-            List of Suite instances.
-        """
-        repo = SuiteRepository(db)
-        return repo.list_all(provider=provider, endpoint=endpoint)
-
-    def update_suite(
-        self,
-        db: Session,
-        suite_id: str,
-        name: str | None = None,
-        status: str | None = None,
-    ) -> Suite:
-        """Update a suite.
-
-        Args:
-            db: Database session.
-            suite_id: Suite ID.
-            name: New suite name.
-            status: New suite status.
-
-        Returns:
-            Updated Suite instance.
-
-        Raises:
-            NotFoundError: If suite not found.
-        """
-        repo = SuiteRepository(db)
-        suite = repo.get_by_id(suite_id)
+    def get_suite(self, _db: Session, suite_id: str) -> RegistrySuite:
+        suites, _ = self._build_indices()
+        suite = suites.get(suite_id)
         if suite is None:
             raise NotFoundError("Suite", suite_id)
-
-        if name is not None:
-            suite.name = name
-        if status is not None:
-            suite.status = status
-
-        repo.update(suite)
-        db.commit()
-        db.refresh(suite)
         return suite
 
-    def delete_suite(self, db: Session, suite_id: str) -> None:
-        """Delete a suite.
-
-        Args:
-            db: Database session.
-            suite_id: Suite ID.
-
-        Raises:
-            NotFoundError: If suite not found.
-        """
-        repo = SuiteRepository(db)
-        suite = repo.get_by_id(suite_id)
-        if suite is None:
+    def list_versions(self, _db: Session, suite_id: str) -> list[RegistrySuiteVersion]:
+        suites, versions = self._build_indices()
+        if suite_id not in suites:
             raise NotFoundError("Suite", suite_id)
+        return [v for v in versions.values() if v.suite_id == suite_id]
 
-        repo.delete(suite)
-        db.commit()
-
-    def create_version(
-        self,
-        db: Session,
-        suite_id: str,
-        raw_json5: str,
-        created_by: str,
-    ) -> SuiteVersion:
-        """Create a new version for a suite.
-
-        Args:
-            db: Database session.
-            suite_id: Suite ID.
-            raw_json5: Raw JSON5 content.
-            created_by: Creator identifier.
-
-        Returns:
-            Created SuiteVersion instance.
-
-        Raises:
-            NotFoundError: If suite not found.
-            ValidationError: If JSON5 is invalid.
-        """
-        repo = SuiteRepository(db)
-        suite = repo.get_by_id(suite_id)
-        if suite is None:
-            raise NotFoundError("Suite", suite_id)
-
-        # Parse and validate
-        parsed = parse_suite_json5(raw_json5)
-        validate_suite_by_runner(parsed)
-
-        # Create new version
-        next_version = suite.latest_version + 1
-        version = SuiteVersion(
-            suite_id=suite.id,
-            version=next_version,
-            raw_json5=raw_json5,
-            parsed_json=parsed,
-            created_by=created_by,
-        )
-        repo.create_version(version)
-
-        # Update suite's latest_version
-        suite.latest_version = next_version
-        repo.update(suite)
-
-        db.commit()
-        db.refresh(version)
-        return version
-
-    def get_version(self, db: Session, version_id: str) -> SuiteVersion:
-        """Get a suite version by ID.
-
-        Args:
-            db: Database session.
-            version_id: Suite version ID.
-
-        Returns:
-            SuiteVersion instance.
-
-        Raises:
-            NotFoundError: If version not found.
-        """
-        repo = SuiteRepository(db)
-        version = repo.get_version_by_id(version_id)
+    def get_version(self, _db: Session, version_id: str) -> RegistrySuiteVersion:
+        _, versions = self._build_indices()
+        version = versions.get(version_id)
         if version is None:
             raise NotFoundError("SuiteVersion", version_id)
         return version
 
-    def list_versions(self, db: Session, suite_id: str) -> Sequence[SuiteVersion]:
-        """List all versions for a suite.
-
-        Args:
-            db: Database session.
-            suite_id: Suite ID.
-
-        Returns:
-            List of SuiteVersion instances.
-
-        Raises:
-            NotFoundError: If suite not found.
-        """
-        repo = SuiteRepository(db)
-        suite = repo.get_by_id(suite_id)
-        if suite is None:
-            raise NotFoundError("Suite", suite_id)
-        return repo.list_versions(suite_id)
+    def resolve_suite_by_version_id(self, version_id: str) -> RegistrySuiteVersion:
+        """Resolve a synthetic suite version id to parsed registry suite."""
+        _, versions = self._build_indices()
+        version = versions.get(version_id)
+        if version is None:
+            raise NotFoundError("SuiteVersion", version_id)
+        # Validate route payload shape with core loader for safety.
+        load_test_suite_from_dict(version.parsed_json)
+        return version

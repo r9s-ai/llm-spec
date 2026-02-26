@@ -1,12 +1,10 @@
 {
-  provider: "openai",
   endpoint: "/v1/images/generations",
   schemas: {
     response: "openai.ImageResponse",
     stream_chunk: "openai.ImageStreamEvent",
   },
   base_params: {
-    model: "dall-e-3",
     prompt: "A cute cat",
     n: 1,
   },

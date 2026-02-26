@@ -37,7 +37,7 @@ Built-in suite configurations are located in `suites-registry/providers/`.
 - `packages/core`: runner/adapters/reporting + core tests
 - `packages/web-api`: FastAPI backend
 - `packages/web`: React frontend
-- `suites-registry/providers`: community-maintained JSON5 suites
+- `suites-registry/providers`: community-maintained provider/route/model registry
 
 | Provider | Status | Default Model | Endpoints |
 |----------|--------|---------------|-----------|
@@ -67,30 +67,41 @@ cp llm-spec.example.toml llm-spec.toml
 The configuration file controls API access, timeouts, and logging levels.
 
 ```toml
-[openai]
+[providers.openai]
 api_key = "sk-..."
 base_url = "https://api.openai.com"
 timeout = 30.0
 
 [log]
 enabled = true
-log_request_body = true  # Great for debugging parameter forwarding
+log_request_body = true
+```
+
+```toml
+[[channels]]
+name = "proxy-a"
+api_key = "sk-..."
+base_url = "https://proxy.example.com"
+timeout = 300.0
+
+  [[channels.providers]]
+  name = "openai"
+  routes = ["chat_completions", "responses"]
+  models = ["gpt-4o-mini"]
 ```
 
 ## 🧪 Config-driven Suites (JSON5)
 
-Suites are defined in JSON5, allowing for comments and flexible syntax. Each suite typically targets one provider and endpoint.
+Suites are defined as route templates (`routes/*.json5`) and model definitions (`models/*.toml`), then expanded as `route × model`.
 
 ```json5
 {
-  provider: "anthropic",
   endpoint: "/v1/messages",
   schemas: {
     response: "anthropic.MessagesResponse",
     stream_chunk: "anthropic.AnthropicStreamChunk",
   },
   base_params: {
-    model: "claude-haiku-4.5",
     max_tokens: 256,
     messages: [{ role: "user", content: "Hello" }],
   },
@@ -106,14 +117,22 @@ Suites are defined in JSON5, allowing for comments and flexible syntax. Each sui
 }
 ```
 
+```toml
+# models/claude-haiku-4.5.toml
+name = "Claude Haiku 4.5"
+routes = ["messages"]
+```
+
 ## 💻 CLI Usage
 
 ```bash
 # Execute all tests
 uv run python -m llm_spec run
 
-# Filter by provider or keyword
+# Filter by provider / channel / model / tags
 uv run python -m llm_spec run --provider openai
+uv run python -m llm_spec run --channel proxy-a
+uv run python -m llm_spec run --model gpt-4o-mini --tags core --exclude-tags expensive
 uv run python -m llm_spec run -k "chat/completions"
 ```
 
@@ -123,20 +142,19 @@ uv run python -m llm_spec run -k "chat/completions"
 
 ### Features
 
-- **Suite Management**: Create, update, delete suites and manage JSON5 versions through a visual editor
+- **Suite Browser**: Read suites from `suites-registry` (provider/route/model)
 - **Testing Dashboard**: Select providers/routes/tests, execute batch runs, and monitor progress in real-time
-- **Settings Editor**: Edit runtime TOML configuration for providers and report behavior
+- **Settings Editor**: Edit runtime `llm-spec.toml` configuration
 - **Run History**: View past runs with detailed results and event streams
 
 ### Tech Stack
 
-- **Backend**: FastAPI (Python) with PostgreSQL
+- **Backend**: FastAPI (Python) with SQLite (default)
 - **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
 
 ### Environment Requirements
 
 - Python >= 3.11
-- PostgreSQL >= 14
 - Node.js >= 18
 - pnpm >= 9
 - uv (Python package manager)
@@ -153,22 +171,18 @@ cd packages/web && pnpm install && cd ../..
 
 ### Database Setup
 
-#### Create PostgreSQL Database
+#### Initialize SQLite Database
 
 ```bash
-# Create database
-createdb llm_spec
+# Default DB file is ./packages/web-api/src/llm_spec_web/.data/llm_spec_web.db
+mkdir -p packages/web-api/src/llm_spec_web/.data
 
-# Or using psql
-psql -U postgres -c "CREATE DATABASE llm_spec;"
-```
+# Tables are auto-created on FastAPI startup by default (LLM_SPEC_WEB_AUTO_INIT_DB=true).
+# Optional manual initialization:
+uv run python -c "from llm_spec_web.main import init_db; init_db()"
 
-#### Initialize / Migrate Database Schema
-
-```bash
-# This file is idempotent: it creates tables if missing, applies minimal schema upgrades,
-# and seeds built-in suites into the DB.
-psql -U postgres -d llm_spec -f packages/web-api/src/llm_spec_web/schema.sql
+# Optional SQL bootstrap (SQLite flavor):
+sqlite3 packages/web-api/src/llm_spec_web/.data/llm_spec_web.db < packages/web-api/src/llm_spec_web/schema.sql
 ```
 
 ### Environment Variables
@@ -182,8 +196,9 @@ cp packages/web-api/src/llm_spec_web/env.example .env
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `LLM_SPEC_WEB_DATABASE_URL` | PostgreSQL connection string | `postgresql+psycopg://postgres:postgres@localhost:5432/llm_spec` |
+| `LLM_SPEC_WEB_DATABASE_URL` | SQLAlchemy DB URL | `sqlite:///./packages/web-api/src/llm_spec_web/.data/llm_spec_web.db` |
 | `LLM_SPEC_WEB_APP_TOML_PATH` | Path to llm-spec.toml | `llm-spec.toml` |
+| `LLM_SPEC_WEB_AUTO_INIT_DB` | Auto create DB tables on app startup | `true` |
 | `LLM_SPEC_WEB_MOCK_MODE` | Enable mock mode for testing | `false` |
 | `LLM_SPEC_WEB_MOCK_BASE_DIR` | Mock data directory | `packages/core/tests/integration/mocks` |
 | `LLM_SPEC_WEB_CORS_ORIGINS` | CORS allowed origins | `["*"]` |
@@ -196,12 +211,12 @@ Provider configs are required for `real` runs. For `mock` runs, the backend can 
 credentials.
 
 ```toml
-[openai]
+[providers.openai]
 api_key = "sk-..."
 base_url = "https://api.openai.com"
 timeout = 30.0
 
-[anthropic]
+[providers.anthropic]
 api_key = "sk-ant-..."
 base_url = "https://api.anthropic.com"
 timeout = 30.0
@@ -210,6 +225,10 @@ timeout = 30.0
 ### Running the Server
 
 ```bash
+# Ensure runtime config exists
+cp llm-spec.example.toml llm-spec.toml
+mkdir -p packages/web-api/src/llm_spec_web/.data
+
 # Start backend server
 uv run python -m llm_spec_web.main
 
@@ -230,34 +249,12 @@ make web-frontend
 - Backend: `http://localhost:8000`
 - Frontend: `http://localhost:5173`
 
-### Suites In DB
+### Suite Source
 
-The initial web schema (`packages/web-api/src/llm_spec_web/schema.sql`) seeds the built-in suites from `suites-registry/providers/` into the
-database (via `suite` + `suite_version`). For custom suites, use the Web UI (or call the `/api/suites`
-endpoints) to create and version them.
+Suites are loaded directly from `suites-registry/providers/` (`routes/*.json5` × `models/*.toml`) at runtime.
+`/api/suites` and `/api/suite-versions/*` are read-only views over registry files.
 
 ### Database Schema
-
-#### suite - Test Suites
-
-| Field | Type | Description |
-|-------|------|-------------|
-| id | varchar(36) | Primary key UUID |
-| provider | varchar(32) | Provider name (openai, anthropic, gemini, xai) |
-| endpoint | varchar(255) | API endpoint path |
-| name | varchar(255) | Suite name |
-| status | varchar(16) | Status (active/archived) |
-| latest_version | integer | Latest version number |
-
-#### suite_version - Suite Versions
-
-| Field | Type | Description |
-|-------|------|-------------|
-| id | varchar(36) | Primary key UUID |
-| suite_id | varchar(36) | Foreign key to suite |
-| version | integer | Version number |
-| raw_json5 | text | Original JSON5 content |
-| parsed_json | jsonb | Parsed JSON data |
 
 #### run_batch - Test Task Batch
 
@@ -295,17 +292,6 @@ endpoints) to create and version them.
 | run_result_json | jsonb | Full result JSON data |
 | created_at | timestamptz | Creation timestamp |
 
-#### provider_config - Provider Configurations
-
-| Field | Type | Description |
-|-------|------|-------------|
-| provider | varchar(32) | Primary key (provider name) |
-| base_url | varchar(512) | API base URL |
-| timeout | double precision | Request timeout seconds |
-| api_key | text | API key |
-| extra_config | jsonb | Extra per-provider config |
-| updated_at | timestamptz | Last update timestamp |
-
 #### run_event - Run Events
 
 | Field | Type | Description |
@@ -338,8 +324,9 @@ endpoints) to create and version them.
 | Endpoint | Description |
 |----------|-------------|
 | `GET /healthz` | Health check |
-| `GET/POST/PUT/DELETE /api/suites` | Suite CRUD operations |
-| `GET/POST /api/suites/{suite_id}/versions` | Suite version management |
+| `GET /api/suites` | List suites from registry |
+| `GET /api/suites/{suite_id}` | Get suite metadata |
+| `GET /api/suites/{suite_id}/versions` | List synthetic versions (read-only) |
 | `GET /api/suite-versions/{version_id}` | Get suite version details |
 | `GET /api/provider-configs` | List provider configurations |
 | `GET /api/provider-configs/{provider}` | Get provider config |
@@ -413,7 +400,7 @@ Web backend layout (high-level):
 ```text
 packages/web-api/src/llm_spec_web/
 ├── api/           # FastAPI routers/controllers
-├── core/          # DB wiring, exceptions, event bus
+├── core/          # DB wiring (run storage), exceptions, event bus
 ├── models/        # SQLAlchemy ORM models
 ├── schemas/       # Pydantic request/response models
 ├── services/      # Business logic

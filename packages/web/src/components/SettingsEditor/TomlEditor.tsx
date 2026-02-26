@@ -8,7 +8,7 @@ interface TomlEditorProps {
 }
 
 const PLACEHOLDER = `# LLM Spec Configuration
-[provider.openai]
+[providers.openai]
 api_key = "sk-..."
 base_url = "https://api.openai.com"`;
 

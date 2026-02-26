@@ -58,7 +58,7 @@ class RunJob(Base):
         mode: Execution mode ("real" or "mock").
         provider: Provider name.
         endpoint: API endpoint path.
-        suite_version_id: Reference to the suite version being tested.
+        suite_version_id: Synthetic suite version ID from registry.
         config_snapshot: Configuration snapshot at run time.
         started_at: Execution start timestamp.
         finished_at: Execution finish timestamp.
@@ -82,11 +82,7 @@ class RunJob(Base):
         nullable=True,
         index=True,
     )
-    suite_version_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey("suite_version.id", ondelete="SET NULL"),
-        nullable=True,
-    )
+    suite_version_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     config_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -1,11 +1,9 @@
 {
-  provider: "openai",
   endpoint: "/v1/audio/speech",
   schemas: {
     stream_chunk: "openai.AudioStreamEvent",
   },
   base_params: {
-    model: "gpt-4o-mini-tts",
     input: "Hello, world!",
     voice: "alloy",
   },

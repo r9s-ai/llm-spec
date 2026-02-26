@@ -15,7 +15,7 @@ from llm_spec.adapters.openai import OpenAIAdapter
 from llm_spec.adapters.xai import XAIAdapter
 from llm_spec.cli import _build_run_result
 from llm_spec.client.http_client import HTTPClient
-from llm_spec.config.loader import LogConfig, ProviderConfig
+from llm_spec.config.loader import LogConfig, ProviderConfig, load_config
 from llm_spec.logger import RequestLogger
 from llm_spec.reporting.collector import EndpointResultBuilder
 from llm_spec.runners import ConfigDrivenTestRunner, SpecTestSuite, load_test_suite_from_dict
@@ -23,13 +23,11 @@ from llm_spec_web.config import settings
 from llm_spec_web.core.event_bus import event_bus
 from llm_spec_web.core.exceptions import NotFoundError
 from llm_spec_web.models.run import RunBatch, RunEvent, RunJob, RunResult, RunTestResult
-from llm_spec_web.models.suite import SuiteVersion
-from llm_spec_web.repositories.provider_repo import ProviderRepository
 from llm_spec_web.repositories.run_repo import RunRepository
-from llm_spec_web.repositories.suite_repo import SuiteRepository
+from llm_spec_web.services.suite_service import SuiteService
 
-# Provider adapter registry
-PROVIDER_ADAPTERS: dict[str, type] = {
+# API-family adapter registry
+API_FAMILY_ADAPTERS: dict[str, type] = {
     "openai": OpenAIAdapter,
     "anthropic": AnthropicAdapter,
     "gemini": GeminiAdapter,
@@ -69,23 +67,23 @@ def create_provider_client(
             provider_name=provider,
         )
 
-    adapter_class = PROVIDER_ADAPTERS.get(provider)
+    adapter_class = API_FAMILY_ADAPTERS.get(config.api_family or provider)
     if adapter_class is None:
-        raise ValueError(f"Unsupported provider: {provider}")
+        raise ValueError(f"Unsupported provider/api_family: {provider}/{config.api_family}")
 
     return adapter_class(config, http_client, logger)
 
 
-def load_suite_from_version(version: SuiteVersion) -> SpecTestSuite:
+def load_suite_from_version(parsed_json: dict[str, Any]) -> SpecTestSuite:
     """Load test suite from a SuiteVersion.
 
     Args:
-        version: SuiteVersion instance.
+        parsed_json: Parsed suite JSON.
 
     Returns:
         Loaded test suite.
     """
-    return load_test_suite_from_dict(version.parsed_json)
+    return load_test_suite_from_dict(parsed_json)
 
 
 class RunService:
@@ -115,13 +113,10 @@ class RunService:
         Raises:
             NotFoundError: If suite version not found.
         """
-        suite_repo = SuiteRepository(db)
         run_repo = RunRepository(db)
+        suite_service = SuiteService()
 
-        # Get suite version
-        suite_version = suite_repo.get_version_by_id(suite_version_id)
-        if suite_version is None:
-            raise NotFoundError("SuiteVersion", suite_version_id)
+        suite_version = suite_service.resolve_suite_by_version_id(suite_version_id)
 
         provider = str(suite_version.parsed_json.get("provider"))
         endpoint = str(suite_version.parsed_json.get("endpoint"))
@@ -135,7 +130,7 @@ class RunService:
             mode=resolved_mode,
             provider=provider,
             endpoint=endpoint,
-            suite_version_id=suite_version.id,
+            suite_version_id=suite_version_id,
             config_snapshot={"selected_tests": selected_tests or []},
         )
         run_repo.create(run)
@@ -277,14 +272,13 @@ class RunService:
             run_id: Run job ID.
             max_concurrent: Maximum number of concurrent tests.
         """
-        suite_repo = SuiteRepository(db)
         run_repo = RunRepository(db)
+        suite_service = SuiteService()
 
         run_job = run_repo.get_by_id(run_id)
         if run_job is None:
             return
 
-        # Get suite version
         if run_job.suite_version_id is None:
             run_job.status = "failed"
             run_job.error_message = "suite_version_id is None"
@@ -293,8 +287,9 @@ class RunService:
             db.commit()
             return
 
-        suite_version = suite_repo.get_version_by_id(run_job.suite_version_id)
-        if suite_version is None:
+        try:
+            suite_version = suite_service.resolve_suite_by_version_id(run_job.suite_version_id)
+        except NotFoundError:
             run_job.status = "failed"
             run_job.error_message = f"suite_version not found: {run_job.suite_version_id}"
             run_job.finished_at = datetime.now(UTC)
@@ -302,9 +297,13 @@ class RunService:
             db.commit()
             return
 
-        provider_repo = ProviderRepository(db)
-        provider_config = provider_repo.get_by_provider(run_job.provider)
-        if provider_config is None and run_job.mode != "mock":
+        app_config = load_config(settings.app_toml_path)
+        provider_cfg = None
+        try:
+            provider_cfg = app_config.get_provider_config(run_job.provider)
+        except KeyError:
+            provider_cfg = None
+        if provider_cfg is None and run_job.mode != "mock":
             # In real mode we need credentials/base_url to reach the upstream provider.
             run_job.status = "failed"
             run_job.error_message = f"provider config missing: {run_job.provider}"
@@ -318,7 +317,7 @@ class RunService:
         run_job.started_at = datetime.now(UTC)
 
         # Load suite and set progress_total before starting
-        suite = load_suite_from_version(suite_version)
+        suite = load_suite_from_version(suite_version.parsed_json)
         selected = set(run_job.config_snapshot.get("selected_tests") or [])
         tests = [t for t in suite.tests if not selected or t.name in selected]
         run_job.progress_total = len(tests)
@@ -341,14 +340,16 @@ class RunService:
         http_client = None
         try:
             # Create client
-            if provider_config is None:
+            if provider_cfg is None:
                 # Mock mode can run without persisted provider configs.
                 config = ProviderConfig(api_key="", base_url="", timeout=30.0)
             else:
                 config = ProviderConfig(
-                    api_key=provider_config.api_key,
-                    base_url=provider_config.base_url,
-                    timeout=provider_config.timeout,
+                    api_key=provider_cfg.api_key,
+                    base_url=provider_cfg.base_url,
+                    timeout=provider_cfg.timeout,
+                    api_family=provider_cfg.api_family,
+                    headers=provider_cfg.headers,
                 )
             logger = RequestLogger(
                 LogConfig(
@@ -641,8 +642,8 @@ class RunService:
         Raises:
             NotFoundError: If any suite version not found.
         """
-        suite_repo = SuiteRepository(db)
         run_repo = RunRepository(db)
+        suite_service = SuiteService()
 
         # Resolve mode
         resolved_mode = mode or ("mock" if settings.mock_mode else "real")
@@ -661,9 +662,7 @@ class RunService:
         # Create runs for each suite version
         runs: list[RunJob] = []
         for suite_version_id in suite_version_ids:
-            suite_version = suite_repo.get_version_by_id(suite_version_id)
-            if suite_version is None:
-                raise NotFoundError("SuiteVersion", suite_version_id)
+            suite_version = suite_service.resolve_suite_by_version_id(suite_version_id)
 
             provider = str(suite_version.parsed_json.get("provider"))
             endpoint = str(suite_version.parsed_json.get("endpoint"))

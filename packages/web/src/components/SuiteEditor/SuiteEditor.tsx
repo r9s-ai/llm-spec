@@ -100,6 +100,12 @@ export function SuiteEditor({
           <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-bold text-violet-700">
             {suite.provider}
           </span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
+            {suite.route}
+          </span>
+          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">
+            {suite.model}
+          </span>
           <code className="rounded bg-slate-100 px-2 py-1 text-xs font-mono text-slate-600">
             {suite.endpoint}
           </code>

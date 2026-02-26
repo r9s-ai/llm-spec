@@ -1,0 +1,4 @@
+name = "xAI"
+api_family = "openai"
+doc = "https://docs.x.ai/api"
+routes_from = "openai"

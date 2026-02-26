@@ -1,12 +1,10 @@
 {
-  provider: "openai",
   endpoint: "/v1/images/edits",
   schemas: {
     response: "openai.ImageResponse",
     stream_chunk: "openai.ImageStreamEvent",
   },
   base_params: {
-    model: "gpt-image-1.5",
     prompt: "Replace the background with a blue sky.",
   },
   tests: [

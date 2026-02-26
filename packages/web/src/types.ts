@@ -8,6 +8,8 @@ export type RunMode = "real" | "mock";
 export type Suite = {
   id: string;
   provider: string;
+  route: string;
+  model: string;
   endpoint: string;
   name: string;
   status: string;
@@ -79,6 +81,26 @@ export type TomlSettings = {
   exists: boolean;
 };
 
+export type ApiType = "openai" | "anthropic" | "gemini" | "xai";
+
+export type ProviderConfig = {
+  provider: string;
+  api_type: ApiType;
+  base_url: string;
+  timeout: number;
+  api_key: string;
+  extra_config: Record<string, unknown>;
+  updated_at: string;
+};
+
+export type ProviderConfigUpsert = {
+  api_type: ApiType;
+  base_url: string;
+  timeout: number;
+  api_key?: string;
+  extra_config?: Record<string, unknown>;
+};
+
 // Test types
 export type TestRow = {
   name: string;
@@ -100,6 +122,8 @@ export type RunSummary = {
 // API request types
 export type CreateSuiteInput = {
   provider: string;
+  route: string;
+  model: string;
   endpoint: string;
   name: string;
   raw_json5: string;

@@ -1,9 +1,15 @@
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 
 interface CreateSuiteModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (provider: string, endpoint: string, name: string) => Promise<void>;
+  onCreate: (
+    provider: string,
+    route: string,
+    model: string,
+    endpoint: string,
+    name: string
+  ) => Promise<void>;
   existingProviders: string[];
 }
 
@@ -24,15 +30,14 @@ export function CreateSuiteModal({
   existingProviders,
 }: CreateSuiteModalProps) {
   const [provider, setProvider] = useState("openai");
+  const [route, setRoute] = useState("chat_completions");
+  const [model, setModel] = useState("gpt-4o-mini");
   const [endpoint, setEndpoint] = useState("/v1/chat/completions");
   const [name, setName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [showCustomEndpoint, setShowCustomEndpoint] = useState(false);
 
-  // Auto-generate name
-  const autoName = useMemo(() => {
-    return `${provider} ${endpoint.split("/").pop() || endpoint}`;
-  }, [provider, endpoint]);
+  const autoName = useMemo(() => `${provider} ${route} (${model})`, [provider, route, model]);
 
   const allProviders = useMemo(() => {
     const providers = new Set(existingProviders);
@@ -47,9 +52,10 @@ export function CreateSuiteModal({
     e.preventDefault();
     setIsCreating(true);
     try {
-      await onCreate(provider, endpoint, name || autoName);
-      // Reset form
+      await onCreate(provider, route, model, endpoint, name || autoName);
       setProvider("openai");
+      setRoute("chat_completions");
+      setModel("gpt-4o-mini");
       setEndpoint("/v1/chat/completions");
       setName("");
       setShowCustomEndpoint(false);
@@ -65,30 +71,54 @@ export function CreateSuiteModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
         <h2 className="text-lg font-bold text-slate-900">Create New Suite</h2>
-        <p className="mt-1 text-sm text-slate-500">Create a new test suite for an API endpoint.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          Create a provider/route/model suite entry.
+        </p>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          {/* Provider */}
           <div>
             <label className="block text-sm font-medium text-slate-700">
               Provider <span className="text-red-500">*</span>
             </label>
-            <div className="mt-1 flex gap-2">
-              <select
-                value={provider}
-                onChange={(e) => setProvider(e.target.value)}
-                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
-              >
-                {allProviders.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            >
+              {allProviders.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* Endpoint */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              Route <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={route}
+              onChange={(e) => setRoute(e.target.value)}
+              placeholder="chat_completions"
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              Model <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder="gpt-4o-mini"
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-slate-700">
               Endpoint <span className="text-red-500">*</span>
@@ -139,7 +169,6 @@ export function CreateSuiteModal({
             </div>
           </div>
 
-          {/* Name */}
           <div>
             <label className="block text-sm font-medium text-slate-700">Name</label>
             <input
@@ -152,7 +181,6 @@ export function CreateSuiteModal({
             <p className="mt-1 text-xs text-slate-400">Leave empty to use: {autoName}</p>
           </div>
 
-          {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
@@ -163,7 +191,7 @@ export function CreateSuiteModal({
             </button>
             <button
               type="submit"
-              disabled={isCreating || !provider || !endpoint}
+              disabled={isCreating || !provider || !route || !model || !endpoint}
               className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white hover:bg-violet-700 disabled:opacity-50"
             >
               {isCreating ? "Creating..." : "Create Suite"}

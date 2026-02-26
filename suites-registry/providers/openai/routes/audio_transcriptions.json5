@@ -1,12 +1,10 @@
 {
-  provider: "openai",
   endpoint: "/v1/audio/transcriptions",
   schemas: {
     response: "openai.AudioTranscriptionResponse",
     stream_chunk: "openai.AudioStreamEvent",
   },
   base_params: {
-    model: "whisper-1",
   },
   tests: [
     {

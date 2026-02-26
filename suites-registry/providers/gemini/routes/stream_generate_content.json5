@@ -1,10 +1,9 @@
 {
-  provider: "gemini",
   // Official REST endpoint pattern (SSE):
   //   POST /v1beta/models/{model}:streamGenerateContent?alt=sse
   // Docs: https://ai.google.dev/api
   // Text output model (per repo convention): gemini-3-flash-preview
-  endpoint: "/v1beta/models/gemini-3-flash-preview:streamGenerateContent",
+  endpoint: "/v1beta/models/{model}:streamGenerateContent",
   schemas: {
     response: "gemini.GenerateContentResponse",
     stream_chunk: "gemini.GeminiStreamChunk",

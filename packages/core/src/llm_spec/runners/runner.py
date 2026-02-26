@@ -74,6 +74,9 @@ class SpecTestCase:
     method: str | None = None
     """Optional HTTP method override for this test."""
 
+    tags: list[str] = field(default_factory=list)
+    """Optional test tags for filtering (e.g. core, expensive)."""
+
 
 @dataclass
 class SpecTestSuite:
@@ -128,6 +131,7 @@ class _RawTestCase(PydanticBaseModel):
     required_fields: list[str] | None = None
     parameterize: dict[str, list[Any]] | None = None
     method: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -250,6 +254,7 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
             schemas=test_config.get("schemas"),
             required_fields=test_config.get("required_fields"),
             method=test_config.get("method"),
+            tags=list(test_config.get("tags", []) or []),
         )
 
 
@@ -323,6 +328,7 @@ def load_test_suite_from_dict(
                     schemas=t.schemas,
                     required_fields=t.required_fields,
                     method=t.method,
+                    tags=t.tags,
                 )
             )
 
@@ -553,19 +559,7 @@ class ConfigDrivenTestRunner:
 
         files = {}
         for param_name, file_path_str in test.files.items():
-            path = Path(file_path_str).expanduser()
-            if not path.is_absolute() and not path.exists() and self.suite.config_path is not None:
-                rel = path
-                base = self.suite.config_path.parent
-                candidates = [
-                    base / rel,
-                    base.parent / rel,
-                    base.parent.parent / rel,
-                ]
-                for c in candidates:
-                    if c.exists():
-                        path = c
-                        break
+            path = self._resolve_test_file_path(file_path_str)
             if not path.exists():
                 raise FileNotFoundError(f"Test file not found: {file_path_str}")
             f = open(path, "rb")  # noqa: SIM115
@@ -583,6 +577,70 @@ class ConfigDrivenTestRunner:
                 }
             )
         return files, opened_files, file_entries
+
+    def _detect_registry_root(self) -> Path | None:
+        """Best-effort detect suites-registry root directory."""
+        # Prefer suite config path ancestry.
+        if self.suite.config_path is not None:
+            for parent in [self.suite.config_path.parent, *self.suite.config_path.parents]:
+                if parent.name == "suites-registry":
+                    return parent
+                if (parent / "suites-registry").is_dir():
+                    return parent / "suites-registry"
+
+        # Fallback to current working directory ancestry.
+        cwd = Path.cwd()
+        if (cwd / "suites-registry").is_dir():
+            return cwd / "suites-registry"
+        for parent in cwd.parents:
+            if parent.name == "suites-registry":
+                return parent
+            if (parent / "suites-registry").is_dir():
+                return parent / "suites-registry"
+        return None
+
+    def _resolve_test_file_path(self, file_path_str: str) -> Path:
+        """Resolve test file path according to suites-registry asset rules."""
+        raw = Path(file_path_str).expanduser()
+        if raw.is_absolute():
+            return raw
+
+        rel = raw
+        candidates: list[Path] = []
+
+        # 1) Relative to current config file directory.
+        if self.suite.config_path is not None:
+            cfg_dir = self.suite.config_path.parent
+            candidates.append(cfg_dir / rel)
+
+            # 2) Recursively walk up to registry root.
+            registry_root = self._detect_registry_root()
+            cur = cfg_dir
+            while True:
+                candidates.append(cur / rel)
+                if registry_root is not None and cur == registry_root:
+                    break
+                if cur.parent == cur:
+                    break
+                cur = cur.parent
+
+            # 3) Relative to suites-registry root.
+            if registry_root is not None:
+                candidates.append(registry_root / rel)
+
+        # DB-loaded suites may not have config_path; still try registry root.
+        registry_root = self._detect_registry_root()
+        if registry_root is not None:
+            candidates.append(registry_root / rel)
+
+        # Backward-compatible fallback: current working directory.
+        candidates.append(Path.cwd() / rel)
+
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+
+        return raw
 
     def run_test(self, test: SpecTestCase) -> bool:
         """Run a single test.

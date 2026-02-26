@@ -3,16 +3,18 @@
 ## Rules
 
 1. One provider per directory under `providers/`.
-2. One endpoint-oriented suite per JSON5 file.
-3. Keep `provider` and `endpoint` stable once published.
-4. Add only reproducible tests with clear names.
+2. Keep `provider.toml` at the provider root.
+3. Put route templates under `routes/*.json5` and model definitions under `models/*.toml`.
+4. Keep `route` and `model` IDs stable once published.
+5. Add only reproducible tests with clear names.
 
 ## Review Checklist
 
 1. JSON5 parses successfully.
-2. `provider` and `endpoint` fields are present.
-3. New/changed tests pass in mock mode.
-4. No credentials or secrets are committed.
+2. Route JSON5 has `endpoint` + `tests`.
+3. Model TOML has `routes` list.
+4. New/changed tests pass in mock mode.
+5. No credentials or secrets are committed.
 
 ## Local Check
 

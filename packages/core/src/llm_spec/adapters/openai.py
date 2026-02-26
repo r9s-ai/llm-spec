@@ -22,6 +22,7 @@ class OpenAIAdapter(ProviderAdapter):
             "Authorization": f"Bearer {self.config.api_key}",
             "Content-Type": "application/json",
         }
+        headers.update(self.config.headers)
 
         if additional_headers:
             headers.update(additional_headers)

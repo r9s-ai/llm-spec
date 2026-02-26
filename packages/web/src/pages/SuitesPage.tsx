@@ -65,16 +65,23 @@ export function SuitesPage() {
 
   // Handle create suite
   const handleCreateSuite = useCallback(
-    async (provider: string, endpoint: string, name: string) => {
+    async (provider: string, route: string, model: string, endpoint: string, name: string) => {
       const raw = `{
-  provider: "${provider}",
   endpoint: "${endpoint}",
   schemas: {},
   base_params: {},
   tests: [{ name: "test_baseline", is_baseline: true }]
 }`;
 
-      await createSuite({ provider, endpoint, name, raw_json5: raw, created_by: "web-ui" });
+      await createSuite({
+        provider,
+        route,
+        model,
+        endpoint,
+        name,
+        raw_json5: raw,
+        created_by: "web-ui",
+      });
       await loadSuites();
       setNotice("Suite created.");
     },

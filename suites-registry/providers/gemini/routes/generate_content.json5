@@ -1,10 +1,9 @@
 {
-  provider: "gemini",
   // Official REST endpoint pattern:
   //   POST /v1beta/models/{model}:generateContent
   // Docs: https://ai.google.dev/api
   // Text output model (per repo convention): gemini-3-flash-preview
-  endpoint: "/v1beta/models/gemini-3-flash-preview:generateContent",
+  endpoint: "/v1beta/models/{model}:generateContent",
   schemas: {
     response: "gemini.GenerateContentResponse",
   },

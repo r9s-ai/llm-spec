@@ -8,8 +8,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class WebSettings(BaseSettings):
     """Environment-driven web settings."""
 
-    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/llm_spec"
+    database_url: str = "sqlite:///./packages/web-api/src/llm_spec_web/.data/llm_spec_web.db"
     app_toml_path: str = "llm-spec.toml"
+    auto_init_db: bool = True
+    suite_registry_cache_ttl_seconds: float = 2.0
     mock_base_dir: str = "packages/core/tests/integration/mocks"
     mock_mode: bool = False
     cors_origins: list[str] = ["*"]

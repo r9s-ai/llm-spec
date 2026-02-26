@@ -29,6 +29,8 @@ export function getSuites(): Promise<Suite[]> {
 
 export function createSuite(input: {
   provider: string;
+  route: string;
+  model: string;
   endpoint: string;
   name: string;
   raw_json5: string;
@@ -56,6 +58,14 @@ export function deleteSuite(suiteId: string): Promise<void> {
 
 export function listVersions(suiteId: string): Promise<SuiteVersion[]> {
   return request<SuiteVersion[]>(`/api/suites/${suiteId}/versions`);
+}
+
+export function refreshSuiteRegistryCache(): Promise<{
+  status: string;
+  suite_count: number;
+  version_count: number;
+}> {
+  return request("/api/suites/cache/refresh", { method: "POST" });
 }
 
 export function createVersion(

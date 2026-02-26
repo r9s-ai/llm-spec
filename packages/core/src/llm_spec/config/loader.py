@@ -33,6 +33,28 @@ class ProviderConfig(BaseModel):
     api_key: str
     base_url: str
     timeout: float = 30.0
+    api_family: str | None = None
+    headers: dict[str, str] = Field(default_factory=dict)
+    channel: str | None = None
+
+
+class ChannelProviderConfig(BaseModel):
+    """Per-provider selection inside a channel."""
+
+    name: str
+    routes: list[str] = Field(default_factory=list)
+    models: list[str] = Field(default_factory=list)
+
+
+class ChannelConfig(BaseModel):
+    """Channel configuration (one API credential set shared by multiple providers)."""
+
+    name: str
+    description: str | None = None
+    api_key: str
+    base_url: str
+    timeout: float = 30.0
+    providers: list[ChannelProviderConfig] = Field(default_factory=list)
 
 
 class AppConfig(BaseModel):
@@ -43,6 +65,7 @@ class AppConfig(BaseModel):
 
     # Dynamically loaded provider configs (Pydantic v2 disallows leading-underscore field names)
     provider_configs: dict[str, ProviderConfig] = Field(default_factory=dict, exclude=True)
+    channels: list[ChannelConfig] = Field(default_factory=list, exclude=True)
 
     @classmethod
     def from_toml(cls, config_path: Path | str = "llm-spec.toml") -> AppConfig:
@@ -65,15 +88,34 @@ class AppConfig(BaseModel):
         log_config = LogConfig(**data.get("log", {}))
         report_config = ReportConfig(**data.get("report", {}))
 
-        # Parse provider sections
+        # Parse provider sections (old style: [openai], [anthropic], ...)
         provider_configs = {}
-        known_sections = {"log", "report"}
+        known_sections = {"log", "report", "providers", "channels"}
+
+        # New style: [providers.<name>]
+        providers_section = data.get("providers", {})
+        if isinstance(providers_section, dict):
+            for provider, value in providers_section.items():
+                if not isinstance(value, dict):
+                    continue
+                provider_configs[str(provider)] = ProviderConfig(**value)
+
+        # Old style top-level provider sections
         for key, value in data.items():
             if key not in known_sections and isinstance(value, dict):
                 # This is a provider config section
                 provider_configs[key] = ProviderConfig(**value)
 
-        config = cls(log=log_config, report=report_config)
+        # Channel mode
+        channels: list[ChannelConfig] = []
+        raw_channels = data.get("channels", [])
+        if isinstance(raw_channels, list):
+            for item in raw_channels:
+                if not isinstance(item, dict):
+                    continue
+                channels.append(ChannelConfig(**item))
+
+        config = cls(log=log_config, report=report_config, channels=channels)
         config.provider_configs = provider_configs
 
         return config
@@ -101,6 +143,17 @@ class AppConfig(BaseModel):
             Provider name list
         """
         return list(self.provider_configs.keys())
+
+    def get_channel(self, name: str) -> ChannelConfig:
+        """Get one configured channel by name."""
+        for channel in self.channels:
+            if channel.name == name:
+                return channel
+        raise KeyError(f"Channel config not found for '{name}'")
+
+    def list_channels(self) -> list[str]:
+        """List all configured channel names."""
+        return [c.name for c in self.channels]
 
 
 def load_config(config_path: Path | str = "llm-spec.toml") -> AppConfig:

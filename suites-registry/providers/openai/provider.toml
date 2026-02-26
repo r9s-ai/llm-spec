@@ -1,0 +1,3 @@
+name = "OpenAI"
+api_family = "openai"
+doc = "https://platform.openai.com/docs/api-reference"

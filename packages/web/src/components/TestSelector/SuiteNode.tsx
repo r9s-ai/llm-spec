@@ -77,9 +77,9 @@ export function SuiteNode({
         {/* Endpoint - Small, gray, not bold */}
         <span
           className="min-w-0 flex-1 truncate text-xs text-slate-500 leading-tight"
-          title={suite.endpoint}
+          title={`${suite.route} (${suite.model}) ${suite.endpoint}`}
         >
-          {suite.endpoint}
+          {suite.route} ({suite.model})
         </span>
 
         {/* Count Badge - Compact */}

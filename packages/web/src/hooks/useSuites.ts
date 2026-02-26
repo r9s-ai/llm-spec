@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getSuites, listVersions } from "../api";
+import { getSuites, listVersions, refreshSuiteRegistryCache } from "../api";
 import type { Suite, SuiteVersion, TestSelectionMap, VersionsMap } from "../types";
 
 export function useSuites() {
@@ -12,6 +12,8 @@ export function useSuites() {
   const [selectedTestsBySuite, setSelectedTestsBySuite] = useState<TestSelectionMap>({});
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set<string>());
   const [expandedSuites, setExpandedSuites] = useState<Set<string>>(new Set<string>());
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshingRegistryCache, setIsRefreshingRegistryCache] = useState(false);
 
   // Derived data
   const providers = useMemo(
@@ -38,56 +40,61 @@ export function useSuites() {
 
   // Load data
   const loadSuites = useCallback(async (): Promise<void> => {
-    const nextSuites = await getSuites();
-    const versionsEntries = await Promise.all(
-      nextSuites.map(async (suite) => [suite.id, await listVersions(suite.id)] as const)
-    );
-    const nextVersionsBySuite = Object.fromEntries(versionsEntries) as VersionsMap;
+    setIsLoading(true);
+    try {
+      const nextSuites = await getSuites();
+      const versionsEntries = await Promise.all(
+        nextSuites.map(async (suite) => [suite.id, await listVersions(suite.id)] as const)
+      );
+      const nextVersionsBySuite = Object.fromEntries(versionsEntries) as VersionsMap;
 
-    setSuites(nextSuites);
-    setVersionsBySuite(nextVersionsBySuite);
+      setSuites(nextSuites);
+      setVersionsBySuite(nextVersionsBySuite);
 
-    setSelectedSuiteId((prev) => {
-      if (!nextSuites.length) return null;
-      if (prev && nextSuites.some((s) => s.id === prev)) return prev;
-      return nextSuites[0].id;
-    });
-
-    setSelectedProviders((prev) => {
-      if (prev.size > 0) return prev;
-      return new Set(nextSuites.map((s) => s.provider));
-    });
-
-    setExpandedProviders((prev) => {
-      if (prev.size > 0) return prev;
-      const first = nextSuites[0]?.provider;
-      return first ? new Set([first]) : prev;
-    });
-
-    setSelectedVersionBySuite((prev) => {
-      const next = { ...prev };
-      nextSuites.forEach((suite) => {
-        const versions = nextVersionsBySuite[suite.id] ?? [];
-        if (!versions.length) return;
-        const exists = versions.some((v) => v.id === next[suite.id]);
-        if (!exists) next[suite.id] = versions[0].id;
+      setSelectedSuiteId((prev) => {
+        if (!nextSuites.length) return null;
+        if (prev && nextSuites.some((s) => s.id === prev)) return prev;
+        return nextSuites[0].id;
       });
-      return next;
-    });
 
-    setSelectedSuiteIds((prev) => {
-      const valid = new Set(nextSuites.map((s) => s.id));
-      return new Set(Array.from(prev).filter((id) => valid.has(id)));
-    });
-
-    setSelectedTestsBySuite((prev) => {
-      const valid = new Set(nextSuites.map((s) => s.id));
-      const next: TestSelectionMap = {};
-      Object.entries(prev).forEach(([suiteId, bucket]) => {
-        if (valid.has(suiteId)) next[suiteId] = new Set(bucket);
+      setSelectedProviders((prev) => {
+        if (prev.size > 0) return prev;
+        return new Set(nextSuites.map((s) => s.provider));
       });
-      return next;
-    });
+
+      setExpandedProviders((prev) => {
+        if (prev.size > 0) return prev;
+        const first = nextSuites[0]?.provider;
+        return first ? new Set([first]) : prev;
+      });
+
+      setSelectedVersionBySuite((prev) => {
+        const next = { ...prev };
+        nextSuites.forEach((suite) => {
+          const versions = nextVersionsBySuite[suite.id] ?? [];
+          if (!versions.length) return;
+          const exists = versions.some((v) => v.id === next[suite.id]);
+          if (!exists) next[suite.id] = versions[0].id;
+        });
+        return next;
+      });
+
+      setSelectedSuiteIds((prev) => {
+        const valid = new Set(nextSuites.map((s) => s.id));
+        return new Set(Array.from(prev).filter((id) => valid.has(id)));
+      });
+
+      setSelectedTestsBySuite((prev) => {
+        const valid = new Set(nextSuites.map((s) => s.id));
+        const next: TestSelectionMap = {};
+        Object.entries(prev).forEach(([suiteId, bucket]) => {
+          if (valid.has(suiteId)) next[suiteId] = new Set(bucket);
+        });
+        return next;
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   // Refresh versions for a single suite
@@ -96,6 +103,21 @@ export function useSuites() {
     setVersionsBySuite((prev) => ({ ...prev, [suiteId]: versions }));
     return versions;
   }, []);
+
+  const refreshRegistryCache = useCallback(async (): Promise<{
+    status: string;
+    suite_count: number;
+    version_count: number;
+  }> => {
+    setIsRefreshingRegistryCache(true);
+    try {
+      const result = await refreshSuiteRegistryCache();
+      await loadSuites();
+      return result;
+    } finally {
+      setIsRefreshingRegistryCache(false);
+    }
+  }, [loadSuites]);
 
   // Provider operations
   const toggleProvider = useCallback((provider: string): void => {
@@ -185,6 +207,8 @@ export function useSuites() {
     selectedTestsBySuite,
     expandedProviders,
     expandedSuites,
+    isLoading,
+    isRefreshingRegistryCache,
 
     // Derived data
     providers,
@@ -195,6 +219,7 @@ export function useSuites() {
     // Methods
     getSuiteById,
     loadSuites,
+    refreshRegistryCache,
     refreshVersions,
     setSelectedSuiteId,
     toggleProvider,

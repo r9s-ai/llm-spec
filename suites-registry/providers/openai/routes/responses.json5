@@ -1,6 +1,5 @@
 {
   suite_name: "OpenAI Responses",
-  provider: "openai",
   endpoint: "/v1/responses",
   schemas: {
     response: "openai.ResponseObject",
@@ -8,7 +7,6 @@
   },
   method: "POST",
   base_params: {
-    model: "gpt-4o-mini",
     input: "Say hello",
   },
   stream_rules: {

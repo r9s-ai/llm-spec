@@ -40,7 +40,7 @@ export function SuiteCard({
             checked={selectedSuiteIds.has(suite.id)}
             onChange={() => onToggleSuite(suite.id)}
           />
-          <strong className="truncate">{suite.endpoint}</strong>
+          <strong className="truncate">{suite.route}</strong>
         </label>
 
         <div className="flex items-center gap-2">
@@ -68,7 +68,9 @@ export function SuiteCard({
       </div>
 
       {!duplicateName && (
-        <div className="my-1 text-xs font-medium text-slate-500">{suite.name}</div>
+        <div className="my-1 text-xs font-medium text-slate-500">
+          {suite.name} · {suite.model} · {suite.endpoint}
+        </div>
       )}
 
       {testsExpanded ? (

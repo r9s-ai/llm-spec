@@ -13,6 +13,8 @@ class SuiteCreateRequest(BaseModel):
 
     Attributes:
         provider: Provider name (e.g., "openai", "anthropic").
+        route: Route key (e.g., "chat_completions").
+        model: Model ID (e.g., "gpt-4o-mini").
         endpoint: API endpoint path.
         name: Human-readable suite name.
         raw_json5: Full suite JSON5 content.
@@ -20,6 +22,8 @@ class SuiteCreateRequest(BaseModel):
     """
 
     provider: str = Field(..., min_length=1, max_length=32)
+    route: str = Field(..., min_length=1, max_length=128)
+    model: str = Field(..., min_length=1, max_length=128)
     endpoint: str = Field(..., min_length=1, max_length=255)
     name: str = Field(..., min_length=1, max_length=255)
     raw_json5: str = Field(..., description="Full suite JSON5 content")
@@ -80,6 +84,8 @@ class SuiteResponse(BaseModel):
     Attributes:
         id: Suite ID.
         provider: Provider name.
+        route: Route key.
+        model: Model ID.
         endpoint: API endpoint path.
         name: Suite name.
         status: Suite status.
@@ -90,6 +96,8 @@ class SuiteResponse(BaseModel):
 
     id: str
     provider: str
+    route: str
+    model: str
     endpoint: str
     name: str
     status: str

@@ -1,11 +1,9 @@
 {
-  provider: "openai",
   endpoint: "/v1/embeddings",
   schemas: {
     response: "openai.EmbeddingResponse",
   },
   base_params: {
-    model: "text-embedding-3-small",
     input: "Hello, world!",
   },
   tests: [

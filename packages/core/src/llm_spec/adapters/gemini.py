@@ -23,6 +23,7 @@ class GeminiAdapter(ProviderAdapter):
             "x-goog-api-key": self.config.api_key,
             # "x-onr-provider":"gemini"
         }
+        headers.update(self.config.headers)
 
         if additional_headers:
             headers.update(additional_headers)

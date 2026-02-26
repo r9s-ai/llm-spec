@@ -3,9 +3,8 @@
 ## setup
 
 ```bash
-cd frontend
+cd packages/web
 pnpm install
-cp .env.example .env
 pnpm dev
 ```
 
@@ -16,6 +15,6 @@ Env:
 
 - Left menu pages: `Testing / Suites / Settings`
 - Testing: pick multiple providers/routes/test cases and run in batch
-- Suites: full CRUD + versioned JSON5 editor
+- Suites: read-only registry browser (`provider/route/model`)
 - Settings: read/write `llm-spec.toml`
 - SSE realtime events + run_result.json rendering

@@ -1,12 +1,10 @@
 {
-  provider: "openai",
   endpoint: "/v1/chat/completions",
   schemas: {
     response: "openai.ChatCompletionResponse",
     stream_chunk: "openai.ChatCompletionChunkResponse",
   },
   base_params: {
-    model: "gpt-4o-mini",
     messages: [
       {
         role: "user",

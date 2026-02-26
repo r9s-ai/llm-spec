@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +20,19 @@ from llm_spec_web.core.error_handler import llm_spec_exception_handler
 from llm_spec_web.core.exceptions import LlmSpecError
 
 
+def init_db() -> None:
+    """Initialize DB tables."""
+    Base.metadata.create_all(bind=engine)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Application lifecycle hooks."""
+    if settings.auto_init_db:
+        init_db()
+    yield
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -28,6 +43,7 @@ def create_app() -> FastAPI:
         title="llm-spec web api",
         version="0.1.0",
         description="Web API for llm-spec test suite management and execution",
+        lifespan=lifespan,
     )
 
     # Configure CORS
@@ -64,15 +80,6 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-
-
-def init_db() -> None:
-    """Initialize DB tables (for local development).
-
-    This creates all tables defined in the models.
-    For production, use Alembic migrations instead.
-    """
-    Base.metadata.create_all(bind=engine)
 
 
 if __name__ == "__main__":

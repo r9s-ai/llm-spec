@@ -27,10 +27,16 @@ from mock_loader import MockDataLoader
 
 from llm_spec.adapters.base import ProviderAdapter
 from llm_spec.cli import _build_run_result
+from llm_spec.registry import ExpandedSuite, load_registry_suites
 from llm_spec.reporting.collector import EndpointResultBuilder
 from llm_spec.reporting.report_types import ReportData
 from llm_spec.reporting.run_result_formatter import RunResultFormatter
-from llm_spec.runners import ConfigDrivenTestRunner, SpecTestCase, SpecTestSuite, load_test_suite
+from llm_spec.runners import (
+    ConfigDrivenTestRunner,
+    SpecTestCase,
+    SpecTestSuite,
+    load_test_suite_from_dict,
+)
 
 if TYPE_CHECKING:
     pass
@@ -43,49 +49,46 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 SUITES_DIR = REPO_ROOT / "suites-registry" / "providers"
 
 # Cache loaded suites and collectors
-_SUITE_CACHE: dict[Path, SpecTestSuite] = {}
-_COLLECTORS: dict[Path, EndpointResultBuilder] = {}
+_SUITE_CACHE: dict[str, tuple[ExpandedSuite, SpecTestSuite]] = {}
+_COLLECTORS: dict[str, EndpointResultBuilder] = {}
 
 
-def _get_suite(config_path: Path) -> SpecTestSuite:
+def _get_suite(suite_key: str) -> tuple[ExpandedSuite, SpecTestSuite]:
     """Get or load a TestSuite (cached)."""
-    if config_path not in _SUITE_CACHE:
-        _SUITE_CACHE[config_path] = load_test_suite(config_path)
-    return _SUITE_CACHE[config_path]
+    return _SUITE_CACHE[suite_key]
 
 
-def _get_collector(config_path: Path, client: ProviderAdapter) -> EndpointResultBuilder:
+def _get_collector(suite_key: str, client: ProviderAdapter) -> EndpointResultBuilder:
     """Get or create a EndpointResultBuilder (cached by suite path)."""
-    if config_path not in _COLLECTORS:
-        suite = _get_suite(config_path)
-        _COLLECTORS[config_path] = EndpointResultBuilder(
+    if suite_key not in _COLLECTORS:
+        _expanded, suite = _get_suite(suite_key)
+        _COLLECTORS[suite_key] = EndpointResultBuilder(
             provider=suite.provider,
             endpoint=suite.endpoint,
             base_url=client.get_base_url(),
         )
-    return _COLLECTORS[config_path]
+    return _COLLECTORS[suite_key]
 
 
-def discover_test_configs() -> list[tuple[Path, str, str]]:
+def discover_test_configs() -> list[tuple[str, str, str]]:
     """Discover all suite configs.
 
     Returns:
-        A list of (config_path, test_name, test_id).
+        A list of (suite_key, test_name, test_id).
     """
-    configs: list[tuple[Path, str, str]] = []
+    configs: list[tuple[str, str, str]] = []
 
     if not SUITES_DIR.exists():
         return configs
 
-    for config_file in sorted(SUITES_DIR.rglob("*.json5")):
-        suite = _get_suite(config_file)
+    for item in load_registry_suites(SUITES_DIR):
+        suite = load_test_suite_from_dict(item.suite_dict, item.source_route_path)
+        suite_key = f"{item.provider}/{item.route}/{item.model}"
+        _SUITE_CACHE[suite_key] = (item, suite)
 
         for test in suite.tests:
-            # Human-readable test id, e.g.:
-            #   openai/chat_completions::test_param_temperature
-            relative_path = config_file.relative_to(SUITES_DIR)
-            test_id = f"{relative_path.with_suffix('')}::{test.name}"
-            configs.append((config_file, test.name, test_id))
+            test_id = f"{suite_key}::{test.name}"
+            configs.append((suite_key, test.name, test_id))
 
     return configs
 
@@ -95,12 +98,12 @@ _TEST_CONFIGS = discover_test_configs()
 
 
 @pytest.mark.parametrize(
-    "config_path,test_name",
+    "suite_key,test_name",
     [(c[0], c[1]) for c in _TEST_CONFIGS],
     ids=[c[2] for c in _TEST_CONFIGS],
 )
 def test_from_config(
-    config_path: Path,
+    suite_key: str,
     test_name: str,
     request: pytest.FixtureRequest,
     mock_mode: bool,
@@ -112,14 +115,14 @@ def test_from_config(
     Supports both real API calls and mock mode (via --mock flag).
 
     Args:
-        config_path: JSON5 suite config path
+        suite_key: provider/route/model key
         test_name: test case name
         request: pytest fixture request
         mock_mode: whether mock mode is enabled
         respx_mock: respx mock router (if mock mode enabled)
         mock_data_loader: mock data loader instance
     """
-    suite = _get_suite(config_path)
+    _expanded, suite = _get_suite(suite_key)
 
     # Resolve the provider client fixture
     client_fixture_name = f"{suite.provider}_client"
@@ -130,7 +133,7 @@ def test_from_config(
         return
 
     # Shared EndpointResultBuilder per suite config
-    collector = _get_collector(config_path, client)
+    collector = _get_collector(suite_key, client)
 
     # Find the target test case
     test_case: SpecTestCase | None = None

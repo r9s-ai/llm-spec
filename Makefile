@@ -4,6 +4,9 @@
 	web-backend web-frontend
 
 PRE_COMMIT ?= pre-commit
+LLM_SPEC_WEB_DATABASE_URL ?= sqlite:///./packages/web-api/src/llm_spec_web/.data/llm_spec_web.db
+LLM_SPEC_WEB_APP_TOML_PATH ?= llm-spec.toml
+LLM_SPEC_WEB_AUTO_INIT_DB ?= true
 
 help:
 	@echo "Targets:"
@@ -71,6 +74,9 @@ test-mock-anthropic:
 
 # --- Web backend helpers ---
 web-backend:
+	LLM_SPEC_WEB_DATABASE_URL=$(LLM_SPEC_WEB_DATABASE_URL) \
+	LLM_SPEC_WEB_APP_TOML_PATH=$(LLM_SPEC_WEB_APP_TOML_PATH) \
+	LLM_SPEC_WEB_AUTO_INIT_DB=$(LLM_SPEC_WEB_AUTO_INIT_DB) \
 	uv run python -m llm_spec_web.main
 
 web-frontend:

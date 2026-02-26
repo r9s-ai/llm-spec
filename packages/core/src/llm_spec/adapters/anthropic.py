@@ -23,6 +23,7 @@ class AnthropicAdapter(ProviderAdapter):
             "anthropic-version": "2023-06-01",
             "Content-Type": "application/json",
         }
+        headers.update(self.config.headers)
 
         if additional_headers:
             headers.update(additional_headers)

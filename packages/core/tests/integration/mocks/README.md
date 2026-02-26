@@ -98,7 +98,7 @@ pytest packages/core/tests/integration/test_suite_runner.py -v
 
 ### Step 1: Identify the Test Case
 
-Find the test case in the suite file (e.g., `suites-registry/providers/openai/chat_completions.json5`):
+Find the test case in the route file (e.g., `suites-registry/providers/openai/routes/chat_completions.json5`):
 
 ```json5
 {

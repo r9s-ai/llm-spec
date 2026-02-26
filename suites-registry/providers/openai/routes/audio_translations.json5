@@ -1,11 +1,9 @@
 {
-  provider: "openai",
   endpoint: "/v1/audio/translations",
   schemas: {
     response: "openai.AudioTranslationResponse",
   },
   base_params: {
-    model: "whisper-1",
   },
   tests: [
     {

@@ -14,6 +14,9 @@ export function TestingPage() {
     expandedProviders,
     expandedSuites,
     selectedTestCount,
+    isLoading,
+    isRefreshingRegistryCache,
+    refreshRegistryCache,
     toggleProvider,
     toggleProviderPanel,
     toggleSuitePanel,
@@ -131,6 +134,11 @@ export function TestingPage() {
     [deleteBatchFromServer]
   );
 
+  const handleRefreshMemory = useCallback(async () => {
+    const result = await refreshRegistryCache();
+    setNotice(`Registry refreshed: ${result.suite_count} suites / ${result.version_count} versions.`);
+  }, [refreshRegistryCache, setNotice]);
+
   return (
     <div className="flex h-[calc(100vh-57px)]">
       {/* Left Panel - Test Selector (with Run controls) */}
@@ -147,6 +155,8 @@ export function TestingPage() {
             selectedTestCount={selectedTestCount}
             runMode={runMode}
             isRunning={isRunning}
+            isLoading={isLoading}
+            isRefreshingCache={isRefreshingRegistryCache}
             maxConcurrent={maxConcurrent}
             onToggleProvider={toggleProvider}
             onToggleProviderExpanded={toggleProviderPanel}
@@ -157,6 +167,7 @@ export function TestingPage() {
             onClearAll={handleClearAll}
             onRunModeChange={setRunMode}
             onMaxConcurrentChange={setMaxConcurrent}
+            onRefreshCache={() => void handleRefreshMemory()}
             onRun={() => void handleStartBatchRun()}
           />
         </div>
