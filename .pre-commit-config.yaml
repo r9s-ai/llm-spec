@@ -12,7 +12,7 @@ repos:
       - id: check-yaml
       - id: check-toml
       - id: check-json
-        exclude: tests/integration/mocks/.*stream.*\.json
+        exclude: packages/core/tests/integration/mocks/.*stream.*\.json
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: check-merge-conflict
@@ -51,11 +51,11 @@ repos:
     hooks:
       - id: eslint
         name: eslint
-        entry: bash -c 'cd frontend && pnpm exec eslint --fix $(echo "$@" | sed "s|frontend/||g")' --
+        entry: bash -c 'cd packages/web && pnpm exec eslint --fix $(echo "$@" | sed "s|packages/web/||g")' --
         language: system
-        files: ^frontend/src/.*\.[jt]sx?$
+        files: ^packages/web/src/.*\.[jt]sx?$
         types: [file]
-        exclude: ^frontend/dist/
+        exclude: ^packages/web/dist/
         pass_filenames: true
 
   # Prettier - Code formatter (using local installation)
@@ -63,11 +63,13 @@ repos:
     hooks:
       - id: prettier
         name: prettier
-        entry: bash -c 'cd frontend && pnpm exec prettier --write $(echo "$@" | sed "s|frontend/||g")' --
+        entry: bash -c 'cd packages/web && pnpm exec prettier --write $(echo "$@" | sed "s|packages/web/||g")' --
         language: system
-        files: ^frontend/src/.*\.(ts|tsx|css)$
+        # NOTE: TS/TSX currently hits a non-idempotent prettier case in this repo.
+        # Keep pre-commit prettier scoped to CSS to avoid infinite modify/fail loops.
+        files: ^packages/web/src/.*\.(css)$
         types: [file]
-        exclude: ^frontend/dist/
+        exclude: ^packages/web/dist/
         pass_filenames: true
 
   # Local hooks for project-specific checks

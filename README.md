@@ -30,7 +30,14 @@ Evaluating model capabilities is often plagued by "flaky passes" and "flaky fail
 
 ## 📦 Supported Providers
 
-Built-in suite configurations are located in `suites/`.
+Built-in suite configurations are located in `suites-registry/providers/`.
+
+## 🗂️ Project Layout
+
+- `packages/core`: runner/adapters/reporting + core tests
+- `packages/web-api`: FastAPI backend
+- `packages/web`: React frontend
+- `suites-registry/providers`: community-maintained JSON5 suites
 
 | Provider | Status | Default Model | Endpoints |
 |----------|--------|---------------|-----------|
@@ -141,7 +148,7 @@ uv run python -m llm_spec run -k "chat/completions"
 uv sync --extra dev --extra web
 
 # Install frontend dependencies
-cd frontend && pnpm install && cd ..
+cd packages/web && pnpm install && cd ../..
 ```
 
 ### Database Setup
@@ -161,7 +168,7 @@ psql -U postgres -c "CREATE DATABASE llm_spec;"
 ```bash
 # This file is idempotent: it creates tables if missing, applies minimal schema upgrades,
 # and seeds built-in suites into the DB.
-psql -U postgres -d llm_spec -f llm_spec/web/schema.sql
+psql -U postgres -d llm_spec -f packages/web-api/src/llm_spec_web/schema.sql
 ```
 
 ### Environment Variables
@@ -170,7 +177,7 @@ Create a `.env` file or export environment variables:
 
 ```bash
 # Copy example config
-cp llm_spec/web/env.example .env
+cp packages/web-api/src/llm_spec_web/env.example .env
 ```
 
 | Variable | Description | Default |
@@ -178,7 +185,7 @@ cp llm_spec/web/env.example .env
 | `LLM_SPEC_WEB_DATABASE_URL` | PostgreSQL connection string | `postgresql+psycopg://postgres:postgres@localhost:5432/llm_spec` |
 | `LLM_SPEC_WEB_APP_TOML_PATH` | Path to llm-spec.toml | `llm-spec.toml` |
 | `LLM_SPEC_WEB_MOCK_MODE` | Enable mock mode for testing | `false` |
-| `LLM_SPEC_WEB_MOCK_BASE_DIR` | Mock data directory | `tests/integration/mocks` |
+| `LLM_SPEC_WEB_MOCK_BASE_DIR` | Mock data directory | `packages/core/tests/integration/mocks` |
 | `LLM_SPEC_WEB_CORS_ORIGINS` | CORS allowed origins | `["*"]` |
 
 ### Provider Configuration
@@ -204,13 +211,20 @@ timeout = 30.0
 
 ```bash
 # Start backend server
-uv run python -m llm_spec.web.main
+uv run python -m llm_spec_web.main
 
 # Or using uvicorn directly
-uv run uvicorn llm_spec.web.main:app --reload --port 8000
+uv run uvicorn llm_spec_web.main:app --reload --port 8000
 
 # Start frontend dev server (in another terminal)
-cd frontend && pnpm dev
+cd packages/web && pnpm dev
+```
+
+Or use Makefile shortcuts:
+
+```bash
+make web-backend
+make web-frontend
 ```
 
 - Backend: `http://localhost:8000`
@@ -218,7 +232,7 @@ cd frontend && pnpm dev
 
 ### Suites In DB
 
-The initial web schema (`llm_spec/web/schema.sql`) seeds the built-in suites from `suites/` into the
+The initial web schema (`packages/web-api/src/llm_spec_web/schema.sql`) seeds the built-in suites from `suites-registry/providers/` into the
 database (via `suite` + `suite_version`). For custom suites, use the Web UI (or call the `/api/suites`
 endpoints) to create and version them.
 
@@ -346,7 +360,7 @@ endpoints) to create and version them.
 | `GET/PUT /api/settings/toml` | TOML configuration |
 
 > [!TIP]
-> OpenAPI spec is available at `llm_spec/web/openapi.yaml` (OpenAPI 3.1.0).
+> OpenAPI spec is available at `packages/web-api/src/llm_spec_web/openapi.yaml` (OpenAPI 3.1.0).
 
 ### Real-time Progress Updates
 
@@ -390,14 +404,14 @@ Mock mode allows testing without actual API calls:
 export LLM_SPEC_WEB_MOCK_MODE=true
 ```
 
-Mock data is stored in `tests/integration/mocks/`.
+Mock data is stored in `packages/core/tests/integration/mocks/`.
 
 ### Architecture
 
 Web backend layout (high-level):
 
 ```text
-llm_spec/web/
+packages/web-api/src/llm_spec_web/
 ├── api/           # FastAPI routers/controllers
 ├── core/          # DB wiring, exceptions, event bus
 ├── models/        # SQLAlchemy ORM models
@@ -423,6 +437,14 @@ Every run generates a unique `run_id` directory in `reports/` containing:
 
 ```bash
 uv run pytest
+```
+
+Or use scoped Make targets:
+
+```bash
+make test-core
+make test-integration
+make test-mock-all
 ```
 
 ### Code Formatting

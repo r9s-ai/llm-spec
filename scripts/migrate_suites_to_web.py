@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Migrate llm-spec.toml + suites/*.json5 into web DB tables."""
+"""Migrate llm-spec.toml + suites-registry/providers/*.json5 into web DB tables."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from pathlib import Path
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from llm_spec.web.core.db import Base
-from llm_spec.web.models import ProviderConfigModel, Suite, SuiteVersion
-from llm_spec.web.services.suite_service import SuiteService
+from llm_spec_web.core.db import Base
+from llm_spec_web.models import ProviderConfigModel, Suite, SuiteVersion
+from llm_spec_web.services.suite_service import SuiteService
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,7 +23,11 @@ def parse_args() -> argparse.Namespace:
         help="SQLAlchemy database URL",
     )
     parser.add_argument("--config", default="llm-spec.toml", help="Path to llm-spec.toml")
-    parser.add_argument("--suites", default="suites", help="Suites directory")
+    parser.add_argument(
+        "--suites",
+        default="suites-registry/providers",
+        help="Suites directory",
+    )
     parser.add_argument("--created-by", default="migration", help="Audit value for created_by")
     return parser.parse_args()
 

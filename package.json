@@ -1,0 +1,12 @@
+{
+  "name": "llm-spec-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "web:dev": "pnpm --dir packages/web dev",
+    "web:build": "pnpm --dir packages/web build"
+  }
+}
