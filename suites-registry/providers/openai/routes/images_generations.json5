@@ -1,0 +1,327 @@
+{
+  endpoint: "/v1/images/generations",
+  schemas: {
+    response: "openai.ImageResponse",
+    stream_chunk: "openai.ImageStreamEvent",
+  },
+  base_params: {
+    prompt: "A cute cat",
+    n: 1,
+  },
+  tests: [
+    {
+      name: "test_baseline",
+      description: "Baseline test: only required parameters",
+      is_baseline: true,
+    },
+    {
+      name: "test_param_size",
+      description: "Test size parameter (dall-e-3 default size)",
+      params: {
+        size: "1024x1024",
+      },
+      test_param: {
+        name: "size",
+        value: "1024x1024",
+      },
+    },
+    {
+      name: "test_param_size_dalle2",
+      description: "Test size parameter (dall-e-2 size variants)",
+      parameterize: {
+        size: [
+          "512x512",
+          "256x256",
+        ],
+      },
+      params: {
+        model: "dall-e-2",
+        size: "$size",
+      },
+      test_param: {
+        name: "size",
+        value: "$size",
+      },
+    },
+    {
+      name: "test_param_size_dalle3",
+      description: "Test dall-e-3 size variants",
+      parameterize: {
+        size: [
+          "1792x1024",
+          "1024x1792",
+        ],
+      },
+      params: {
+        size: "$size",
+      },
+      test_param: {
+        name: "size",
+        value: "$size",
+      },
+    },
+    {
+      name: "test_param_quality_dalle3",
+      description: "Test quality parameter (dall-e-3)",
+      parameterize: {
+        quality: [
+          "hd",
+          "standard",
+        ],
+      },
+      params: {
+        quality: "$quality",
+      },
+      test_param: {
+        name: "quality",
+        value: "$quality",
+      },
+    },
+    {
+      name: "test_param_response_format",
+      description: "Test response_format parameter (dall-e-3/dall-e-2)",
+      parameterize: {
+        response_format: [
+          "url",
+          "b64_json",
+        ],
+      },
+      params: {
+        response_format: "$response_format",
+      },
+      test_param: {
+        name: "response_format",
+        value: "$response_format",
+      },
+    },
+    {
+      name: "test_param_style",
+      description: "Test style parameter (dall-e-3)",
+      parameterize: {
+        style: [
+          "vivid",
+          "natural",
+        ],
+      },
+      params: {
+        style: "$style",
+      },
+      test_param: {
+        name: "style",
+        value: "$style",
+      },
+    },
+    {
+      name: "test_param_n_dalle2",
+      description: "Test n parameter (dall-e-2 supports multiple)",
+      params: {
+        model: "dall-e-2",
+        n: 2,
+      },
+      test_param: {
+        name: "n",
+        value: 2,
+      },
+    },
+    {
+      name: "test_param_user",
+      description: "Test user parameter",
+      params: {
+        user: "user-123",
+      },
+      test_param: {
+        name: "user",
+        value: "user-123",
+      },
+    },
+    {
+      name: "test_gpt_image_background_transparent",
+      description: "Test background parameter (transparent background, GPT image model)",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A simple logo with a transparent background",
+        background: "transparent",
+        output_format: "png",
+      },
+      test_param: {
+        name: "background",
+        value: "transparent",
+      },
+    },
+    {
+      name: "test_gpt_image_output_formats",
+      description: "Test output_format variants (GPT image model)",
+      parameterize: {
+        output_format: [
+          "png",
+          "jpeg",
+          "webp",
+        ],
+      },
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A minimal illustration of a rocket",
+        output_format: "$output_format",
+      },
+      test_param: {
+        name: "output_format",
+        value: "$output_format",
+      },
+    },
+    {
+      name: "test_gpt_image_output_webp_compression",
+      description: "Test output_format=webp + output_compression (GPT image model)",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A futuristic city skyline",
+        output_format: "webp",
+        output_compression: 80,
+      },
+      test_param: {
+        name: "output_compression",
+        value: 80,
+      },
+    },
+    {
+      name: "test_gpt_image_output_jpeg_compression",
+      description: "Test output_format=jpeg + output_compression (GPT image model)",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A portrait photo realistic style",
+        output_format: "jpeg",
+        output_compression: 80,
+      },
+      test_param: {
+        name: "output_compression",
+        value: 80,
+      },
+    },
+    {
+      name: "test_gpt_image_background_variants",
+      description: "Test background variants (GPT image model)",
+      parameterize: {
+        background: [
+          "transparent",
+          "opaque",
+          "auto",
+        ],
+      },
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A product icon with specified background",
+        background: "$background",
+      },
+      test_param: {
+        name: "background",
+        value: "$background",
+      },
+    },
+    {
+      name: "test_gpt_image_moderation_low",
+      description: "Test moderation=low (GPT image model)",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A landscape painting with trees and river",
+        moderation: "low",
+      },
+      test_param: {
+        name: "moderation",
+        value: "low",
+      },
+    },
+    {
+      name: "test_gpt_image_moderation_auto",
+      description: "Test moderation=auto (GPT image model)",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A sketch of a city skyline",
+        moderation: "auto",
+      },
+      test_param: {
+        name: "moderation",
+        value: "auto",
+      },
+    },
+    {
+      name: "test_gpt_image_quality_high",
+      description: "Test quality=high (GPT image model)",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A detailed illustration of a spaceship cockpit",
+        quality: "high",
+      },
+      test_param: {
+        name: "quality",
+        value: "high",
+      },
+    },
+    {
+      name: "test_gpt_image_quality_variants",
+      description: "Test other quality values (GPT image model)",
+      parameterize: {
+        quality: [
+          "medium",
+          "low",
+          "auto",
+        ],
+      },
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A clean line-art illustration",
+        quality: "$quality",
+      },
+      test_param: {
+        name: "quality",
+        value: "$quality",
+      },
+    },
+    {
+      name: "test_gpt_image_n_multiple",
+      description: "Test n parameter (GPT image model, multiple generation)",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A set of minimal icons",
+        n: 2,
+      },
+      test_param: {
+        name: "n",
+        value: 2,
+      },
+    },
+    {
+      name: "test_gpt_image_sizes",
+      description: "Test size parameter (GPT image model)",
+      parameterize: {
+        size: [
+          "1024x1024",
+          "1536x1024",
+          "1024x1536",
+        ],
+      },
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A landscape or portrait illustration",
+        size: "$size",
+      },
+      test_param: {
+        name: "size",
+        value: "$size",
+      },
+    },
+    {
+      name: "test_gpt_image_partial_streaming",
+      description: "Test partial_images + stream (GPT image model streaming)",
+      params: {
+        model: "gpt-image-1.5",
+        prompt: "A painting of a mountain lake",
+        partial_images: true,
+        stream: true,
+      },
+      stream: true,
+      test_param: {
+        name: "stream",
+        value: true,
+      },
+    },
+  ],
+}

@@ -1,0 +1,2 @@
+name = "Whisper 1"
+routes = ["audio_transcriptions", "audio_translations"]

@@ -1,0 +1,2 @@
+name = "DALL-E 3"
+routes = ["images_generations"]
