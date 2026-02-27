@@ -3,7 +3,7 @@ import { Badge } from "../UI";
 import { ActiveRunCard } from "./ActiveRunCard";
 import { CompletedRunCard } from "./CompletedRunCard";
 import { ProgressBar } from "./ProgressBar";
-import type { RunBatchWithRuns, RunEvent, RunSummary } from "../../types";
+import type { RunBatchWithRuns, RunEvent, RunJob, RunSummary } from "../../types";
 import * as api from "../../api";
 
 interface TaskCardProps {
@@ -12,6 +12,7 @@ interface TaskCardProps {
   resultsByRunId: Record<string, Record<string, unknown>>;
   onDelete: (batchId: string) => void;
   onUpdate?: (batch: RunBatchWithRuns) => void;
+  onRetryFailedTest?: (run: RunJob, testName: string) => Promise<void> | void;
 }
 
 function formatRelativeTime(dateStr: string | null): string {
@@ -53,6 +54,7 @@ export function TaskCard({
   resultsByRunId,
   onDelete,
   onUpdate,
+  onRetryFailedTest,
 }: TaskCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -418,6 +420,7 @@ export function TaskCard({
                               run={run}
                               summary={summary}
                               result={result}
+                              onRetryFailedTest={onRetryFailedTest}
                             />
                           );
                         })}

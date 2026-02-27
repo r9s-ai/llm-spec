@@ -6,6 +6,7 @@ import {
   getBatch,
   getBatches,
   getRunResult,
+  retryRunTest,
   streamRunEvents,
   updateBatch,
 } from "../api";
@@ -326,6 +327,30 @@ export function useBatches() {
     return updated;
   }, []);
 
+  const retryFailedTestInPlace = useCallback(
+    async (run: RunJob, testName: string, onNotice: (msg: string) => void): Promise<void> => {
+      onNotice(`Retrying ${testName}...`);
+      const updatedRun = await retryRunTest(run.id, testName);
+      const updatedResult = await getRunResult(run.id);
+
+      setRunResultById((prev) => ({ ...prev, [run.id]: updatedResult }));
+
+      if (updatedRun.batch_id) {
+        updateRunInBatch(updatedRun.batch_id, updatedRun);
+      } else {
+        setBatches((prev) =>
+          prev.map((batch) => ({
+            ...batch,
+            runs: batch.runs.map((r) => (r.id === updatedRun.id ? updatedRun : r)),
+          }))
+        );
+      }
+
+      onNotice(`Retried ${testName}. Backend result updated.`);
+    },
+    [updateRunInBatch]
+  );
+
   return {
     // State
     batches,
@@ -342,5 +367,6 @@ export function useBatches() {
     removeBatch,
     deleteBatchFromServer,
     updateBatchName,
+    retryFailedTestInPlace,
   };
 }

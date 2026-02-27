@@ -283,6 +283,54 @@ class RunRepository:
         self.db.flush()
         return test_result
 
+    def get_test_result_by_name(self, run_id: str, test_name: str) -> RunTestResult | None:
+        """Get one test result by run ID and test name."""
+        stmt = select(RunTestResult).where(
+            RunTestResult.run_id == run_id,
+            RunTestResult.test_name == test_name,
+        )
+        return self.db.execute(stmt).scalars().first()
+
+    def upsert_test_result_by_name(
+        self,
+        *,
+        run_id: str,
+        test_name: str,
+        test_id: str,
+        parameter_value: dict | list | str | int | float | bool | None,
+        status: str,
+        fail_stage: str | None,
+        reason_code: str | None,
+        latency_ms: int | None,
+        raw_record: dict,
+    ) -> RunTestResult:
+        """Insert or update a test result identified by ``run_id + test_name``."""
+        row = self.get_test_result_by_name(run_id, test_name)
+        if row is None:
+            row = RunTestResult(
+                run_id=run_id,
+                test_id=test_id,
+                test_name=test_name,
+                parameter_value=parameter_value,
+                status=status,
+                fail_stage=fail_stage,
+                reason_code=reason_code,
+                latency_ms=latency_ms,
+                raw_record=raw_record,
+            )
+            self.db.add(row)
+        else:
+            row.test_id = test_id
+            row.parameter_value = parameter_value
+            row.status = status
+            row.fail_stage = fail_stage
+            row.reason_code = reason_code
+            row.latency_ms = latency_ms
+            row.raw_record = raw_record
+            self.db.add(row)
+        self.db.flush()
+        return row
+
     def list_test_results(self, run_id: str) -> Sequence[RunTestResult]:
         """List test results for a run.
 

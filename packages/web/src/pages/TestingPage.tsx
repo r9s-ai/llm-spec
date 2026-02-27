@@ -1,6 +1,7 @@
 import { useMemo, useCallback, useEffect, useState } from "react";
 import { TestSelector, TaskCard } from "../components";
 import { useAppContext } from "../context";
+import type { RunJob } from "../types";
 
 export function TestingPage() {
   const { runMode, setRunMode, setNotice, suites, batches } = useAppContext();
@@ -139,6 +140,13 @@ export function TestingPage() {
     setNotice(`Registry refreshed: ${result.suite_count} suites / ${result.version_count} versions.`);
   }, [refreshRegistryCache, setNotice]);
 
+  const handleRetryFailedTest = useCallback(
+    async (run: RunJob, testName: string): Promise<void> => {
+      await batches.retryFailedTestInPlace(run, testName, setNotice);
+    },
+    [batches, setNotice]
+  );
+
   return (
     <div className="flex h-[calc(100vh-57px)]">
       {/* Left Panel - Test Selector (with Run controls) */}
@@ -194,6 +202,7 @@ export function TestingPage() {
               resultsByRunId={runResultById}
               onDelete={handleDeleteBatch}
               onUpdate={upsertBatch}
+              onRetryFailedTest={handleRetryFailedTest}
             />
           ))}
 
@@ -206,6 +215,7 @@ export function TestingPage() {
               resultsByRunId={runResultById}
               onDelete={handleDeleteBatch}
               onUpdate={upsertBatch}
+              onRetryFailedTest={handleRetryFailedTest}
             />
           ))}
         </div>

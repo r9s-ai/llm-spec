@@ -26,10 +26,12 @@ interface TestResultRow {
 
 interface TestResultTableProps {
   tests: TestResultRow[];
+  onRetryFailedTest?: (testName: string) => Promise<void> | void;
 }
 
-export function TestResultTable({ tests }: TestResultTableProps) {
+export function TestResultTable({ tests, onRetryFailedTest }: TestResultTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [retryingRows, setRetryingRows] = useState<Set<string>>(new Set());
 
   const toggleRow = (testName: string) => {
     setExpandedRows((prev) => {
@@ -59,6 +61,20 @@ export function TestResultTable({ tests }: TestResultTableProps) {
     return test.result?.status === "fail";
   };
 
+  const handleRetry = async (testName: string): Promise<void> => {
+    if (!onRetryFailedTest) return;
+    setRetryingRows((prev) => new Set(prev).add(testName));
+    try {
+      await onRetryFailedTest(testName);
+    } finally {
+      setRetryingRows((prev) => {
+        const next = new Set(prev);
+        next.delete(testName);
+        return next;
+      });
+    }
+  };
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -84,7 +100,27 @@ export function TestResultTable({ tests }: TestResultTableProps) {
                 >
                   {/* Status */}
                   <td className="px-2 py-2">
-                    {failed ? (
+                    {retryingRows.has(test.test_name) ? (
+                      <svg
+                        className="h-4 w-4 animate-spin text-violet-500"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                    ) : failed ? (
                       <span className="text-red-500 font-bold">✗</span>
                     ) : (
                       <span className="text-green-500 font-bold">✓</span>
@@ -122,25 +158,72 @@ export function TestResultTable({ tests }: TestResultTableProps) {
                   {/* Validation Result */}
                   <td className="px-2 py-2">
                     {failed ? (
-                      <button
-                        onClick={() => toggleRow(test.test_name)}
-                        className="flex items-center gap-1 text-red-600 hover:text-red-700"
-                      >
-                        <span className="font-medium">Failed</span>
-                        <svg
-                          className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`}
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleRow(test.test_name)}
+                          className="flex items-center gap-1 text-red-600 hover:text-red-700"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 9l-7 7-7-7"
-                          />
-                        </svg>
-                      </button>
+                          <span className="font-medium">Failed</span>
+                          <svg
+                            className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 9l-7 7-7-7"
+                            />
+                          </svg>
+                        </button>
+                        {onRetryFailedTest && (
+                          <button
+                            onClick={() => void handleRetry(test.test_name)}
+                            disabled={retryingRows.has(test.test_name)}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-300 text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            title="Retry this failed test"
+                            aria-label="Retry this failed test"
+                          >
+                            {retryingRows.has(test.test_name) ? (
+                              <svg
+                                className="h-3.5 w-3.5 animate-spin text-violet-500"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                />
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                />
+                              </svg>
+                            ) : (
+                              <svg
+                                className="h-3.5 w-3.5"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M16.023 9.348h4.992v-5.01M7.977 14.652H2.985v5.01M3 10a9 9 0 0115.547-6.352L21 6m0 8a9 9 0 01-15.547 6.352L3 18"
+                                />
+                              </svg>
+                            )}
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-green-600 font-medium">OK</span>
                     )}

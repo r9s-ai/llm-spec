@@ -101,6 +101,13 @@ export function getRun(runId: string): Promise<RunJob> {
   return request<RunJob>(`/api/runs/${runId}`);
 }
 
+export function retryRunTest(runId: string, testName: string): Promise<RunJob> {
+  return request<RunJob>(`/api/runs/${runId}/tests/retry`, {
+    method: "POST",
+    body: JSON.stringify({ test_name: testName }),
+  });
+}
+
 export function getRunResult(runId: string): Promise<Record<string, unknown>> {
   return request<Record<string, unknown>>(`/api/runs/${runId}/result`);
 }
