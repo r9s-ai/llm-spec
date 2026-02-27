@@ -18,7 +18,8 @@ from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import LogConfig, ProviderConfig, load_config
 from llm_spec.logger import RequestLogger
 from llm_spec.reporting.collector import EndpointResultBuilder
-from llm_spec.runners import ConfigDrivenTestRunner, SpecTestSuite, load_test_suite_from_dict
+from llm_spec.runners import ConfigDrivenTestRunner
+from llm_spec.suites import SpecTestSuite, load_test_suite_from_dict
 from llm_spec_web.config import settings
 from llm_spec_web.core.event_bus import event_bus
 from llm_spec_web.core.exceptions import NotFoundError
@@ -336,6 +337,7 @@ class RunService:
             {
                 "mode": run_job.mode,
                 "progress_total": run_job.progress_total,
+                "test_order": [t.name for t in tests],
                 "max_concurrent": max_concurrent,
             },
         )
@@ -440,6 +442,7 @@ class RunService:
                         "test_finished",
                         {
                             "test_name": test.name,
+                            "index": idx,
                             "status": status,
                             "progress_done": progress_done,
                             "progress_total": len(tests),

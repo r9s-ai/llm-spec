@@ -20,7 +20,8 @@ from llm_spec.registry import load_registry_suites
 from llm_spec.reporting.collector import EndpointResultBuilder
 from llm_spec.reporting.report_types import ReportData
 from llm_spec.reporting.run_result_formatter import RunResultFormatter
-from llm_spec.runners import ConfigDrivenTestRunner, SpecTestSuite, load_test_suite_from_dict
+from llm_spec.runners import ConfigDrivenTestRunner
+from llm_spec.suites import SpecTestSuite, load_test_suite_from_dict
 
 
 @dataclass(frozen=True)
