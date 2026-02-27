@@ -56,7 +56,6 @@
         ],
       },
       params: {
-        model: "gpt-4o-mini-transcribe",
         response_format: "$response_format",
       },
       files: {
@@ -71,7 +70,6 @@
       name: "test_prompt",
       description: "Test prompt parameter",
       params: {
-        model: "gpt-4o-mini-transcribe",
         prompt: "Please transcribe in a friendly style.",
       },
       files: {
@@ -86,7 +84,6 @@
       name: "test_chunking_strategy_auto",
       description: "Test chunking_strategy = auto",
       params: {
-        model: "gpt-4o-mini-transcribe",
         chunking_strategy: "auto",
       },
       files: {
@@ -101,7 +98,6 @@
       name: "test_chunking_strategy_server_vad",
       description: "Test chunking_strategy = server_vad object",
       params: {
-        model: "gpt-4o-mini-transcribe",
         chunking_strategy: {
           type: "server_vad",
         },
@@ -120,7 +116,6 @@
       name: "test_include_logprobs",
       description: "Test include=logprobs",
       params: {
-        model: "gpt-4o-mini-transcribe",
         include: [
           "logprobs",
         ],
@@ -141,7 +136,6 @@
       name: "test_known_speakers",
       description: "Test known_speaker_names + known_speaker_references",
       params: {
-        model: "gpt-4o-mini-transcribe",
         known_speaker_names: [
           "speaker_a",
           "speaker_b",
@@ -166,7 +160,6 @@
       name: "test_timestamp_granularities",
       description: "Test timestamp_granularities with verbose_json",
       params: {
-        model: "gpt-4o-mini-transcribe",
         response_format: "verbose_json",
         timestamp_granularities: [
           "word",
@@ -189,7 +182,6 @@
       name: "test_stream_flag",
       description: "Test stream=true",
       params: {
-        model: "gpt-4o-mini-transcribe",
         stream: true,
       },
       stream: true,

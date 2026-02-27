@@ -460,7 +460,6 @@
         ],
       },
       params: {
-        model: "gpt-5.1-codex-max",
         reasoning_effort: "$effort",
         max_completion_tokens:1024,
       },
@@ -474,7 +473,6 @@
       name: "test_param_modalities",
       description: "Test modalities parameter for text and audio output support",
       params: {
-        model: "gpt-audio-mini",
         modalities: [
           "text",
           "audio",
@@ -497,7 +495,6 @@
       name: "test_role_developer",
       description: "Test developer role (replaces system in o1+)",
       params: {
-        model: "o1-mini",
         messages: [
           {
             role: "developer",

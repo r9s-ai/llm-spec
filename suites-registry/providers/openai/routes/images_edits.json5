@@ -20,7 +20,6 @@
       name: "test_param_response_format_url_dalle2",
       description: "dall-e-2 supports response_format=url",
       params: {
-        model: "dall-e-2",
         response_format: "url",
       },
       files: {

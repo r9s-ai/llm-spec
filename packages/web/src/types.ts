@@ -53,6 +53,8 @@ export type RunJob = {
   status: string;
   mode: string;
   provider: string;
+  route: string | null;
+  model: string | null;
   endpoint: string;
   batch_id: string | null;
   suite_version_id: string | null;
@@ -117,27 +119,6 @@ export type RunSummary = {
   total?: number;
   passed?: number;
   failed?: number;
-};
-
-// API request types
-export type CreateSuiteInput = {
-  provider: string;
-  route: string;
-  model: string;
-  endpoint: string;
-  name: string;
-  raw_json5: string;
-  created_by: string;
-};
-
-export type UpdateSuiteInput = {
-  name?: string;
-  status?: "active" | "archived";
-};
-
-export type CreateVersionInput = {
-  raw_json5: string;
-  created_by: string;
 };
 
 export type CreateRunInput = {

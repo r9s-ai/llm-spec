@@ -117,6 +117,7 @@ class RunService:
         suite_service = SuiteService()
 
         suite_version = suite_service.resolve_suite_by_version_id(suite_version_id)
+        suite = suite_service.get_suite(suite_version.suite_id)
 
         provider = str(suite_version.parsed_json.get("provider"))
         endpoint = str(suite_version.parsed_json.get("endpoint"))
@@ -129,6 +130,8 @@ class RunService:
             status="queued",
             mode=resolved_mode,
             provider=provider,
+            route=suite.route,
+            model=suite.model,
             endpoint=endpoint,
             suite_version_id=suite_version_id,
             config_snapshot={"selected_tests": selected_tests or []},
@@ -663,6 +666,7 @@ class RunService:
         runs: list[RunJob] = []
         for suite_version_id in suite_version_ids:
             suite_version = suite_service.resolve_suite_by_version_id(suite_version_id)
+            suite = suite_service.get_suite(suite_version.suite_id)
 
             provider = str(suite_version.parsed_json.get("provider"))
             endpoint = str(suite_version.parsed_json.get("endpoint"))
@@ -678,6 +682,8 @@ class RunService:
                 status="queued",
                 mode=resolved_mode,
                 provider=provider,
+                route=suite.route,
+                model=suite.model,
                 endpoint=endpoint,
                 batch_id=batch.id,
                 suite_version_id=suite_version.id,

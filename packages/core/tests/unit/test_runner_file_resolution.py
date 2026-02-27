@@ -66,7 +66,6 @@ def test_asset_placeholder_base64_and_data_uri(tmp_path: Path) -> None:
 
     test = SpecTestCase(
         name="asset_placeholders",
-        override_base=True,
         params={
             "raw": "$asset_base64(assets/images/tiny.bin)",
             "uri": "$asset_data_uri(assets/images/tiny.bin,application/octet-stream)",
@@ -83,7 +82,6 @@ def test_asset_placeholder_missing_file_raises(tmp_path: Path) -> None:
     runner, _ = _make_runner(tmp_path)
     test = SpecTestCase(
         name="missing_asset",
-        override_base=True,
         params={"raw": "$asset_base64(assets/images/not_exists.bin)"},
         test_param={"name": "raw", "value": "x"},
     )

@@ -27,35 +27,6 @@ export function getSuites(): Promise<Suite[]> {
   return request<Suite[]>("/api/suites");
 }
 
-export function createSuite(input: {
-  provider: string;
-  route: string;
-  model: string;
-  endpoint: string;
-  name: string;
-  raw_json5: string;
-  created_by: string;
-}): Promise<Suite> {
-  return request<Suite>("/api/suites", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
-
-export function updateSuite(
-  suiteId: string,
-  input: { name?: string; status?: "active" | "archived" }
-): Promise<Suite> {
-  return request<Suite>(`/api/suites/${suiteId}`, {
-    method: "PUT",
-    body: JSON.stringify(input),
-  });
-}
-
-export function deleteSuite(suiteId: string): Promise<void> {
-  return request<void>(`/api/suites/${suiteId}`, { method: "DELETE" });
-}
-
 export function listVersions(suiteId: string): Promise<SuiteVersion[]> {
   return request<SuiteVersion[]>(`/api/suites/${suiteId}/versions`);
 }
@@ -66,16 +37,6 @@ export function refreshSuiteRegistryCache(): Promise<{
   version_count: number;
 }> {
   return request("/api/suites/cache/refresh", { method: "POST" });
-}
-
-export function createVersion(
-  suiteId: string,
-  input: { raw_json5: string; created_by: string }
-): Promise<SuiteVersion> {
-  return request<SuiteVersion>(`/api/suites/${suiteId}/versions`, {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
 }
 
 // Batch API functions

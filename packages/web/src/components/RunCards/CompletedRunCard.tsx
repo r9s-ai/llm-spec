@@ -138,10 +138,10 @@ export function CompletedRunCard({ run, summary, result }: CompletedRunCardProps
           <Badge variant={statusVariant}>{statusText}</Badge>
           <div>
             <h4 className="font-semibold text-slate-900">
-              {run.provider} {run.endpoint}
+              {run.provider} / {run.model ?? "unknown"} / {run.route ?? run.endpoint}
             </h4>
             <p className="text-xs text-slate-500">
-              {run.id} · {run.mode}
+              {run.id} · {run.mode} · {run.endpoint}
             </p>
           </div>
         </div>

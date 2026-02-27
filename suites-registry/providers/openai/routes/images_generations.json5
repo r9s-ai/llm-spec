@@ -35,7 +35,6 @@
         ],
       },
       params: {
-        model: "dall-e-2",
         size: "$size",
       },
       test_param: {
@@ -115,7 +114,6 @@
       name: "test_param_n_dalle2",
       description: "Test n parameter (dall-e-2 supports multiple)",
       params: {
-        model: "dall-e-2",
         n: 2,
       },
       test_param: {
@@ -138,7 +136,6 @@
       name: "test_gpt_image_background_transparent",
       description: "Test background parameter (transparent background, GPT image model)",
       params: {
-        model: "gpt-image-1.5",
         prompt: "A simple logo with a transparent background",
         background: "transparent",
         output_format: "png",
@@ -159,7 +156,6 @@
         ],
       },
       params: {
-        model: "gpt-image-1.5",
         prompt: "A minimal illustration of a rocket",
         output_format: "$output_format",
       },
@@ -172,7 +168,6 @@
       name: "test_gpt_image_output_webp_compression",
       description: "Test output_format=webp + output_compression (GPT image model)",
       params: {
-        model: "gpt-image-1.5",
         prompt: "A futuristic city skyline",
         output_format: "webp",
         output_compression: 80,
@@ -186,7 +181,6 @@
       name: "test_gpt_image_output_jpeg_compression",
       description: "Test output_format=jpeg + output_compression (GPT image model)",
       params: {
-        model: "gpt-image-1.5",
         prompt: "A portrait photo realistic style",
         output_format: "jpeg",
         output_compression: 80,
@@ -207,7 +201,6 @@
         ],
       },
       params: {
-        model: "gpt-image-1.5",
         prompt: "A product icon with specified background",
         background: "$background",
       },
@@ -220,7 +213,6 @@
       name: "test_gpt_image_moderation_low",
       description: "Test moderation=low (GPT image model)",
       params: {
-        model: "gpt-image-1.5",
         prompt: "A landscape painting with trees and river",
         moderation: "low",
       },
@@ -233,7 +225,6 @@
       name: "test_gpt_image_moderation_auto",
       description: "Test moderation=auto (GPT image model)",
       params: {
-        model: "gpt-image-1.5",
         prompt: "A sketch of a city skyline",
         moderation: "auto",
       },
@@ -246,7 +237,6 @@
       name: "test_gpt_image_quality_high",
       description: "Test quality=high (GPT image model)",
       params: {
-        model: "gpt-image-1.5",
         prompt: "A detailed illustration of a spaceship cockpit",
         quality: "high",
       },
@@ -266,7 +256,6 @@
         ],
       },
       params: {
-        model: "gpt-image-1.5",
         prompt: "A clean line-art illustration",
         quality: "$quality",
       },
@@ -279,7 +268,6 @@
       name: "test_gpt_image_n_multiple",
       description: "Test n parameter (GPT image model, multiple generation)",
       params: {
-        model: "gpt-image-1.5",
         prompt: "A set of minimal icons",
         n: 2,
       },
@@ -299,7 +287,6 @@
         ],
       },
       params: {
-        model: "gpt-image-1.5",
         prompt: "A landscape or portrait illustration",
         size: "$size",
       },
@@ -312,7 +299,6 @@
       name: "test_gpt_image_partial_streaming",
       description: "Test partial_images + stream (GPT image model streaming)",
       params: {
-        model: "gpt-image-1.5",
         prompt: "A painting of a mountain lake",
         partial_images: true,
         stream: true,

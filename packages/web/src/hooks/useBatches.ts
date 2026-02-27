@@ -234,7 +234,7 @@ export function useBatches() {
       maxConcurrent?: number
     ): Promise<void> => {
       if (suiteVersionIds.length === 0) {
-        onNotice("Pick at least one route to run.");
+        onNotice("Pick at least one model/route to run.");
         return;
       }
 

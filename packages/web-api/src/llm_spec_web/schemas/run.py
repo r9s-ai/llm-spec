@@ -64,6 +64,8 @@ class RunJobResponse(BaseModel):
         status: Job status.
         mode: Execution mode.
         provider: Provider name.
+        route: Registry route key.
+        model: Model ID.
         endpoint: API endpoint path.
         batch_id: Batch ID this run belongs to.
         suite_version_id: Suite version ID.
@@ -80,6 +82,8 @@ class RunJobResponse(BaseModel):
     status: str
     mode: str
     provider: str
+    route: str | None = None
+    model: str | None = None
     endpoint: str
     batch_id: str | None = None
     suite_version_id: str | None
