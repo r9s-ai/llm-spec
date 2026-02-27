@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { Checkbox } from "../UI";
 import { ModelNode } from "./ModelNode";
 import type { Suite, TestSelectionMap, VersionsMap } from "../../types";
@@ -33,7 +33,6 @@ export function ProviderNode({
   onToggleTests,
   onToggleTest,
 }: ProviderNodeProps) {
-
   // Calculate selection state for this provider
   const { totalTests, selectedTests, isAllSelected, isIndeterminate } = useMemo(() => {
     let total = 0;
@@ -104,17 +103,34 @@ export function ProviderNode({
   const modelNames = useMemo(() => Object.keys(suitesByModel).sort(), [suitesByModel]);
   const uniqueRouteCount = useMemo(() => new Set(suites.map((suite) => suite.route)).size, [suites]);
 
-  // Calculate expanded models directly from searchQuery and modelNames
-  // This replaces useEffect + useState to avoid calling setState within effect
-  const expandedModels = useMemo(() => {
+  // Keep model expansion state local to each provider panel.
+  const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set<string>());
+
+  const effectiveExpandedModels = useMemo(() => {
+    if (modelNames.length === 0) {
+      return new Set<string>();
+    }
+
     if (searchQuery) {
       return new Set(modelNames);
     }
-    if (modelNames.length > 0) {
-      return new Set([modelNames[0]]);
+
+    const next = new Set(Array.from(expandedModels).filter((name) => modelNames.includes(name)));
+    if (next.size === 0) {
+      next.add(modelNames[0]);
     }
-    return new Set<string>();
-  }, [searchQuery, modelNames]);
+    return next;
+  }, [expandedModels, searchQuery, modelNames]);
+
+  const handleToggleModelExpanded = useCallback((model: string) => {
+    if (searchQuery) return;
+    setExpandedModels((prev) => {
+      const next = new Set(prev);
+      if (next.has(model)) next.delete(model);
+      else next.add(model);
+      return next;
+    });
+  }, [searchQuery]);
 
   if (modelNames.length === 0) {
     return null;
@@ -178,13 +194,9 @@ export function ProviderNode({
               selectedVersionBySuite={selectedVersionBySuite}
               selectedTestsBySuite={selectedTestsBySuite}
               expandedSuites={expandedSuites}
-              isExpanded={expandedModels.has(model)}
+              isExpanded={effectiveExpandedModels.has(model)}
               searchQuery={searchQuery}
-              onToggleExpanded={() => {
-                // Toggle model expansion - this is a user action that needs state
-                // Since we're using useMemo for expandedModels, we need a callback to parent
-                // For now, this will be a no-op that gets reset on searchQuery/modelNames change
-              }}
+              onToggleExpanded={() => handleToggleModelExpanded(model)}
               onToggleSuiteExpanded={onToggleSuiteExpanded}
               onToggleTests={onToggleTests}
               onToggleTest={onToggleTest}

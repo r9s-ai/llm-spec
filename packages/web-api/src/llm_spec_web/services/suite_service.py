@@ -13,7 +13,7 @@ from typing import Any
 import json5
 
 from llm_spec.registry import load_registry_suites
-from llm_spec.runners import load_test_suite_from_dict
+from llm_spec.suites import load_test_suite_from_dict
 from llm_spec_web.core.exceptions import NotFoundError
 
 
@@ -111,7 +111,30 @@ class SuiteService:
             model = expanded.model
             suite_id = self._suite_id(provider, route, model)
             parsed_json = dict(expanded.suite_dict)
-            raw_json5 = json5.dumps(parsed_json, quote_keys=False, trailing_commas=False)
+            raw_json5_source = dict(expanded.suite_dict)
+
+            # Normalize suite payload to executable test rows so UI selection and
+            # runner execution share the same test-name space (including variants).
+            loaded_suite = load_test_suite_from_dict(parsed_json)
+            parsed_json["tests"] = [
+                {
+                    "name": test.name,
+                    "description": test.description,
+                    "params": test.params,
+                    "test_param": test.test_param,
+                    "is_baseline": test.is_baseline,
+                    "stream": test.stream,
+                    "stream_rules": test.stream_rules,
+                    "endpoint_override": test.endpoint_override,
+                    "files": test.files,
+                    "schemas": test.schemas,
+                    "required_fields": test.required_fields,
+                    "method": test.method,
+                    "tags": test.tags,
+                }
+                for test in loaded_suite.tests
+            ]
+            raw_json5 = json5.dumps(raw_json5_source, quote_keys=False, trailing_commas=False)
             name = str(parsed_json.get("suite_name") or f"{provider} {route} ({model})")
 
             suite = RegistrySuite(

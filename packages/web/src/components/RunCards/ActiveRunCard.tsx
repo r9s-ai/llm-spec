@@ -43,30 +43,47 @@ function formatValue(value: unknown): string {
 }
 
 export function ActiveRunCard({ run, events }: ActiveRunCardProps) {
-  // Build test results from events
-  const testResults: TestResultRow[] = [];
-  const runningTests = new Set<string>();
-  const finishedTests = new Set<string>();
+  // Build test results from events.
+  // Keep a stable order by test index from backend events.
+  const testResultsByName = new Map<string, TestResultRow>();
+  const testIndexByName = new Map<string, number>();
 
   // Process events in reverse order (oldest first) since events are stored newest first
   const sortedEvents = [...events].reverse();
 
   for (const event of sortedEvents) {
+    if (event.event_type === "run_started") {
+      const payloadOrder = event.payload.test_order;
+      if (Array.isArray(payloadOrder)) {
+        payloadOrder.forEach((item, idx) => {
+          if (typeof item === "string" && !testIndexByName.has(item)) {
+            testIndexByName.set(item, idx + 1);
+          }
+        });
+      }
+    }
+
     if (event.event_type === "test_started") {
       const testName = (event.payload.test_name as string) || "Unknown";
-      // Only add to running if not already finished
-      if (!finishedTests.has(testName)) {
-        runningTests.add(testName);
+      const index = event.payload.index as number | undefined;
+      if (typeof index === "number") {
+        testIndexByName.set(testName, index);
       }
-    } else if (event.event_type === "test_finished") {
+      const existing = testResultsByName.get(testName);
+      if (!existing || (existing.status !== "pass" && existing.status !== "fail")) {
+        testResultsByName.set(testName, { test_name: testName, status: "running" });
+      }
+    }
+
+    if (event.event_type === "test_finished") {
       const testName = (event.payload.test_name as string) || "Unknown";
+      const index = event.payload.index as number | undefined;
+      if (typeof index === "number") {
+        testIndexByName.set(testName, index);
+      }
       const status = (event.payload.status as string) || "fail";
       const testResult = event.payload.test_result as Record<string, unknown> | undefined;
-
-      runningTests.delete(testName);
-      finishedTests.add(testName);
-
-      testResults.push({
+      testResultsByName.set(testName, {
         test_name: testName,
         status: status === "pass" ? "pass" : "fail",
         parameter: testResult?.parameter as TestResultRow["parameter"],
@@ -77,13 +94,12 @@ export function ActiveRunCard({ run, events }: ActiveRunCardProps) {
     }
   }
 
-  // Add running tests
-  for (const testName of runningTests) {
-    testResults.push({
-      test_name: testName,
-      status: "running",
-    });
-  }
+  const testResults = Array.from(testResultsByName.values()).sort((a, b) => {
+    const ai = testIndexByName.get(a.test_name) ?? Number.MAX_SAFE_INTEGER;
+    const bi = testIndexByName.get(b.test_name) ?? Number.MAX_SAFE_INTEGER;
+    if (ai !== bi) return ai - bi;
+    return a.test_name.localeCompare(b.test_name);
+  });
 
   // Don't show placeholder pending tests - they are confusing and not useful
   // The progress bar in the header shows the overall progress
