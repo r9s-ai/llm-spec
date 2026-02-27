@@ -20,13 +20,6 @@ class LogConfig(BaseModel):
     max_body_length: int = 1000
 
 
-class ReportConfig(BaseModel):
-    """Report configuration."""
-
-    format: str = "both"  # terminal, json, both
-    output_dir: str = "./reports"
-
-
 class ProviderConfig(BaseModel):
     """Provider configuration."""
 
@@ -61,7 +54,6 @@ class AppConfig(BaseModel):
     """App configuration."""
 
     log: LogConfig = Field(default_factory=LogConfig)
-    report: ReportConfig = Field(default_factory=ReportConfig)
 
     # Dynamically loaded provider configs (Pydantic v2 disallows leading-underscore field names)
     provider_configs: dict[str, ProviderConfig] = Field(default_factory=dict, exclude=True)
@@ -84,13 +76,12 @@ class AppConfig(BaseModel):
         with open(config_path, "rb") as f:
             data = tomllib.load(f)
 
-        # Parse log/report sections
+        # Parse log section
         log_config = LogConfig(**data.get("log", {}))
-        report_config = ReportConfig(**data.get("report", {}))
 
         # Parse provider sections (old style: [openai], [anthropic], ...)
         provider_configs = {}
-        known_sections = {"log", "report", "providers", "channels"}
+        known_sections = {"log", "providers", "channels"}
 
         # New style: [providers.<name>]
         providers_section = data.get("providers", {})
@@ -115,7 +106,7 @@ class AppConfig(BaseModel):
                     continue
                 channels.append(ChannelConfig(**item))
 
-        config = cls(log=log_config, report=report_config, channels=channels)
+        config = cls(log=log_config, channels=channels)
         config.provider_configs = provider_configs
 
         return config

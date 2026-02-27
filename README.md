@@ -15,7 +15,7 @@
 
 It provides a complete evidence chain:
 
-`Request -> Response -> Validator/Rule -> Test Result -> Run Report`
+`Request -> Response -> Validator/Rule -> Test Result`
 
 ---
 
@@ -32,7 +32,7 @@ This project now uses a **registry-first** design:
 
 ## Repository Layout
 
-- `packages/core`: runner, adapters, validators, report pipeline
+- `packages/core`: test runner engine, adapters, validators
 - `packages/web-api`: FastAPI backend
 - `packages/web`: React + Vite frontend
 - `suites-registry`: community-maintained provider/route/model registry
@@ -78,30 +78,32 @@ cd ../..
 
 ---
 
-## Run With CLI
+## Run Test Engine
 
-Run all suites:
+Run core unit tests:
 
 ```bash
-uv run python -m llm_spec run
+uv run pytest packages/core/tests/unit -v
 ```
 
-Filter examples:
+Run config-driven integration suites:
 
 ```bash
-uv run python -m llm_spec run --provider openai
-uv run python -m llm_spec run --provider anthropic
-uv run python -m llm_spec run --model gpt-4o-mini
-uv run python -m llm_spec run -k "chat_completions"
+uv run pytest packages/core/tests/integration/test_suite_runner.py -v
+```
+
+Mock mode:
+
+```bash
+uv run pytest packages/core/tests/integration/test_suite_runner.py --mock -v
 ```
 
 Useful Make targets:
 
 ```bash
-make llm-spec-run-all
-make llm-spec-run-openai
 make test-core
 make test-integration
+make test-mock-all
 ```
 
 ---

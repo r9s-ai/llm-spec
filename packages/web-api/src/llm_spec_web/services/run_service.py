@@ -13,11 +13,11 @@ from llm_spec.adapters.anthropic import AnthropicAdapter
 from llm_spec.adapters.gemini import GeminiAdapter
 from llm_spec.adapters.openai import OpenAIAdapter
 from llm_spec.adapters.xai import XAIAdapter
-from llm_spec.cli import _build_run_result
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import LogConfig, ProviderConfig, load_config
 from llm_spec.logger import RequestLogger
 from llm_spec.reporting.collector import EndpointResultBuilder
+from llm_spec.reporting.run_result import build_run_result
 from llm_spec.runners import ConfigDrivenTestRunner
 from llm_spec.suites import SpecTestSuite, load_test_suite_from_dict
 from llm_spec_web.config import settings
@@ -561,7 +561,7 @@ class RunService:
 
             # Build and save result
             report_data = final_collector.build_report_data()
-            run_result = _build_run_result(
+            run_result = build_run_result(
                 run_id=run_id,
                 started_at=run_job.started_at.isoformat() if run_job.started_at else "",
                 finished_at=datetime.now(UTC).isoformat(),

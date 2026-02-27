@@ -3,7 +3,7 @@
 # Usage:
 # 1) Copy this file to the project root as `llm-spec.toml`
 # 2) Fill in each provider's api_key / base_url
-# 3) Run pytest to generate reports
+# 3) Run pytest integration suites
 
 
 # Logging configuration
@@ -15,11 +15,6 @@ file = "./logs/llm-spec.log"   # Log file path (optional)
 log_request_body = true        # Log request body
 log_response_body = false      # Log response body (may be large)
 max_body_length = 1000         # Max body length to log
-
-
-# Report configuration
-[report]
-output_dir = "./reports"       # Report output directory (actual path: output_dir/<run_id>/...)
 
 
 # Provider configuration (new style: [providers.<name>])

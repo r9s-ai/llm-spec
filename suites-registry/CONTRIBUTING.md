@@ -19,5 +19,5 @@
 ## Local Check
 
 ```bash
-uv run python -m llm_spec run --suites suites-registry/providers -k baseline
+uv run pytest packages/core/tests/integration/test_suite_runner.py --mock -k baseline -v
 ```

@@ -51,12 +51,6 @@ class ProviderService:
                 lines.append(f"{k} = {self._format_toml_value(v)}")
             lines.append("")
 
-        if "report" in data and isinstance(data["report"], dict):
-            lines.append("[report]")
-            for k, v in data["report"].items():
-                lines.append(f"{k} = {self._format_toml_value(v)}")
-            lines.append("")
-
         providers = data.get("providers", {})
         if isinstance(providers, dict):
             for provider in sorted(providers.keys()):
