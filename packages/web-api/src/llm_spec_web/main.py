@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 
 from llm_spec_web.api.batches import router as batches_router
 from llm_spec_web.api.provider_configs import router as provider_config_router
@@ -22,7 +23,25 @@ from llm_spec_web.core.exceptions import LlmSpecError
 
 def init_db() -> None:
     """Initialize DB tables."""
+    _ensure_run_job_columns()
     Base.metadata.create_all(bind=engine)
+
+
+def _ensure_run_job_columns() -> None:
+    """Best-effort lightweight schema migration for run_job."""
+    inspector = inspect(engine)
+    if "run_job" not in inspector.get_table_names():
+        return
+    existing_cols = {col["name"] for col in inspector.get_columns("run_job")}
+    ddl_by_col = {
+        "route": "ALTER TABLE run_job ADD COLUMN route VARCHAR(128)",
+        "model": "ALTER TABLE run_job ADD COLUMN model VARCHAR(128)",
+    }
+    for col_name, ddl in ddl_by_col.items():
+        if col_name in existing_cols:
+            continue
+        with engine.begin() as conn:
+            conn.execute(text(ddl))
 
 
 @asynccontextmanager

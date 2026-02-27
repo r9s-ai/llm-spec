@@ -125,7 +125,6 @@
     {
       name: "test_tool_call_any",
       description: "Tool calling: force a function call via toolConfig.functionCallingConfig.mode=ANY",
-      override_base: true,
       params: {
         contents: [
           {
@@ -165,7 +164,6 @@
     {
       name: "test_tool_call_none",
       description: "Tool calling: disable tool calls via toolConfig.functionCallingConfig.mode=NONE",
-      override_base: true,
       params: {
         contents: [
           {

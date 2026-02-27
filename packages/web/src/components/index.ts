@@ -11,6 +11,7 @@ export * from "./UI";
 export { TestSelector } from "./TestSelector";
 export { SearchInput } from "./TestSelector/SearchInput";
 export { ProviderNode } from "./TestSelector/ProviderNode";
+export { ModelNode } from "./TestSelector/ModelNode";
 export { SuiteNode } from "./TestSelector/SuiteNode";
 export { TestNode } from "./TestSelector/TestNode";
 
@@ -33,7 +34,7 @@ export { ErrorDetailModal } from "./ResultPanel";
 export { TestResultTable } from "./ResultPanel";
 
 // SuiteEditor components
-export { SuiteTree, SuiteEditor, CreateSuiteModal } from "./SuiteEditor";
+export { SuiteTree, SuiteEditor } from "./SuiteEditor";
 
 // SettingsEditor components
 export { TomlEditor, ProviderSummary } from "./SettingsEditor";

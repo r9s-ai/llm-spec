@@ -69,8 +69,15 @@ export function TestSelector({
     return grouped;
   }, [suites]);
 
-  // Calculate route count
-  const routeCount = suites.length;
+  const { routeCount, modelCount } = useMemo(() => {
+    const routeSet = new Set<string>();
+    const modelSet = new Set<string>();
+    suites.forEach((suite) => {
+      routeSet.add(`${suite.provider}:${suite.route}`);
+      modelSet.add(`${suite.provider}:${suite.model}`);
+    });
+    return { routeCount: routeSet.size, modelCount: modelSet.size };
+  }, [suites]);
 
   // Expand all when searching
   const handleSearchChange = useCallback(
@@ -195,6 +202,7 @@ export function TestSelector({
         {/* Row 2: Stats - centered with bold numbers */}
         <div className="text-center text-xs text-slate-600">
           <span className="font-bold text-slate-900">{providers.length}</span> providers ·{" "}
+          <span className="font-bold text-slate-900">{modelCount}</span> models ·{" "}
           <span className="font-bold text-slate-900">{routeCount}</span> routes ·{" "}
           <span className="font-bold text-slate-900">{selectedTestCount}</span> selected
         </div>

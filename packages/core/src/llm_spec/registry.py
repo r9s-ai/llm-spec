@@ -163,28 +163,6 @@ def load_registry_suites(
         meta = metas[provider]
         models = _load_models(provider_dir)
 
-        # Legacy fallback: no models/ means route files are already full suites.
-        if not models:
-            for route_name, (route_path, route_payload) in _load_local_routes(provider_dir).items():
-                suite = copy.deepcopy(route_payload)
-                suite["provider"] = provider
-                if "base_params" not in suite or not isinstance(suite.get("base_params"), dict):
-                    suite["base_params"] = {}
-                if "model" not in suite["base_params"]:
-                    suite["base_params"]["model"] = "default"
-                expanded.append(
-                    ExpandedSuite(
-                        provider=provider,
-                        api_family=meta.api_family,
-                        route=route_name,
-                        model=str(suite["base_params"]["model"]),
-                        source_route_path=route_path,
-                        suite_dict=suite,
-                        provider_headers=meta.headers,
-                    )
-                )
-            continue
-
         routes = _resolve_routes_for_provider(
             provider,
             provider_dirs=provider_dirs,

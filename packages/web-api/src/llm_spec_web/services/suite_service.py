@@ -11,7 +11,6 @@ from threading import Lock
 from typing import Any
 
 import json5
-from sqlalchemy.orm import Session
 
 from llm_spec.registry import load_registry_suites
 from llm_spec.runners import load_test_suite_from_dict
@@ -164,7 +163,6 @@ class SuiteService:
 
     def list_suites(
         self,
-        _db: Session,
         provider: str | None = None,
         route: str | None = None,
         model: str | None = None,
@@ -182,20 +180,20 @@ class SuiteService:
             rows = [s for s in rows if s.endpoint == endpoint]
         return sorted(rows, key=lambda s: (s.provider, s.route, s.model))
 
-    def get_suite(self, _db: Session, suite_id: str) -> RegistrySuite:
+    def get_suite(self, suite_id: str) -> RegistrySuite:
         suites, _ = self._build_indices()
         suite = suites.get(suite_id)
         if suite is None:
             raise NotFoundError("Suite", suite_id)
         return suite
 
-    def list_versions(self, _db: Session, suite_id: str) -> list[RegistrySuiteVersion]:
+    def list_versions(self, suite_id: str) -> list[RegistrySuiteVersion]:
         suites, versions = self._build_indices()
         if suite_id not in suites:
             raise NotFoundError("Suite", suite_id)
         return [v for v in versions.values() if v.suite_id == suite_id]
 
-    def get_version(self, _db: Session, version_id: str) -> RegistrySuiteVersion:
+    def get_version(self, version_id: str) -> RegistrySuiteVersion:
         _, versions = self._build_indices()
         version = versions.get(version_id)
         if version is None:

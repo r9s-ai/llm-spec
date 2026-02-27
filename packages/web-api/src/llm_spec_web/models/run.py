@@ -57,6 +57,8 @@ class RunJob(Base):
         status: Job status ("queued", "running", "success", "failed", "cancelled").
         mode: Execution mode ("real" or "mock").
         provider: Provider name.
+        route: Route name (registry route key).
+        model: Model ID.
         endpoint: API endpoint path.
         suite_version_id: Synthetic suite version ID from registry.
         config_snapshot: Configuration snapshot at run time.
@@ -75,6 +77,8 @@ class RunJob(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued", index=True)
     mode: Mapped[str] = mapped_column(String(16), nullable=False, default="real")
     provider: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    route: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     endpoint: Mapped[str] = mapped_column(String(255), nullable=False)
     batch_id: Mapped[str | None] = mapped_column(
         String(36),
@@ -202,4 +206,5 @@ class RunTestResult(Base):
 
 # Additional indexes for common queries
 Index("ix_run_job_provider_status", RunJob.provider, RunJob.status)
+Index("ix_run_job_provider_model_route", RunJob.provider, RunJob.model, RunJob.route)
 Index("ix_run_test_result_run_status", RunTestResult.run_id, RunTestResult.status)

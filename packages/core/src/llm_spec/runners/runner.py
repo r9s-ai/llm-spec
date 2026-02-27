@@ -59,9 +59,6 @@ class SpecTestCase:
     stream_rules: dict[str, Any] | None = None
     """Streaming validation rules (e.g. required events)."""
 
-    override_base: bool = False
-    """Whether to fully override base_params."""
-
     endpoint_override: str | None = None
     """Override the suite endpoint for this test."""
 
@@ -127,7 +124,6 @@ class _RawTestCase(PydanticBaseModel):
     stream: Any = False
     stream_rules: dict[str, Any] | None = None
     stream_validation: dict[str, Any] | None = None
-    override_base: bool = False
     endpoint_override: str | None = None
     files: dict[str, str] | None = None
     schemas: dict[str, str] | None = None
@@ -251,7 +247,6 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
             is_baseline=test_config.get("is_baseline", False),
             stream=stream,
             stream_rules=test_config.get("stream_rules", test_config.get("stream_validation")),
-            override_base=test_config.get("override_base", False),
             endpoint_override=test_config.get("endpoint_override"),
             files=test_config.get("files"),
             schemas=test_config.get("schemas"),
@@ -325,7 +320,6 @@ def load_test_suite_from_dict(
                     is_baseline=t.is_baseline,
                     stream=t.stream if isinstance(t.stream, bool) else False,
                     stream_rules=t.stream_rules,
-                    override_base=t.override_base,
                     endpoint_override=t.endpoint_override,
                     files=t.files,
                     schemas=t.schemas,
@@ -408,8 +402,8 @@ class ConfigDrivenTestRunner:
         Returns:
             merged request params
         """
-        # If override_base is set, skip suite base_params.
-        base = {} if test.override_base else copy.deepcopy(self.suite.base_params)
+        # Test params override same-name keys in suite base_params.
+        base = copy.deepcopy(self.suite.base_params)
 
         test_params = copy.deepcopy(test.params)
         base.update(test_params)

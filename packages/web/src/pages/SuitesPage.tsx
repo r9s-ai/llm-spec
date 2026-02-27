@@ -1,26 +1,21 @@
 import { useState, useMemo, useCallback } from "react";
-import { createSuite, createVersion, deleteSuite, updateSuite } from "../api";
 import { useAppContext } from "../context";
-import { SuiteTree, SuiteEditor, CreateSuiteModal } from "../components";
+import { SuiteTree, SuiteEditor } from "../components";
 
 export function SuitesPage() {
-  const { setNotice, suites } = useAppContext();
+  const { suites } = useAppContext();
   const {
     suites: suiteList,
     versionsBySuite,
     selectedSuiteId,
     selectedVersionBySuite,
-    loadSuites,
     refreshVersions,
     setSelectedSuiteId,
     setSelectedVersionBySuite,
-    setSelectedSuiteIds,
-    setSelectedTestsBySuite,
     getSuiteById,
   } = suites;
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   // Get selected suite
   const selectedSuite = useMemo(() => {
@@ -33,11 +28,6 @@ export function SuitesPage() {
   const selectedVersionId = selectedSuite
     ? (selectedVersionBySuite[selectedSuite.id] ?? null)
     : null;
-
-  // Get existing providers for the create modal
-  const existingProviders = useMemo(() => {
-    return [...new Set(suiteList.map((s) => s.provider))];
-  }, [suiteList]);
 
   // Handle suite selection
   const handleSelectSuite = useCallback(
@@ -63,92 +53,6 @@ export function SuitesPage() {
     [selectedSuite, setSelectedVersionBySuite]
   );
 
-  // Handle create suite
-  const handleCreateSuite = useCallback(
-    async (provider: string, route: string, model: string, endpoint: string, name: string) => {
-      const raw = `{
-  endpoint: "${endpoint}",
-  schemas: {},
-  base_params: {},
-  tests: [{ name: "test_baseline", is_baseline: true }]
-}`;
-
-      await createSuite({
-        provider,
-        route,
-        model,
-        endpoint,
-        name,
-        raw_json5: raw,
-        created_by: "web-ui",
-      });
-      await loadSuites();
-      setNotice("Suite created.");
-    },
-    [loadSuites, setNotice]
-  );
-
-  // Handle update meta
-  const handleUpdateMeta = useCallback(
-    async (name: string, status: "active" | "archived") => {
-      if (!selectedSuite) return;
-      await updateSuite(selectedSuite.id, { name, status });
-      await loadSuites();
-      setNotice("Suite metadata updated.");
-    },
-    [selectedSuite, loadSuites, setNotice]
-  );
-
-  // Handle delete suite
-  const handleDeleteSuite = useCallback(async () => {
-    if (!selectedSuite) return;
-
-    await deleteSuite(selectedSuite.id);
-    await loadSuites();
-
-    // Clear selection
-    setSelectedSuiteId(null);
-    setSelectedSuiteIds((prev) => {
-      const next = new Set(prev);
-      next.delete(selectedSuite.id);
-      return next;
-    });
-    setSelectedTestsBySuite((prev) => {
-      const next = { ...prev };
-      delete next[selectedSuite.id];
-      return next;
-    });
-    setSelectedVersionBySuite((prev) => {
-      const next = { ...prev };
-      delete next[selectedSuite.id];
-      return next;
-    });
-
-    setNotice("Suite deleted.");
-  }, [
-    selectedSuite,
-    loadSuites,
-    setSelectedSuiteId,
-    setSelectedSuiteIds,
-    setSelectedTestsBySuite,
-    setSelectedVersionBySuite,
-    setNotice,
-  ]);
-
-  // Handle save new version
-  const handleSaveVersion = useCallback(
-    async (rawJson5: string) => {
-      if (!selectedSuite) return;
-
-      await createVersion(selectedSuite.id, { raw_json5: rawJson5, created_by: "web-ui" });
-      const vers = await refreshVersions(selectedSuite.id);
-      setSelectedVersionBySuite((prev) => ({ ...prev, [selectedSuite.id]: vers[0]?.id ?? "" }));
-      await loadSuites();
-      setNotice("New version saved.");
-    },
-    [selectedSuite, refreshVersions, setSelectedVersionBySuite, loadSuites, setNotice]
-  );
-
   return (
     <div className="flex h-[calc(100vh-57px)]">
       {/* Left Panel - Suite Tree */}
@@ -160,7 +64,6 @@ export function SuitesPage() {
             searchQuery={searchQuery}
             onSelectSuite={handleSelectSuite}
             onSearchChange={setSearchQuery}
-            onCreateSuite={() => setIsCreateModalOpen(true)}
           />
         </div>
       </div>
@@ -173,20 +76,9 @@ export function SuitesPage() {
             versions={versions}
             selectedVersionId={selectedVersionId}
             onSelectVersion={handleSelectVersion}
-            onUpdateMeta={handleUpdateMeta}
-            onDeleteSuite={handleDeleteSuite}
-            onSaveVersion={handleSaveVersion}
           />
         </div>
       </div>
-
-      {/* Create Suite Modal */}
-      <CreateSuiteModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onCreate={handleCreateSuite}
-        existingProviders={existingProviders}
-      />
     </div>
   );
 }

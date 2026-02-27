@@ -50,7 +50,7 @@ export function SuiteNode({
 
   return (
     <div className="rounded-sm border border-slate-200/40 bg-white/80">
-      {/* Suite Header - Route name is prominent */}
+      {/* Route Header */}
       <div className="flex items-center gap-0.5 px-1 py-0.5 hover:bg-slate-50">
         {/* Expand Button */}
         <button
@@ -74,13 +74,14 @@ export function SuiteNode({
           onChange={(e) => handleCheckboxChange(e.target.checked)}
         />
 
-        {/* Endpoint - Small, gray, not bold */}
-        <span
-          className="min-w-0 flex-1 truncate text-xs text-slate-500 leading-tight"
-          title={`${suite.route} (${suite.model}) ${suite.endpoint}`}
-        >
-          {suite.route} ({suite.model})
-        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs font-medium leading-tight text-slate-700" title={suite.route}>
+            {suite.route}
+          </div>
+          <div className="truncate text-[10px] leading-tight text-slate-400" title={suite.endpoint}>
+            {suite.endpoint}
+          </div>
+        </div>
 
         {/* Count Badge - Compact */}
         <span

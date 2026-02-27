@@ -7,7 +7,6 @@ interface SuiteTreeProps {
   searchQuery: string;
   onSelectSuite: (suiteId: string) => void;
   onSearchChange: (query: string) => void;
-  onCreateSuite: () => void;
 }
 
 export function SuiteTree({
@@ -16,7 +15,6 @@ export function SuiteTree({
   searchQuery,
   onSelectSuite,
   onSearchChange,
-  onCreateSuite,
 }: SuiteTreeProps) {
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set());
 
@@ -193,19 +191,6 @@ export function SuiteTree({
             {searchQuery ? "No matching suites" : "No suites available"}
           </div>
         )}
-      </div>
-
-      {/* Create Button */}
-      <div className="flex-shrink-0 pt-3">
-        <button
-          onClick={onCreateSuite}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New Suite
-        </button>
       </div>
     </div>
   );

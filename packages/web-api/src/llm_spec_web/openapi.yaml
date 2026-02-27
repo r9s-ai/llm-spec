@@ -3,7 +3,7 @@ info:
   title: llm-spec web api
   version: 0.1.0
   description: |
-    Web backend for suite version management and test run orchestration.
+    Web backend for read-only suite browsing and test run orchestration.
 servers:
   - url: http://localhost:8000
     description: local
@@ -45,22 +45,6 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/SuiteResponse'
-    post:
-      summary: Create suite (with version=1)
-      operationId: createSuite
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SuiteCreateRequest'
-      responses:
-        '201':
-          description: created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuiteResponse'
 
   /api/suites/{suite_id}:
     get:
@@ -75,36 +59,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuiteResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    put:
-      summary: Update suite metadata
-      operationId: updateSuite
-      parameters:
-        - $ref: '#/components/parameters/SuiteId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SuiteUpdateRequest'
-      responses:
-        '200':
-          description: updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuiteResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    delete:
-      summary: Delete suite
-      operationId: deleteSuite
-      parameters:
-        - $ref: '#/components/parameters/SuiteId'
-      responses:
-        '204':
-          description: deleted
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -123,28 +77,6 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/SuiteVersionResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    post:
-      summary: Create new suite version
-      operationId: createSuiteVersion
-      parameters:
-        - $ref: '#/components/parameters/SuiteId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SuiteVersionCreateRequest'
-      responses:
-        '201':
-          description: created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuiteVersionResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -197,24 +129,6 @@ paths:
                 $ref: '#/components/schemas/ProviderConfigResponse'
         '404':
           $ref: '#/components/responses/NotFound'
-    put:
-      summary: Upsert provider config
-      operationId: upsertProviderConfig
-      parameters:
-        - $ref: '#/components/parameters/ProviderName'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProviderConfigUpsertRequest'
-      responses:
-        '200':
-          description: updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProviderConfigResponse'
 
   /api/runs:
     get:
@@ -431,41 +345,6 @@ components:
                 type: string
 
   schemas:
-    SuiteCreateRequest:
-      type: object
-      required: [provider, endpoint, name, raw_json5]
-      properties:
-        provider:
-          type: string
-        endpoint:
-          type: string
-        name:
-          type: string
-        raw_json5:
-          type: string
-        created_by:
-          type: string
-          default: ui
-
-    SuiteUpdateRequest:
-      type: object
-      properties:
-        name:
-          type: string
-        status:
-          type: string
-          enum: [active, archived]
-
-    SuiteVersionCreateRequest:
-      type: object
-      required: [raw_json5]
-      properties:
-        raw_json5:
-          type: string
-        created_by:
-          type: string
-          default: ui
-
     SuiteResponse:
       type: object
       required: [id, provider, endpoint, name, status, latest_version, created_at, updated_at]
@@ -507,20 +386,6 @@ components:
         raw_json5:
           type: string
         parsed_json:
-          type: object
-          additionalProperties: true
-
-    ProviderConfigUpsertRequest:
-      type: object
-      required: [base_url, timeout, api_key]
-      properties:
-        base_url:
-          type: string
-        timeout:
-          type: number
-        api_key:
-          type: string
-        extra_config:
           type: object
           additionalProperties: true
 

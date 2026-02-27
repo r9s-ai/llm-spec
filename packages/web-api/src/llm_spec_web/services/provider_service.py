@@ -7,8 +7,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy.orm import Session
-
 from llm_spec_web.config import settings
 from llm_spec_web.core.exceptions import NotFoundError
 
@@ -113,7 +111,7 @@ class ProviderService:
             "updated_at": datetime.now(UTC),
         }
 
-    def list_providers(self, _db: Session) -> list[dict[str, Any]]:
+    def list_providers(self) -> list[dict[str, Any]]:
         data = self._read()
         providers = data.get("providers", {})
         if not isinstance(providers, dict):
@@ -122,48 +120,10 @@ class ProviderService:
             self._row(p, v if isinstance(v, dict) else {}) for p, v in sorted(providers.items())
         ]
 
-    def get_provider(self, _db: Session, provider: str) -> dict[str, Any]:
+    def get_provider(self, provider: str) -> dict[str, Any]:
         data = self._read()
         providers = data.get("providers", {})
         if not isinstance(providers, dict) or provider not in providers:
             raise NotFoundError("ProviderConfig", provider)
         value = providers[provider]
         return self._row(provider, value if isinstance(value, dict) else {})
-
-    def upsert_provider(
-        self,
-        _db: Session,
-        provider: str,
-        api_type: str,
-        base_url: str,
-        timeout: float,
-        api_key: str | None,
-        extra_config: dict,
-    ) -> dict[str, Any]:
-        data = self._read()
-        providers = data.get("providers", {})
-        if not isinstance(providers, dict):
-            providers = {}
-        existing = providers.get(provider, {})
-        if not isinstance(existing, dict):
-            existing = {}
-        providers[provider] = {
-            **existing,
-            **(extra_config or {}),
-            "api_family": api_type,
-            "base_url": base_url,
-            "timeout": timeout,
-            "api_key": api_key if api_key is not None else str(existing.get("api_key", "")),
-        }
-        data["providers"] = providers
-        self._write(data)
-        return self._row(provider, providers[provider])
-
-    def delete_provider(self, _db: Session, provider: str) -> None:
-        data = self._read()
-        providers = data.get("providers", {})
-        if not isinstance(providers, dict) or provider not in providers:
-            raise NotFoundError("ProviderConfig", provider)
-        del providers[provider]
-        data["providers"] = providers
-        self._write(data)

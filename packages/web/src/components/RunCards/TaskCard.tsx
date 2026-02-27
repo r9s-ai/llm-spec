@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "../UI";
 import { ActiveRunCard } from "./ActiveRunCard";
 import { CompletedRunCard } from "./CompletedRunCard";
@@ -70,6 +70,58 @@ export function TaskCard({
   const passedTests = batch.runs.reduce((sum, run) => sum + run.progress_passed, 0);
   const failedTests = batch.runs.reduce((sum, run) => sum + run.progress_failed, 0);
   const progress = totalTests > 0 ? Math.round((doneTests / totalTests) * 100) : 0;
+  const modelCount = useMemo(
+    () => new Set(batch.runs.map((run) => `${run.provider}:${run.model ?? "unknown"}`)).size,
+    [batch.runs]
+  );
+  const routeCount = useMemo(
+    () => new Set(batch.runs.map((run) => `${run.provider}:${run.route ?? run.endpoint}`)).size,
+    [batch.runs]
+  );
+
+  const groupedRuns = useMemo(() => {
+    const grouped = new Map<string, Map<string, typeof batch.runs>>();
+    for (const run of batch.runs) {
+      const providerKey = run.provider;
+      const modelKey = run.model ?? "unknown";
+      if (!grouped.has(providerKey)) {
+        grouped.set(providerKey, new Map<string, typeof batch.runs>());
+      }
+      const providerMap = grouped.get(providerKey)!;
+      if (!providerMap.has(modelKey)) {
+        providerMap.set(modelKey, []);
+      }
+      providerMap.get(modelKey)!.push(run);
+    }
+
+    return Array.from(grouped.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([provider, models]) => ({
+        provider,
+        models: Array.from(models.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([model, runs]) => {
+            const modelTotal = runs.reduce((sum, run) => sum + run.progress_total, 0);
+            const modelDone = runs.reduce((sum, run) => sum + run.progress_done, 0);
+            const modelPassed = runs.reduce((sum, run) => sum + run.progress_passed, 0);
+            const modelFailed = runs.reduce((sum, run) => sum + run.progress_failed, 0);
+            return {
+              model,
+              runs: [...runs].sort((a, b) => {
+                const routeA = a.route ?? a.endpoint;
+                const routeB = b.route ?? b.endpoint;
+                return routeA.localeCompare(routeB);
+              }),
+              summary: {
+                total: modelTotal,
+                done: modelDone,
+                passed: modelPassed,
+                failed: modelFailed,
+              },
+            };
+          }),
+      }));
+  }, [batch]);
 
   const handleDelete = async () => {
     if (isDeleting) return;
@@ -227,7 +279,8 @@ export function TaskCard({
             </div>
             <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
               <span>
-                {batch.runs.length} route{batch.runs.length !== 1 ? "s" : ""}
+                {batch.runs.length} run{batch.runs.length !== 1 ? "s" : ""} · {modelCount} model
+                {modelCount !== 1 ? "s" : ""} · {routeCount} route{routeCount !== 1 ? "s" : ""}
               </span>
               <span>·</span>
               <span>
@@ -331,21 +384,49 @@ export function TaskCard({
       {/* Expanded Content */}
       {isExpanded && (
         <div className="border-t border-slate-100">
-          {/* Route Cards */}
-          <div className="divide-y divide-slate-100">
-            {batch.runs.map((run) => {
-              const events = eventsByRunId[run.id] ?? [];
-              const result = resultsByRunId[run.id];
-              const summary = result?.summary as RunSummary | undefined;
+          <div className="space-y-2 p-3 bg-slate-50/50">
+            {groupedRuns.map((providerGroup) => (
+              <div key={providerGroup.provider} className="rounded-lg border border-slate-200 bg-white">
+                <div className="border-b border-slate-100 px-3 py-2 text-sm font-bold text-slate-900">
+                  {providerGroup.provider}
+                </div>
+                <div className="space-y-2 p-2">
+                  {providerGroup.models.map((modelGroup) => (
+                    <div key={`${providerGroup.provider}:${modelGroup.model}`} className="rounded-md border border-slate-100">
+                      <div className="flex items-center justify-between bg-slate-50 px-3 py-1.5 text-xs">
+                        <span className="font-semibold text-slate-700">
+                          Model: {modelGroup.model}
+                        </span>
+                        <span className="text-slate-500">
+                          {modelGroup.summary.done}/{modelGroup.summary.total} ·{" "}
+                          <span className="text-green-700">{modelGroup.summary.passed} pass</span> ·{" "}
+                          <span className="text-red-700">{modelGroup.summary.failed} fail</span>
+                        </span>
+                      </div>
+                      <div className="divide-y divide-slate-100">
+                        {modelGroup.runs.map((run) => {
+                          const events = eventsByRunId[run.id] ?? [];
+                          const result = resultsByRunId[run.id];
+                          const summary = result?.summary as RunSummary | undefined;
 
-              if (run.status === "running" || run.status === "queued") {
-                return <ActiveRunCard key={run.id} run={run} events={events} />;
-              } else {
-                return (
-                  <CompletedRunCard key={run.id} run={run} summary={summary} result={result} />
-                );
-              }
-            })}
+                          if (run.status === "running" || run.status === "queued") {
+                            return <ActiveRunCard key={run.id} run={run} events={events} />;
+                          }
+                          return (
+                            <CompletedRunCard
+                              key={run.id}
+                              run={run}
+                              summary={summary}
+                              result={result}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Footer with task ID */}

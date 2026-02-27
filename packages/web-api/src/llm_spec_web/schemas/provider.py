@@ -3,30 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
-from pydantic import BaseModel, Field
-
-# Supported API types
-ApiType = Literal["openai", "anthropic", "gemini", "xai"]
-
-
-class ProviderConfigUpsertRequest(BaseModel):
-    """Request body for upserting provider configuration.
-
-    Attributes:
-        api_type: API type (openai, anthropic, gemini, xai).
-        base_url: API base URL.
-        timeout: Request timeout in seconds.
-        api_key: API key for authentication (optional for updates).
-        extra_config: Additional configuration.
-    """
-
-    api_type: ApiType = Field(default="openai", description="API type")
-    base_url: str = Field(..., min_length=1, max_length=512)
-    timeout: float = Field(default=30.0, ge=0.0, le=600.0)
-    api_key: str | None = Field(default=None, min_length=1)
-    extra_config: dict[str, Any] = Field(default_factory=dict)
+from pydantic import BaseModel
 
 
 class ProviderConfigResponse(BaseModel):

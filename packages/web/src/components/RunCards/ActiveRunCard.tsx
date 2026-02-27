@@ -101,8 +101,9 @@ export function ActiveRunCard({ run, events }: ActiveRunCardProps) {
             <span className="text-xs text-slate-500">{run.mode}</span>
           </div>
           <h4 className="mt-1 truncate text-sm font-semibold text-slate-900">
-            {run.provider} {run.endpoint}
+            {run.provider} / {run.model ?? "unknown"} / {run.route ?? run.endpoint}
           </h4>
+          <p className="truncate text-xs text-slate-500">{run.endpoint}</p>
         </div>
         <div className="text-right text-xs text-slate-500">
           <span className="font-medium text-violet-600">

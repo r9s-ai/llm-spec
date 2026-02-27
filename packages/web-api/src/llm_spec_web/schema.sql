@@ -26,6 +26,8 @@ create table if not exists run_job (
     status text not null default 'queued',
     mode text not null default 'real',
     provider text not null,
+    route text null,
+    model text null,
     endpoint text not null,
     batch_id text references run_batch(id) on delete cascade,
     suite_version_id text null,
@@ -41,6 +43,7 @@ create table if not exists run_job (
 
 create index if not exists ix_run_job_batch_id on run_job(batch_id);
 create index if not exists ix_run_job_provider_status on run_job(provider, status);
+create index if not exists ix_run_job_provider_model_route on run_job(provider, model, route);
 
 create table if not exists run_event (
     id integer primary key autoincrement,
