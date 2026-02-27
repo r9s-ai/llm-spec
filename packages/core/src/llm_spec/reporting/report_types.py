@@ -3,13 +3,7 @@ from __future__ import annotations
 from typing import Any, TypedDict
 
 
-class TestedParameter(TypedDict):
-    name: str
-    value: Any
-
-
 class TestParameterRecord(TypedDict):
-    name: str
     value: Any
     value_type: str
 
@@ -58,7 +52,7 @@ class TestExecutionResult(TypedDict, total=False):
     error: str | None
     missing_fields: list[str]
     expected_fields: list[str]
-    tested_param: TestedParameter | None
+    tested_param: Any | None
     is_baseline: bool
     request_ok: bool
     schema_ok: bool
@@ -91,7 +85,6 @@ class ReportData(TypedDict, total=False):
 
 
 __all__ = [
-    "TestedParameter",
     "TestParameterRecord",
     "TestRequestRecord",
     "TestValidationRecord",

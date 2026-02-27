@@ -23,7 +23,6 @@ def test_run_result_formatter_generates_md_and_html(tmp_path: Path) -> None:
                             {
                                 "test_name": "test_param_temperature[0.7]",
                                 "parameter": {
-                                    "name": "temperature",
                                     "value": 0.7,
                                     "value_type": "float",
                                 },
@@ -42,5 +41,9 @@ def test_run_result_formatter_generates_md_and_html(tmp_path: Path) -> None:
 
     assert Path(md_path).exists()
     assert Path(html_path).exists()
-    assert "LLM Spec Run Report" in Path(md_path).read_text(encoding="utf-8")
-    assert "Provider: <code>openai</code>" in Path(html_path).read_text(encoding="utf-8")
+    md_text = Path(md_path).read_text(encoding="utf-8")
+    html_text = Path(html_path).read_text(encoding="utf-8")
+    assert "LLM Spec Run Report" in md_text
+    assert "Parameter" not in md_text
+    assert "Provider: <code>openai</code>" in html_text
+    assert "<th>Parameter</th>" not in html_text

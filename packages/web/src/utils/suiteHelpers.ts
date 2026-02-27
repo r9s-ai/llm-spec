@@ -16,7 +16,10 @@ export function getTestRows(version: SuiteVersion | undefined): TestRow[] {
       const tp = (obj.focus_param ?? {}) as Record<string, unknown>;
       const paramName = typeof tp.name === "string" ? tp.name : "baseline";
       const valueText = tp.value === undefined ? "-" : JSON.stringify(tp.value);
-      return { name, paramName, valueText };
+      const tags = Array.isArray(obj.tags)
+        ? obj.tags.filter((tag): tag is string => typeof tag === "string")
+        : [];
+      return { name, paramName, valueText, tags };
     })
     .filter((it): it is TestRow => Boolean(it));
 }

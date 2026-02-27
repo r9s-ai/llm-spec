@@ -169,7 +169,6 @@ class RunTestResult(Base):
         run_id: Parent run job ID.
         test_id: Test identifier.
         test_name: Test name.
-        parameter_name: Parameter name being tested.
         parameter_value: Parameter value.
         status: Test status ("pass" or "fail").
         fail_stage: Stage where failure occurred (if any).
@@ -189,7 +188,6 @@ class RunTestResult(Base):
     )
     test_id: Mapped[str] = mapped_column(String(512), nullable=False)
     test_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    parameter_name: Mapped[str] = mapped_column(String(255), nullable=False)
     parameter_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
         JSON,
         nullable=True,

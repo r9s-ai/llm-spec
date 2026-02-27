@@ -20,7 +20,7 @@ from llm_spec.adapters.base import ProviderAdapter
 from llm_spec.logger import RequestLogger, current_test_name
 from llm_spec.path_utils import get_value_at_path
 from llm_spec.reporting.collector import EndpointResultBuilder
-from llm_spec.reporting.report_types import TestedParameter, TestExecutionResult
+from llm_spec.reporting.report_types import TestExecutionResult
 from llm_spec.runners.parsers import ResponseParser, StreamResponseParser
 from llm_spec.runners.stream_rules import extract_observations, validate_stream
 from llm_spec.suites import (
@@ -169,14 +169,14 @@ class ConfigDrivenTestRunner:
             self.logger.logger.error(json.dumps(error_details, ensure_ascii=False))
 
     @staticmethod
-    def _build_tested_param(test: SpecTestCase) -> TestedParameter | None:
-        """Build normalized tested_param payload."""
+    def _build_tested_param(test: SpecTestCase) -> Any | None:
+        """Build normalized tested_param value."""
         if not test.focus_param:
             return None
         param_name = test.focus_param.get("name")
         if not isinstance(param_name, str) or not param_name:
             return None
-        return {"name": param_name, "value": test.focus_param.get("value")}
+        return test.focus_param.get("value")
 
     @staticmethod
     def _make_test_result(
@@ -188,7 +188,7 @@ class ConfigDrivenTestRunner:
         error: str | None = None,
         missing_fields: list[str] | None = None,
         expected_fields: list[str] | None = None,
-        tested_param: TestedParameter | None = None,
+        tested_param: Any | None = None,
         request_ok: bool | None = None,
         schema_ok: bool | None = None,
         required_fields_ok: bool | None = None,

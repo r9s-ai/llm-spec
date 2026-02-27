@@ -136,7 +136,6 @@ export function ActiveRunCard({ run, events }: ActiveRunCardProps) {
             <tr className="border-b border-slate-200 text-left text-xs font-medium text-slate-500 uppercase tracking-wider bg-slate-50">
               <th className="w-10 px-3 py-2">Status</th>
               <th className="px-3 py-2">Test Name</th>
-              <th className="px-3 py-2">Param</th>
               <th className="px-3 py-2">Value</th>
               <th className="px-3 py-2 text-center">Code</th>
               <th className="px-3 py-2">Validation</th>
@@ -186,15 +185,6 @@ export function ActiveRunCard({ run, events }: ActiveRunCardProps) {
                   }`}
                 >
                   {test.test_name}
-                </td>
-
-                {/* Param Name */}
-                <td
-                  className={`px-3 py-2 ${
-                    test.status === "pending" ? "text-slate-300" : "text-slate-600"
-                  }`}
-                >
-                  {test.parameter?.name ?? "-"}
                 </td>
 
                 {/* Param Value */}

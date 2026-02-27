@@ -66,7 +66,6 @@ export function TestResultTable({ tests }: TestResultTableProps) {
           <tr className="border-b border-slate-200 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
             <th className="w-10 px-2 py-2">Status</th>
             <th className="px-2 py-2">Test Name</th>
-            <th className="px-2 py-2">Param</th>
             <th className="px-2 py-2">Value</th>
             <th className="px-2 py-2 text-center">Code</th>
             <th className="px-2 py-2">Validation</th>
@@ -94,9 +93,6 @@ export function TestResultTable({ tests }: TestResultTableProps) {
 
                   {/* Test Name */}
                   <td className="px-2 py-2 font-medium text-slate-900">{test.test_name}</td>
-
-                  {/* Param Name */}
-                  <td className="px-2 py-2 text-slate-600">{test.parameter?.name ?? "-"}</td>
 
                   {/* Param Value */}
                   <td className="px-2 py-2 text-slate-600">
@@ -159,7 +155,7 @@ export function TestResultTable({ tests }: TestResultTableProps) {
                 {/* Expanded Error Details */}
                 {failed && expanded && (
                   <tr className="bg-red-50/30">
-                    <td colSpan={7} className="px-4 py-3">
+                    <td colSpan={6} className="px-4 py-3">
                       <div className="space-y-2 text-xs">
                         {/* Reason */}
                         {test.result?.reason && (

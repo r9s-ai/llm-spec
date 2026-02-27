@@ -66,7 +66,6 @@ create table if not exists run_test_result (
     run_id text not null references run_job(id) on delete cascade,
     test_id text not null,
     test_name text not null,
-    parameter_name text not null,
     parameter_value text null,
     status text not null,
     fail_stage text null,

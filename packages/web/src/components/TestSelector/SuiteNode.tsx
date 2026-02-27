@@ -33,7 +33,10 @@ export function SuiteNode({
     if (!searchQuery) return tests;
     const query = searchQuery.toLowerCase();
     return tests.filter(
-      (t) => t.name.toLowerCase().includes(query) || t.paramName.toLowerCase().includes(query)
+      (t) =>
+        t.name.toLowerCase().includes(query) ||
+        t.paramName.toLowerCase().includes(query) ||
+        t.tags.some((tag) => tag.toLowerCase().includes(query))
     );
   }, [tests, searchQuery]);
 
@@ -104,8 +107,7 @@ export function SuiteNode({
             <TestNode
               key={test.name}
               testName={test.name}
-              paramName={test.paramName}
-              valueText={test.valueText}
+              tags={test.tags}
               isSelected={selectedTests.has(test.name)}
               isHighlighted={
                 !!searchQuery && test.name.toLowerCase().includes(searchQuery.toLowerCase())
