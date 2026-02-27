@@ -56,6 +56,12 @@ class BatchUpdateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="New name for the batch")
 
 
+class RunTestRetryRequest(BaseModel):
+    """Request body for retrying one test inside an existing run."""
+
+    test_name: str = Field(..., min_length=1, description="Test name to retry")
+
+
 class RunJobResponse(BaseModel):
     """Response model for run job.
 

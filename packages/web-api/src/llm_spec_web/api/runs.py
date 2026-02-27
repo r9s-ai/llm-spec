@@ -13,7 +13,12 @@ from llm_spec_web.api.deps import get_db, get_run_service
 from llm_spec_web.core.db import SessionLocal
 from llm_spec_web.core.event_bus import event_bus
 from llm_spec_web.models.run import RunEvent, RunJob
-from llm_spec_web.schemas.run import RunCreateRequest, RunEventResponse, RunJobResponse
+from llm_spec_web.schemas.run import (
+    RunCreateRequest,
+    RunEventResponse,
+    RunJobResponse,
+    RunTestRetryRequest,
+)
 from llm_spec_web.services.run_service import RunService
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
@@ -118,6 +123,18 @@ def cancel_run(
         Cancelled run job.
     """
     run = service.cancel_run(db, run_id)
+    return RunJobResponse.model_validate(run)
+
+
+@router.post("/{run_id}/tests/retry", response_model=RunJobResponse)
+def retry_run_test(
+    run_id: str,
+    payload: RunTestRetryRequest,
+    db: Session = Depends(get_db),
+    service: RunService = Depends(get_run_service),
+) -> RunJobResponse:
+    """Retry one test within an existing run and persist updated run result."""
+    run = service.retry_test_in_run(db, run_id=run_id, test_name=payload.test_name)
     return RunJobResponse.model_validate(run)
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Sequence
+from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any
 
@@ -22,7 +23,7 @@ from llm_spec.runners import ConfigDrivenTestRunner
 from llm_spec.suites import SpecTestSuite, load_test_suite_from_dict
 from llm_spec_web.config import settings
 from llm_spec_web.core.event_bus import event_bus
-from llm_spec_web.core.exceptions import NotFoundError
+from llm_spec_web.core.exceptions import ConfigurationError, NotFoundError, ValidationError
 from llm_spec_web.models.run import RunBatch, RunEvent, RunJob, RunResult, RunTestResult
 from llm_spec_web.repositories.run_repo import RunRepository
 from llm_spec_web.services.suite_service import SuiteService
@@ -253,6 +254,267 @@ class RunService:
         run_repo = RunRepository(db)
         results = run_repo.list_test_results(run_id)
         return [r.raw_record for r in results]
+
+    def retry_test_in_run(self, db: Session, run_id: str, test_name: str) -> RunJob:
+        """Retry one test and persist the updated result back to the same run."""
+        run_repo = RunRepository(db)
+        suite_service = SuiteService()
+
+        run_job = run_repo.get_by_id(run_id)
+        if run_job is None:
+            raise NotFoundError("Run", run_id)
+        if run_job.status in {"running", "queued"}:
+            raise ValidationError(f"Run is still active: {run_id}")
+        if not run_job.suite_version_id:
+            raise ValidationError(f"run {run_id} has no suite_version_id")
+
+        suite_version = suite_service.resolve_suite_by_version_id(run_job.suite_version_id)
+        suite = load_suite_from_version(suite_version.parsed_json)
+        target_test = next((t for t in suite.tests if t.name == test_name), None)
+        if target_test is None:
+            raise NotFoundError("Test", test_name)
+
+        app_config = load_config(settings.app_toml_path)
+        provider_cfg = None
+        try:
+            provider_cfg = app_config.get_provider_config(run_job.provider)
+        except KeyError:
+            provider_cfg = None
+        if provider_cfg is None and run_job.mode != "mock":
+            raise ConfigurationError(f"provider config missing: {run_job.provider}")
+
+        asyncio.run(
+            self._retry_test_in_run_async(
+                db=db,
+                run_repo=run_repo,
+                run_job=run_job,
+                suite=suite,
+                target_test=target_test,
+                provider_cfg=provider_cfg,
+            )
+        )
+        if run_job.batch_id:
+            self.update_batch_status(db, run_job.batch_id)
+        db.refresh(run_job)
+        return run_job
+
+    async def _retry_test_in_run_async(
+        self,
+        *,
+        db: Session,
+        run_repo: RunRepository,
+        run_job: RunJob,
+        suite: SpecTestSuite,
+        target_test: Any,
+        provider_cfg: Any,
+    ) -> None:
+        http_client = None
+        try:
+            if provider_cfg is None:
+                config = ProviderConfig(api_key="", base_url="", timeout=30.0)
+            else:
+                config = ProviderConfig(
+                    api_key=provider_cfg.api_key,
+                    base_url=provider_cfg.base_url,
+                    timeout=provider_cfg.timeout,
+                    api_family=provider_cfg.api_family,
+                    headers=provider_cfg.headers,
+                )
+
+            logger = RequestLogger(
+                LogConfig(
+                    enabled=True,
+                    level="INFO",
+                    console=False,
+                    file="./logs/llm-spec-web.log",
+                )
+            )
+            http_client = HTTPClient(default_timeout=config.timeout)
+            client = create_provider_client(
+                run_job.provider, config, run_job.mode, logger, http_client
+            )
+
+            local_collector = EndpointResultBuilder(
+                provider=suite.provider,
+                endpoint=suite.endpoint,
+                base_url=client.get_base_url(),
+            )
+            local_runner = ConfigDrivenTestRunner(
+                suite=suite, client=client, collector=local_collector, logger=None
+            )
+
+            test_record: dict[str, Any]
+            try:
+                await local_runner.run_test_async(target_test)
+                test_record = dict(local_collector.tests[-1])
+            except Exception as exc:
+                test_record = {
+                    "test_id": f"{suite.provider}/{suite.endpoint.lstrip('/')}::{target_test.name}",
+                    "test_name": target_test.name,
+                    "result": {
+                        "status": "fail",
+                        "fail_stage": "request",
+                        "reason_code": "REQUEST_ERROR",
+                        "reason": str(exc),
+                    },
+                    "request": {"ok": False, "http_status": 0},
+                    "validation": {
+                        "schema_ok": False,
+                        "required_fields_ok": False,
+                        "stream_rules_ok": False,
+                        "missing_fields": [],
+                        "missing_events": [],
+                    },
+                }
+
+            result_record = test_record.get("result")
+            result_record_dict = result_record if isinstance(result_record, dict) else {}
+            request_record = test_record.get("request")
+            request_record_dict = request_record if isinstance(request_record, dict) else {}
+            parameter_record = test_record.get("parameter")
+            parameter_record_dict = parameter_record if isinstance(parameter_record, dict) else {}
+            status = str(result_record_dict.get("status", "fail"))
+            run_repo.upsert_test_result_by_name(
+                run_id=run_job.id,
+                test_name=str(test_record.get("test_name", target_test.name)),
+                test_id=str(test_record.get("test_id", "")),
+                parameter_value=parameter_record_dict.get("value"),
+                status=status,
+                fail_stage=result_record_dict.get("fail_stage"),
+                reason_code=result_record_dict.get("reason_code"),
+                latency_ms=request_record_dict.get("latency_ms"),
+                raw_record=test_record,
+            )
+
+            run_result_row = run_repo.get_result(run_job.id)
+            if run_result_row is None:
+                raise NotFoundError("RunResult", run_job.id)
+            updated_run_result = self._merge_test_record_into_run_result(
+                run_result_row.run_result_json,
+                run_job=run_job,
+                test_name=target_test.name,
+                new_test_record=test_record,
+            )
+            run_result_row.run_result_json = updated_run_result
+            run_repo.save_result(run_result_row)
+
+            summary = updated_run_result.get("summary", {})
+            run_job.progress_total = int(summary.get("total", run_job.progress_total))
+            run_job.progress_done = run_job.progress_total
+            run_job.progress_passed = int(summary.get("passed", run_job.progress_passed))
+            run_job.progress_failed = int(summary.get("failed", run_job.progress_failed))
+            run_job.status = "success" if run_job.progress_failed == 0 else "failed"
+            run_job.error_message = None if run_job.status == "success" else run_job.error_message
+            run_job.finished_at = datetime.now(UTC)
+            run_repo.update(run_job)
+            run_repo.append_event(
+                run_job.id,
+                "test_retried",
+                {
+                    "test_name": target_test.name,
+                    "status": status,
+                    "run_status": run_job.status,
+                },
+            )
+            db.commit()
+        finally:
+            if http_client is not None and isinstance(http_client, HTTPClient):
+                await http_client.close_async()
+
+    def _merge_test_record_into_run_result(
+        self,
+        run_result_json: dict[str, Any],
+        *,
+        run_job: RunJob,
+        test_name: str,
+        new_test_record: dict[str, Any],
+    ) -> dict[str, Any]:
+        merged = deepcopy(run_result_json)
+        providers = merged.get("providers")
+        if not isinstance(providers, list):
+            raise ValidationError(f"run result format invalid for run {run_job.id}")
+
+        target_provider_node: dict[str, Any] | None = None
+        target_endpoint_node: dict[str, Any] | None = None
+        for provider_node in providers:
+            if provider_node.get("provider") != run_job.provider:
+                continue
+            endpoints = provider_node.get("endpoints")
+            if not isinstance(endpoints, list):
+                continue
+            for endpoint_node in endpoints:
+                if endpoint_node.get("endpoint") == run_job.endpoint:
+                    target_provider_node = provider_node
+                    target_endpoint_node = endpoint_node
+                    break
+            if target_endpoint_node is not None:
+                break
+
+        if target_provider_node is None or target_endpoint_node is None:
+            raise ValidationError(f"run result endpoint node missing for run {run_job.id}")
+
+        tests = target_endpoint_node.get("tests")
+        if not isinstance(tests, list):
+            tests = []
+            target_endpoint_node["tests"] = tests
+
+        replaced = False
+        for idx, row in enumerate(tests):
+            if isinstance(row, dict) and str(row.get("test_name", "")) == test_name:
+                tests[idx] = new_test_record
+                replaced = True
+                break
+        if not replaced:
+            tests.append(new_test_record)
+
+        def _count(items: list[dict[str, Any]]) -> tuple[int, int]:
+            passed = 0
+            for item in items:
+                result = item.get("result") if isinstance(item, dict) else None
+                if isinstance(result, dict) and result.get("status") == "pass":
+                    passed += 1
+            total = len(items)
+            return total, passed
+
+        provider_total = 0
+        provider_passed = 0
+        for endpoint_node in target_provider_node.get("endpoints", []):
+            endpoint_tests = endpoint_node.get("tests")
+            endpoint_items = endpoint_tests if isinstance(endpoint_tests, list) else []
+            total, passed = _count([r for r in endpoint_items if isinstance(r, dict)])
+            endpoint_node["summary"] = {
+                "total": total,
+                "passed": passed,
+                "failed": total - passed,
+                "skipped": 0,
+            }
+            provider_total += total
+            provider_passed += passed
+
+        target_provider_node["summary"] = {
+            "total": provider_total,
+            "passed": provider_passed,
+            "failed": provider_total - provider_passed,
+            "skipped": 0,
+        }
+
+        global_total = 0
+        global_passed = 0
+        for provider_node in providers:
+            summary = provider_node.get("summary") if isinstance(provider_node, dict) else None
+            if not isinstance(summary, dict):
+                continue
+            global_total += int(summary.get("total", 0))
+            global_passed += int(summary.get("passed", 0))
+
+        merged["summary"] = {
+            "total": global_total,
+            "passed": global_passed,
+            "failed": global_total - global_passed,
+            "skipped": 0,
+        }
+        merged["finished_at"] = datetime.now(UTC).isoformat()
+        return merged
 
     def execute_run(self, db: Session, run_id: str, max_concurrent: int = 5) -> None:
         """Execute a queued run job with concurrent test execution.

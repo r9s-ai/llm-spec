@@ -46,6 +46,7 @@ interface CompletedRunCardProps {
   run: RunJob;
   summary?: RunSummary;
   result?: RunResultData;
+  onRetryFailedTest?: (run: RunJob, testName: string) => Promise<void> | void;
 }
 
 function formatRelativeTime(dateStr: string | null): string {
@@ -78,7 +79,7 @@ function calculateDuration(start: string | null, end: string | null): string {
   return `${diffSecs}s`;
 }
 
-export function CompletedRunCard({ run, summary, result }: CompletedRunCardProps) {
+export function CompletedRunCard({ run, summary, result, onRetryFailedTest }: CompletedRunCardProps) {
   // Backend sets status to "success" or "failed" (not "finished")
   // success = all tests passed, failed = some tests failed or run error
   const isSuccess = run.status === "success";
@@ -175,7 +176,14 @@ export function CompletedRunCard({ run, summary, result }: CompletedRunCardProps
       {/* Test Results Table */}
       {tests.length > 0 && (
         <div className="p-2">
-          <TestResultTable tests={tests} />
+          <TestResultTable
+            tests={tests}
+            onRetryFailedTest={
+              onRetryFailedTest
+                ? (testName) => onRetryFailedTest(run, testName)
+                : undefined
+            }
+          />
         </div>
       )}
 
