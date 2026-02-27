@@ -108,6 +108,7 @@ export type TestRow = {
   name: string;
   paramName: string;
   valueText: string;
+  tags: string[];
 };
 
 // Selection types

@@ -16,7 +16,7 @@ def test_collector_report_contains_endpoint_tests_array() -> None:
             "status_code": 200,
             "response_body": {"id": "ok"},
             "error": None,
-            "tested_param": {"name": "temperature", "value": 0.7},
+            "tested_param": 0.7,
             "request_ok": True,
             "schema_ok": True,
             "required_fields_ok": True,
@@ -35,7 +35,7 @@ def test_collector_report_contains_endpoint_tests_array() -> None:
     test_record = tests[0]
     parameter = test_record.get("parameter")
     assert parameter is not None
-    assert parameter["name"] == "temperature"
+    assert parameter["value"] == 0.7
     result = test_record.get("result")
     assert result is not None
     status = result.get("status")
@@ -56,7 +56,7 @@ def test_build_run_result_with_provider_endpoint_tests_structure() -> None:
             {
                 "test_id": "openai/v1/chat/completions::test_param_temperature[0.7]",
                 "test_name": "test_param_temperature[0.7]",
-                "parameter": {"name": "temperature", "value": 0.7, "value_type": "float"},
+                "parameter": {"value": 0.7, "value_type": "float"},
                 "request": {"ok": True, "http_status": 200},
                 "validation": {
                     "schema_ok": True,
@@ -92,4 +92,4 @@ def test_build_run_result_with_provider_endpoint_tests_structure() -> None:
     first_test = endpoint["tests"][0]
     parameter = first_test.get("parameter")
     assert parameter is not None
-    assert parameter["name"] == "temperature"
+    assert parameter["value"] == 0.7

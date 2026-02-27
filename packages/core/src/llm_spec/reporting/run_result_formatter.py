@@ -58,22 +58,19 @@ class RunResultFormatter:
                         f"- Failed: {e_summary.get('failed', 0)}",
                         f"- Skipped: {e_summary.get('skipped', 0)}",
                         "",
-                        "| Test | Parameter | Value | Status | Reason |",
-                        "|---|---|---|---|---|",
+                        "| Test | Value | Status | Reason |",
+                        "|---|---|---|---|",
                     ]
                 )
 
                 for test in endpoint_node.get("tests", []):
                     test_name = test.get("test_name", "")
-                    parameter = (test.get("parameter") or {}).get("name", "")
                     value = (test.get("parameter") or {}).get("value")
                     status = (test.get("result") or {}).get("status", "")
                     reason = (test.get("result") or {}).get("reason")
                     value_text = json.dumps(value, ensure_ascii=False) if value is not None else "-"
                     reason_text = str(reason) if reason else "-"
-                    lines.append(
-                        f"| `{test_name}` | `{parameter}` | `{value_text}` | `{status}` | {reason_text} |"
-                    )
+                    lines.append(f"| `{test_name}` | `{value_text}` | `{status}` | {reason_text} |")
                 lines.append("")
 
         return "\n".join(lines)
@@ -113,20 +110,19 @@ class RunResultFormatter:
                         f"<h3>Endpoint: <code>{endpoint}</code></h3>",
                         f"<p>Total: {e_summary.get('total', 0)} | Passed: {e_summary.get('passed', 0)} | "
                         f"Failed: {e_summary.get('failed', 0)} | Skipped: {e_summary.get('skipped', 0)}</p>",
-                        "<table><tr><th>Test</th><th>Parameter</th><th>Value</th><th>Status</th><th>Reason</th></tr>",
+                        "<table><tr><th>Test</th><th>Value</th><th>Status</th><th>Reason</th></tr>",
                     ]
                 )
 
                 for test in endpoint_node.get("tests", []):
                     test_name = str(test.get("test_name", ""))
-                    parameter = str((test.get("parameter") or {}).get("name", ""))
                     value = (test.get("parameter") or {}).get("value")
                     status = str((test.get("result") or {}).get("status", ""))
                     reason = str((test.get("result") or {}).get("reason", "") or "-")
                     value_text = json.dumps(value, ensure_ascii=False) if value is not None else "-"
                     html.append(
-                        f"<tr><td><code>{test_name}</code></td><td><code>{parameter}</code></td>"
-                        f"<td><code>{value_text}</code></td><td>{status}</td><td>{reason}</td></tr>"
+                        f"<tr><td><code>{test_name}</code></td><td><code>{value_text}</code></td>"
+                        f"<td>{status}</td><td>{reason}</td></tr>"
                     )
                 html.append("</table>")
 

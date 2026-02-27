@@ -46,12 +46,7 @@ class EndpointResultBuilder:
 
     def record_result(self, result: TestExecutionResult) -> None:
         """Record one normalized test execution result."""
-        tested_param_input = result.get("tested_param")
-        tested_param: tuple[str, Any] | None = None
-        if tested_param_input:
-            param_name = tested_param_input.get("name")
-            if isinstance(param_name, str) and param_name:
-                tested_param = (param_name, tested_param_input.get("value"))
+        tested_param = result.get("tested_param")
 
         test_name = str(result.get("test_name", "unknown"))
         status_code = int(result.get("status_code", 0))
@@ -124,8 +119,7 @@ class EndpointResultBuilder:
                 )
 
         # Build stable endpoint-level test record for run_result/report consumption
-        param_name = tested_param[0] if tested_param else "__baseline__"
-        param_value = tested_param[1] if tested_param else None
+        param_value = tested_param
 
         fail_stage: str | None = None
         reason_code: str | None = None
@@ -160,7 +154,6 @@ class EndpointResultBuilder:
                 test_id=f"{self.provider}/{self.endpoint.lstrip('/')}::{test_name}",
                 test_name=test_name,
                 parameter={
-                    "name": param_name,
                     "value": param_value,
                     "value_type": type(param_value).__name__ if param_value is not None else "none",
                 },

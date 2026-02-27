@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from llm_spec.reporting.report_types import (  # noqa: F401
     ReportData,
-    TestedParameter,
     TestExecutionResult,
     TestParameterRecord,
     TestRecord,
@@ -19,7 +18,6 @@ from llm_spec.reporting.report_types import (  # noqa: F401
 )
 
 __all__ = [
-    "TestedParameter",
     "TestParameterRecord",
     "TestRequestRecord",
     "TestValidationRecord",

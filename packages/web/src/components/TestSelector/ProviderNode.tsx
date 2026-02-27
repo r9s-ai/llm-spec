@@ -83,7 +83,10 @@ export function ProviderNode({
         suite.endpoint.toLowerCase().includes(query) ||
         suite.name.toLowerCase().includes(query) ||
         tests.some(
-          (t) => t.name.toLowerCase().includes(query) || t.paramName.toLowerCase().includes(query)
+          (t) =>
+            t.name.toLowerCase().includes(query) ||
+            t.paramName.toLowerCase().includes(query) ||
+            t.tags.some((tag) => tag.toLowerCase().includes(query))
         )
       );
     });
@@ -107,19 +110,11 @@ export function ProviderNode({
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set<string>());
 
   const effectiveExpandedModels = useMemo(() => {
-    if (modelNames.length === 0) {
-      return new Set<string>();
-    }
-
     if (searchQuery) {
       return new Set(modelNames);
     }
 
-    const next = new Set(Array.from(expandedModels).filter((name) => modelNames.includes(name)));
-    if (next.size === 0) {
-      next.add(modelNames[0]);
-    }
-    return next;
+    return new Set(Array.from(expandedModels).filter((name) => modelNames.includes(name)));
   }, [expandedModels, searchQuery, modelNames]);
 
   const handleToggleModelExpanded = useCallback((model: string) => {

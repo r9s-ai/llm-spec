@@ -15,7 +15,7 @@ def test_collector_accepts_normalized_test_result_dict() -> None:
             "status_code": 400,
             "response_body": {"error": {"message": "temperature is out of range"}},
             "error": "HTTP 400",
-            "tested_param": {"name": "temperature", "value": 9.9},
+            "tested_param": 9.9,
             "is_baseline": False,
         }
     )
@@ -27,7 +27,7 @@ def test_collector_accepts_normalized_test_result_dict() -> None:
     assert tests is not None
     parameter = tests[0].get("parameter")
     assert parameter is not None
-    assert parameter["name"] == "temperature"
+    assert parameter["value"] == 9.9
     result = tests[0].get("result")
     assert result is not None
     status = result.get("status")

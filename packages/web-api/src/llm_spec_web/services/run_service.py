@@ -542,7 +542,6 @@ class RunService:
                     run_id=run_id,
                     test_id=str(test_record.get("test_id", "")),
                     test_name=str(test_record.get("test_name", result["test"].name)),
-                    parameter_name=str((test_record.get("parameter") or {}).get("name", "")),
                     parameter_value=(test_record.get("parameter") or {}).get("value"),
                     status=result["status"],
                     fail_stage=(test_record.get("result") or {}).get("fail_stage"),
