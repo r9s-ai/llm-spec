@@ -8,81 +8,72 @@
   },
   tests: [
     {
-      name: "test_baseline",
+      name: "baseline",
       description: "Baseline test: only required parameters",
-      is_baseline: true,
+      baseline: true,
     },
     {
-      name: "test_param_input_array",
-      description: "Test input parameter (string array)",
+      name: "input",
+      description: "Test input parameter variants",
+      variants: {
+        input_variant: [
+          {
+            variant_id: "string_array",
+            value: [
+              "Hello",
+              "World",
+            ],
+          },
+          {
+            variant_id: "token_array",
+            value: [
+              [
+                11,
+                12,
+                13,
+                14,
+              ],
+            ],
+          },
+        ],
+      },
       params: {
-        input: [
-          "Hello",
-          "World",
-        ],
+        input: "$input_variant.value",
       },
-      test_param: {
+      focus_param: {
         name: "input",
-        value: [
-          "Hello",
-          "World",
-        ],
+        value: "$input_variant.value",
       },
     },
     {
-      name: "test_param_input_tokens",
-      description: "Test input parameter (token array)",
-      params: {
-        input: [
-          [
-            11,
-            12,
-            13,
-            14,
-          ],
-        ],
-      },
-      test_param: {
-        name: "input",
-        value: [
-          [
-            11,
-            12,
-            13,
-            14,
-          ],
-        ],
-      },
-    },
-    {
-      name: "test_param_encoding_format",
+      name: "encoding_format",
       description: "Test encoding_format parameter (base64)",
       params: {
         encoding_format: "base64",
       },
-      test_param: {
+      focus_param: {
         name: "encoding_format",
         value: "base64",
       },
     },
     {
-      name: "test_param_user",
+      name: "user",
       description: "Test user parameter (user identifier)",
       params: {
         user: "user-123",
       },
-      test_param: {
+      focus_param: {
         name: "user",
         value: "user-123",
       },
     },
     {
-      name: "test_param_dimensions",
+      name: "dimensions",
       description: "Test dimensions parameter (V3 models only)",
       params: {
         dimensions: 512,
       },
-      test_param: {
+      focus_param: {
         name: "dimensions",
         value: 512,
       },

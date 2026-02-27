@@ -7,17 +7,17 @@
   },
   tests: [
     {
-      name: "test_baseline",
+      name: "baseline",
       description: "Baseline test: only required parameters",
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      is_baseline: true,
+      baseline: true,
     },
     {
-      name: "test_response_format_variants",
+      name: "response_format",
       description: "Test response_format parameter",
-      parameterize: {
+      variants: {
         response_format: [
           "json",
           "text",
@@ -32,13 +32,13 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      test_param: {
+      focus_param: {
         name: "response_format",
         value: "$response_format",
       },
     },
     {
-      name: "test_prompt",
+      name: "prompt",
       description: "Test prompt parameter",
       params: {
         prompt: "Translate this into French.",
@@ -46,13 +46,13 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      test_param: {
+      focus_param: {
         name: "prompt",
         value: "Translate this into French.",
       },
     },
     {
-      name: "test_param_temperature",
+      name: "temperature",
       description: "Test temperature parameter",
       params: {
         temperature: 0.0,
@@ -60,7 +60,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      test_param: {
+      focus_param: {
         name: "temperature",
         value: 0.0,
       },

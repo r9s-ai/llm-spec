@@ -8,9 +8,9 @@ This directory contains mock HTTP response data for offline integration testing.
 mocks/
 ├── openai/
 │   ├── v1_chat_completions/
-│   │   ├── test_baseline.json              # Non-streaming response
-│   │   ├── test_baseline_stream.jsonl      # Streaming response
-│   │   ├── test_param_temperature.json
+│   │   ├── baseline.json                   # Non-streaming response
+│   │   ├── stream.jsonl                    # Streaming response
+│   │   ├── temperature.json
 │   │   └── ...
 │   ├── v1_embeddings/
 │   └── ...
@@ -24,7 +24,7 @@ mocks/
 ## File Naming Convention
 
 - **Non-streaming responses**: `{test_name}.json`
-- **Streaming responses**: `{test_name}_stream.jsonl`
+- **Streaming responses**: `{test_name}.jsonl`
 
 The `{test_name}` must match the test case name in the corresponding suite JSON5 file.
 
@@ -84,7 +84,7 @@ pytest packages/core/tests/integration/test_suite_runner.py --mock -v
 MOCK_MODE=1 pytest packages/core/tests/integration/test_suite_runner.py -v
 
 # Run specific test with mock
-pytest packages/core/tests/integration/test_suite_runner.py --mock -k "test_baseline" -v
+pytest packages/core/tests/integration/test_suite_runner.py --mock -k "baseline" -v
 ```
 
 ### Running Tests with Real API
@@ -102,7 +102,7 @@ Find the test case in the route file (e.g., `suites-registry/providers/openai/ro
 
 ```json5
 {
-  name: "test_my_feature",
+  name: "my_feature",
   description: "Test my feature",
   params: {...}
 }
@@ -111,8 +111,8 @@ Find the test case in the route file (e.g., `suites-registry/providers/openai/ro
 ### Step 2: Create Mock File
 
 Create a file with the appropriate name:
-- Non-streaming: `mocks/openai/v1_chat_completions/test_my_feature.json`
-- Streaming: `mocks/openai/v1_chat_completions/test_my_feature_stream.jsonl`
+- Non-streaming: `mocks/openai/v1_chat_completions/my_feature.json`
+- Streaming: `mocks/openai/v1_chat_completions/my_feature.jsonl`
 
 ### Step 3: Populate with Response Data
 
@@ -122,7 +122,7 @@ Create a file with the appropriate name:
 
 ```bash
 # Future: record mode to capture real responses
-MOCK_RECORD=1 pytest packages/core/tests/integration/test_suite_runner.py -k "test_my_feature"
+MOCK_RECORD=1 pytest packages/core/tests/integration/test_suite_runner.py -k "my_feature"
 ```
 
 ## Best Practices
@@ -152,7 +152,7 @@ MOCK_RECORD=1 pytest packages/core/tests/integration/test_suite_runner.py -k "te
 ### Mock file not found
 
 ```
-FileNotFoundError: Mock data not found: packages/core/tests/integration/mocks/openai/v1_chat_completions/test_my_test.json
+FileNotFoundError: Mock data not found: packages/core/tests/integration/mocks/openai/v1_chat_completions/my_test.json
 ```
 
 **Solution**: Create the missing mock file with the exact name shown in the error.

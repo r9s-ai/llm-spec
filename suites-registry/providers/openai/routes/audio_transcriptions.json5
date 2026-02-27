@@ -8,15 +8,15 @@
   },
   tests: [
     {
-      name: "test_baseline",
+      name: "baseline",
       description: "Baseline test: only required parameters",
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      is_baseline: true,
+      baseline: true,
     },
     {
-      name: "test_param_language",
+      name: "language",
       description: "Test language parameter",
       params: {
         language: "en",
@@ -24,13 +24,13 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      test_param: {
+      focus_param: {
         name: "language",
         value: "en",
       },
     },
     {
-      name: "test_param_temperature",
+      name: "temperature",
       description: "Test temperature parameter",
       params: {
         temperature: 0.0,
@@ -38,15 +38,15 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      test_param: {
+      focus_param: {
         name: "temperature",
         value: 0.0,
       },
     },
     {
-      name: "test_response_format_variants",
+      name: "response_format",
       description: "Test response_format parameter (all formats)",
-      parameterize: {
+      variants: {
         response_format: [
           "json",
           "text",
@@ -61,13 +61,13 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      test_param: {
+      focus_param: {
         name: "response_format",
         value: "$response_format",
       },
     },
     {
-      name: "test_prompt",
+      name: "prompt",
       description: "Test prompt parameter",
       params: {
         prompt: "Please transcribe in a friendly style.",
@@ -75,45 +75,41 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      test_param: {
+      focus_param: {
         name: "prompt",
         value: "Please transcribe in a friendly style.",
       },
     },
     {
-      name: "test_chunking_strategy_auto",
-      description: "Test chunking_strategy = auto",
+      name: "chunking_strategy",
+      description: "Test chunking_strategy variants",
+      variants: {
+        chunking_variant: [
+          {
+            variant_id: "auto",
+            value: "auto",
+          },
+          {
+            variant_id: "server_vad",
+            value: {
+              type: "server_vad",
+            },
+          },
+        ],
+      },
       params: {
-        chunking_strategy: "auto",
+        chunking_strategy: "$chunking_variant.value",
       },
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      test_param: {
+      focus_param: {
         name: "chunking_strategy",
-        value: "auto",
+        value: "$chunking_variant.value",
       },
     },
     {
-      name: "test_chunking_strategy_server_vad",
-      description: "Test chunking_strategy = server_vad object",
-      params: {
-        chunking_strategy: {
-          type: "server_vad",
-        },
-      },
-      files: {
-        file: "assets/audio/hello_en.mp3",
-      },
-      test_param: {
-        name: "chunking_strategy",
-        value: {
-          type: "server_vad",
-        },
-      },
-    },
-    {
-      name: "test_include_logprobs",
+      name: "include",
       description: "Test include=logprobs",
       params: {
         include: [
@@ -124,7 +120,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      test_param: {
+      focus_param: {
         name: "include",
         value: [
           "logprobs",
@@ -133,7 +129,7 @@
       required_fields: ["logprobs"],
     },
     {
-      name: "test_known_speakers",
+      name: "known_speaker_names",
       description: "Test known_speaker_names + known_speaker_references",
       params: {
         known_speaker_names: [
@@ -148,7 +144,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      test_param: {
+      focus_param: {
         name: "known_speaker_names",
         value: [
           "speaker_a",
@@ -157,7 +153,7 @@
       },
     },
     {
-      name: "test_timestamp_granularities",
+      name: "timestamp_granularities",
       description: "Test timestamp_granularities with verbose_json",
       params: {
         response_format: "verbose_json",
@@ -169,7 +165,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      test_param: {
+      focus_param: {
         name: "timestamp_granularities",
         value: [
           "word",
@@ -179,7 +175,7 @@
       required_fields: ["duration", "language", "segments", "words"],
     },
     {
-      name: "test_stream_flag",
+      name: "stream",
       description: "Test stream=true",
       params: {
         stream: true,
@@ -188,7 +184,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      test_param: {
+      focus_param: {
         name: "stream",
         value: true,
       },

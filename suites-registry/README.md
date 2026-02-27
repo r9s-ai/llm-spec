@@ -89,7 +89,7 @@ routes_from = "openai"
 - Should not contain `provider`; provider comes from directory name.
 - `base_params` should not hardcode model for non-Gemini routes; model is injected at runtime.
 - For Gemini-style URLs, use `{model}` in `endpoint` and runtime will replace it.
-- `tests[]` entries follow existing suite format (`name`, `params`, `test_param`, `is_baseline`, `tags`, etc.).
+- `tests[]` entries follow existing suite format (`name`, `params`, `focus_param`, `baseline`, `tags`, etc.).
 - Parameter precedence at runtime is: `base_params` -> `test.params` (test-level values override same keys in `base_params`).
 
 Complete template example (non-Gemini):
@@ -110,7 +110,7 @@ Complete template example (non-Gemini):
     max_tokens: 64,
   },
 
-  stream_rules: {
+  stream_expectations: {
     min_observations: 2,
     checks: [
       { type: "required_terminal", value: "[DONE]" },
@@ -119,24 +119,24 @@ Complete template example (non-Gemini):
 
   tests: [
     {
-      name: "test_baseline",
-      is_baseline: true,
+      name: "baseline",
+      baseline: true,
       tags: ["core"],
     },
     {
-      name: "test_param_temperature",
+      name: "temperature",
       params: { temperature: 0.7 },
-      test_param: { name: "temperature", value: 0.7 },
+      focus_param: { name: "temperature", value: 0.7 },
       tags: ["core"],
     },
     {
-      name: "test_stream",
+      name: "stream",
       params: { stream: true },
-      test_param: { name: "stream", value: true },
+      focus_param: { name: "stream", value: true },
       tags: ["streaming"],
     },
     {
-      name: "test_file_upload",
+      name: "file_upload",
       files: { file: "assets/audio/hello_en.mp3" },
       tags: ["multimodal"],
     },
@@ -161,7 +161,7 @@ Gemini-style endpoint template:
     ],
   },
   tests: [
-    { name: "test_baseline", is_baseline: true, tags: ["core"] },
+    { name: "baseline", baseline: true, tags: ["core"] },
   ],
 }
 ```
@@ -192,8 +192,8 @@ routes = ["chat_completions", "responses"]
 
 # Optional: skip route tests by test name
 skip_tests = [
-  "test_param_logit_bias",
-  "test_param_service_tier",
+  "logit_bias",
+  "service_tier",
 ]
 
 # Optional: override route base_params (deep merge)
@@ -204,35 +204,35 @@ temperature = 0.2
 # Optional: append model-specific tests for a route
 [[extra_tests]]
 route = "chat_completions"
-name = "test_reasoning_effort_high"
+name = "reasoning_effort[high]"
 description = "Model-specific reasoning_effort coverage"
 params = { reasoning_effort = "high", max_completion_tokens = 2048 }
-test_param = { name = "reasoning_effort", value = "high" }
+focus_param = { name = "reasoning_effort", value = "high" }
 tags = ["core", "reasoning"]
 
 # Variant values: declare one [[extra_tests]] block per value.
 [[extra_tests]]
 route = "chat_completions"
-name = "test_reasoning_effort_medium"
+name = "reasoning_effort[medium]"
 description = "Model-specific reasoning_effort=medium coverage"
 params = { reasoning_effort = "medium", max_completion_tokens = 2048 }
-test_param = { name = "reasoning_effort", value = "medium" }
+focus_param = { name = "reasoning_effort", value = "medium" }
 tags = ["core", "reasoning"]
 
 [[extra_tests]]
 route = "chat_completions"
-name = "test_reasoning_effort_low"
+name = "reasoning_effort[low]"
 description = "Model-specific reasoning_effort=low coverage"
 params = { reasoning_effort = "low", max_completion_tokens = 2048 }
-test_param = { name = "reasoning_effort", value = "low" }
+focus_param = { name = "reasoning_effort", value = "low" }
 tags = ["core", "reasoning"]
 
 [[extra_tests]]
 route = "responses"
-name = "test_text_verbosity_low"
+name = "text.verbosity[low]"
 description = "Model-specific verbosity check"
 params = { text = { verbosity = "low" } }
-test_param = { name = "text.verbosity", value = "low" }
+focus_param = { name = "text.verbosity", value = "low" }
 tags = ["rare"]
 ```
 
@@ -266,5 +266,5 @@ Notes for variants:
 ## Validate by Running
 
 ```bash
-uv run python -m llm_spec run --suites suites-registry/providers -k test_baseline
+uv run python -m llm_spec run --suites suites-registry/providers -k baseline
 ```

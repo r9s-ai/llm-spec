@@ -39,7 +39,7 @@ class MockDataLoader:
         Args:
             provider: Provider name (e.g., "openai", "anthropic", "gemini")
             endpoint: API endpoint path (e.g., "/v1/chat/completions")
-            test_name: Test case name (e.g., "test_baseline")
+            test_name: Test case name (e.g., "baseline")
             is_stream: Whether this is a streaming response
 
         Returns:
@@ -99,11 +99,16 @@ class MockDataLoader:
             return self._load_json_response(file_path)
 
     def _sanitize_filename(self, name: str) -> str:
-        """Replace all characters except alphanumeric, _, -, [, and ] with _."""
+        """Replace unsafe filename characters with underscore.
+
+        Keep dots/colons for parameter-style test names such as
+        ``generationConfig.temperature`` and
+        ``safetySettings[HARM_CATEGORY_X:BLOCK_NONE]``.
+        """
         import re
 
         # Replace unsafe characters with underscore
-        return re.sub(r"[^a-zA-Z0-9_\-\[\]]", "_", name)
+        return re.sub(r"[^a-zA-Z0-9_.:\-\[\],]", "_", name)
 
     def _load_json_response(self, file_path: Path) -> dict:
         """Load non-streaming JSON response.

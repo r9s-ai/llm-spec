@@ -19,5 +19,5 @@
 ## Local Check
 
 ```bash
-uv run python -m llm_spec run --suites suites-registry/providers -k test_baseline
+uv run python -m llm_spec run --suites suites-registry/providers -k baseline
 ```

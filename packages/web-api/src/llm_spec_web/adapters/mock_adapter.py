@@ -71,7 +71,7 @@ class MockProviderAdapter(ProviderAdapter):
         """
         full_name = current_test_name.get() or ""
         if "::" not in full_name:
-            return "test_baseline"
+            return "baseline"
         return full_name.split("::", 1)[1]
 
     def request(

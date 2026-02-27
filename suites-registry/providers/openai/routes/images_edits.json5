@@ -9,15 +9,15 @@
   },
   tests: [
     {
-      name: "test_baseline",
+      name: "baseline",
       description: "Baseline test: gpt-image-1.5 single image + prompt",
       files: {
         image: "assets/images/test_base.png",
       },
-      is_baseline: true,
+      baseline: true,
     },
     {
-      name: "test_param_response_format_url_dalle2",
+      name: "response_format",
       description: "dall-e-2 supports response_format=url",
       params: {
         response_format: "url",
@@ -25,13 +25,13 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      test_param: {
+      focus_param: {
         name: "response_format",
         value: "url",
       },
     },
     {
-      name: "test_param_background_transparent",
+      name: "background",
       description: "GPT image supports transparent background",
       params: {
         background: "transparent",
@@ -39,13 +39,13 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      test_param: {
+      focus_param: {
         name: "background",
         value: "transparent",
       },
     },
     {
-      name: "test_param_output_format_webp",
+      name: "output_format",
       description: "GPT image supports output_format=webp",
       params: {
         output_format: "webp",
@@ -53,13 +53,13 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      test_param: {
+      focus_param: {
         name: "output_format",
         value: "webp",
       },
     },
     {
-      name: "test_param_output_compression",
+      name: "output_compression",
       description: "GPT image supports output_compression (webp/jpeg)",
       params: {
         output_format: "webp",
@@ -68,13 +68,13 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      test_param: {
+      focus_param: {
         name: "output_compression",
         value: 80,
       },
     },
     {
-      name: "test_param_size_gpt_landscape",
+      name: "size",
       description: "GPT image landscape size",
       params: {
         size: "1536x1024",
@@ -82,13 +82,13 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      test_param: {
+      focus_param: {
         name: "size",
         value: "1536x1024",
       },
     },
     {
-      name: "test_param_n_multiple",
+      name: "n",
       description: "Generate multiple images (n=2)",
       params: {
         n: 2,
@@ -96,13 +96,13 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      test_param: {
+      focus_param: {
         name: "n",
         value: 2,
       },
     },
     {
-      name: "test_param_input_fidelity_high",
+      name: "input_fidelity",
       description: "Input fidelity (GPT image model only)",
       params: {
         input_fidelity: "high",
@@ -110,26 +110,26 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      test_param: {
+      focus_param: {
         name: "input_fidelity",
         value: "high",
       },
     },
     {
-      name: "test_param_mask_png",
+      name: "mask",
       description: "Edit with mask",
       params: {},
       files: {
         image: "assets/images/test_base.png",
         mask: "assets/images/test_base.png",
       },
-      test_param: {
+      focus_param: {
         name: "mask",
         value: null,
       },
     },
     {
-      name: "test_param_user",
+      name: "user",
       description: "User identifier",
       params: {
         user: "user-123",
@@ -137,7 +137,7 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      test_param: {
+      focus_param: {
         name: "user",
         value: "user-123",
       },

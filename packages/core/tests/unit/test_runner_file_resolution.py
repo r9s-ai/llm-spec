@@ -70,7 +70,7 @@ def test_asset_placeholder_base64_and_data_uri(tmp_path: Path) -> None:
             "raw": "$asset_base64(assets/images/tiny.bin)",
             "uri": "$asset_data_uri(assets/images/tiny.bin,application/octet-stream)",
         },
-        test_param={"name": "raw", "value": "x"},
+        focus_param={"name": "raw", "value": "x"},
     )
     params = runner.build_params(test)
     expected_b64 = base64.b64encode(b"\x00\x01\x02").decode("ascii")
@@ -83,7 +83,7 @@ def test_asset_placeholder_missing_file_raises(tmp_path: Path) -> None:
     test = SpecTestCase(
         name="missing_asset",
         params={"raw": "$asset_base64(assets/images/not_exists.bin)"},
-        test_param={"name": "raw", "value": "x"},
+        focus_param={"name": "raw", "value": "x"},
     )
     with pytest.raises(FileNotFoundError):
         runner.build_params(test)
