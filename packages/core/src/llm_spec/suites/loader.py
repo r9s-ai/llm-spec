@@ -20,42 +20,31 @@ class _RawTestCase(PydanticBaseModel):
     name: str
     description: str = ""
     params: dict[str, Any] = Field(default_factory=dict)
-    test_param: dict[str, Any] | None = None
-    is_baseline: bool = False
+    focus_param: dict[str, Any] | None = None
+    baseline: bool = False
     stream: Any = False
-    stream_rules: dict[str, Any] | None = None
-    stream_validation: dict[str, Any] | None = None
+    stream_expectations: dict[str, Any] | None = None
     endpoint_override: str | None = None
     files: dict[str, str] | None = None
     schemas: dict[str, str] | None = None
     required_fields: list[str] | None = None
-    parameterize: dict[str, list[Any]] | None = None
+    variants: dict[str, list[Any]] | None = None
     method: str | None = None
     tags: list[str] = Field(default_factory=list)
 
-    @model_validator(mode="before")
-    @classmethod
-    def _normalize_legacy_fields(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        if "stream_rules" not in data and "stream_validation" in data:
-            data = dict(data)
-            data["stream_rules"] = data.get("stream_validation")
-        return data
-
     @model_validator(mode="after")
     def _validate_required_non_baseline_fields(self) -> _RawTestCase:
-        if self.is_baseline:
-            if isinstance(self.stream, str) and not self.parameterize:
+        if self.baseline:
+            if isinstance(self.stream, str) and not self.variants:
                 raise ValueError(
                     f"Invalid stream value for baseline test '{self.name}': {self.stream}"
                 )
             return self
-        if self.test_param is None:
-            raise ValueError(f"Missing 'test_param' for non-baseline test '{self.name}'")
-        if "name" not in self.test_param:
-            raise ValueError(f"Missing test_param.name for test '{self.name}'")
-        if isinstance(self.stream, str) and not self.parameterize:
+        if self.focus_param is None:
+            raise ValueError(f"Missing 'focus_param' for non-baseline test '{self.name}'")
+        if "name" not in self.focus_param:
+            raise ValueError(f"Missing focus_param.name for test '{self.name}'")
+        if isinstance(self.stream, str) and not self.variants:
             raise ValueError(f"Invalid stream value for test '{self.name}': {self.stream}")
         return self
 
@@ -69,39 +58,29 @@ class _RawSuite(PydanticBaseModel):
     base_params: dict[str, Any] = Field(default_factory=dict)
     tests: list[_RawTestCase] = Field(default_factory=list)
     required_fields: list[str] = Field(default_factory=list)
-    stream_rules: dict[str, Any] | None = None
-    stream_validation: dict[str, Any] | None = None
+    stream_expectations: dict[str, Any] | None = None
     method: str = "POST"
     suite_name: str | None = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def _normalize_legacy_fields(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        if "stream_rules" not in data and "stream_validation" in data:
-            data = dict(data)
-            data["stream_rules"] = data.get("stream_validation")
-        return data
-
 
 def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTestCase]:
-    """Expand a parameterized test into multiple SpecTestCase instances."""
-    parameterize = test_config.get("parameterize", {})
-    if not parameterize:
+    """Expand a variants-based test into multiple SpecTestCase instances."""
+    variants = test_config.get("variants", {})
+    if not variants:
         return
 
     # Currently only supports a single parameterized variable.
-    param_name, param_values = next(iter(parameterize.items()))
+    param_name, param_values = next(iter(variants.items()))
 
     for value in param_values:
         if isinstance(value, dict):
-            if "suffix" not in value:
+            if "variant_id" not in value:
                 raise ValueError(
-                    f"Parameterized dict value must have 'suffix' field in test "
+                    f"Parameterized dict value must have 'variant_id' field in test "
                     f"'{test_config['name']}': {value}"
                 )
-            suffix = str(value["suffix"]).replace("/", "_")
+            variant_id = value["variant_id"]
+            suffix = str(variant_id).replace("/", "_")
         elif isinstance(value, list):
             suffix = ",".join(str(v) for v in value)
         else:
@@ -110,9 +89,9 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
         params = copy.deepcopy(test_config.get("params", {}))
         replace_parameter_references(params, param_name, value)
 
-        test_param = copy.deepcopy(test_config.get("test_param"))
-        if test_param:
-            replace_parameter_references(test_param, param_name, value)
+        focus_param = copy.deepcopy(test_config.get("focus_param"))
+        if focus_param:
+            replace_parameter_references(focus_param, param_name, value)
 
         variant_name = f"{test_config['name']}[{suffix}]"
 
@@ -124,10 +103,10 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
             name=variant_name,
             description=test_config.get("description", ""),
             params=params,
-            test_param=test_param,
-            is_baseline=test_config.get("is_baseline", False),
+            focus_param=focus_param,
+            baseline=test_config.get("baseline", False),
             stream=stream,
-            stream_rules=test_config.get("stream_rules", test_config.get("stream_validation")),
+            stream_expectations=test_config.get("stream_expectations"),
             endpoint_override=test_config.get("endpoint_override"),
             files=test_config.get("files"),
             schemas=test_config.get("schemas"),
@@ -177,7 +156,7 @@ def load_test_suite_from_dict(
 
     for t in raw_suite.tests:
         t_dict = t.model_dump()
-        if t.parameterize:
+        if t.variants:
             tests.extend(expand_parameterized_tests(t_dict))
         else:
             tests.append(
@@ -185,10 +164,10 @@ def load_test_suite_from_dict(
                     name=t.name,
                     description=t.description,
                     params=t.params,
-                    test_param=t.test_param,
-                    is_baseline=t.is_baseline,
+                    focus_param=t.focus_param,
+                    baseline=t.baseline,
                     stream=t.stream if isinstance(t.stream, bool) else False,
-                    stream_rules=t.stream_rules,
+                    stream_expectations=t.stream_expectations,
                     endpoint_override=t.endpoint_override,
                     files=t.files,
                     schemas=t.schemas,
@@ -205,7 +184,7 @@ def load_test_suite_from_dict(
         base_params=raw_suite.base_params,
         tests=tests,
         required_fields=raw_suite.required_fields,
-        stream_rules=raw_suite.stream_rules,
+        stream_expectations=raw_suite.stream_expectations,
         config_path=config_path,
         method=raw_suite.method,
         suite_name=raw_suite.suite_name,

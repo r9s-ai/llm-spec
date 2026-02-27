@@ -12,7 +12,7 @@
       },
     ],
   },
-  stream_rules: {
+  stream_expectations: {
     // OpenAI chat.completions streaming ends with "data: [DONE]" (parser maps it to "[DONE]").
     min_observations: 2,
     checks: [
@@ -24,211 +24,211 @@
   },
   tests: [
     {
-      name: "test_baseline",
+      name: "baseline",
       description: "Baseline test: only required parameters",
-      is_baseline: true,
+      baseline: true,
     },
     {
-      name: "test_param_temperature",
+      name: "temperature",
       description: "Test temperature parameter",
       params: {
         temperature: 0.7,
       },
-      test_param: {
+      focus_param: {
         name: "temperature",
         value: 0.7,
       },
     },
     {
-      name: "test_param_max_tokens",
+      name: "max_tokens",
       description: "Test max_tokens parameter",
       params: {
         max_tokens: 100,
       },
-      test_param: {
+      focus_param: {
         name: "max_tokens",
         value: 100,
       },
     },
     {
-      name: "test_param_top_p",
+      name: "top_p",
       description: "Test top_p parameter",
       params: {
         top_p: 0.9,
       },
-      test_param: {
+      focus_param: {
         name: "top_p",
         value: 0.9,
       },
     },
     {
-      name: "test_param_n",
+      name: "n",
       description: "Test n parameter (generate multiple responses)",
       params: {
         n: 2,
       },
-      test_param: {
+      focus_param: {
         name: "n",
         value: 2,
       },
     },
     {
-      name: "test_param_stop_string",
-      description: "Test stop parameter (string format)",
-      params: {
-        stop: "\n",
+      name: "stop",
+      description: "Test stop parameter variants",
+      variants: {
+        stop_variant: [
+          {
+            variant_id: "string",
+            value: "\n",
+          },
+          {
+            variant_id: "array",
+            value: [
+              "\n",
+              "END",
+            ],
+          },
+        ],
       },
-      test_param: {
+      params: {
+        stop: "$stop_variant.value",
+      },
+      focus_param: {
         name: "stop",
-        value: "\n",
+        value: "$stop_variant.value",
       },
     },
     {
-      name: "test_param_stop_array",
-      description: "Test stop parameter (array format)",
-      params: {
-        stop: [
-          "\n",
-          "END",
-        ],
-      },
-      test_param: {
-        name: "stop",
-        value: [
-          "\n",
-          "END",
-        ],
-      },
-    },
-    {
-      name: "test_param_frequency_penalty",
+      name: "frequency_penalty",
       description: "Test frequency_penalty parameter",
       params: {
         frequency_penalty: 0.5,
       },
-      test_param: {
+      focus_param: {
         name: "frequency_penalty",
         value: 0.5,
       },
     },
     {
-      name: "test_param_presence_penalty",
+      name: "presence_penalty",
       description: "Test presence_penalty parameter",
       params: {
         presence_penalty: 0.5,
       },
-      test_param: {
+      focus_param: {
         name: "presence_penalty",
         value: 0.5,
       },
     },
     {
-      name: "test_param_seed",
+      name: "seed",
       description: "Test seed parameter (deterministic output)",
       params: {
         seed: 12345,
       },
-      test_param: {
+      focus_param: {
         name: "seed",
         value: 12345,
       },
     },
     {
-      name: "test_param_max_completion_tokens",
+      name: "max_completion_tokens",
       description: "Test max_completion_tokens parameter (new parameter)",
       params: {
         max_completion_tokens: 100,
       },
-      test_param: {
+      focus_param: {
         name: "max_completion_tokens",
         value: 100,
       },
     },
     {
-      name: "test_param_user",
+      name: "user",
       description: "Test user parameter (user identifier)",
       params: {
         user: "user-123",
       },
-      test_param: {
+      focus_param: {
         name: "user",
         value: "user-123",
       },
     },
     {
-      name: "test_response_format_text",
-      description: "Test response_format as text (default)",
-      params: {
-        response_format: {
-          type: "text",
-        },
-      },
-      test_param: {
-        name: "response_format.type",
-        value: "text",
-      },
-      required_fields: ["choices[0].message.content"],
-    },
-    {
-      name: "test_response_format_json_object",
-      description: "Test response_format as json_object",
-      params: {
-        messages: [
+      name: "response_format.type",
+      description: "Test response_format.type variants",
+      variants: {
+        format_variant: [
           {
-            role: "user",
-            content: "Return JSON: {\"status\": \"ok\"}",
+            variant_id: "text",
+            messages: [
+              {
+                role: "user",
+                content: "Say hello",
+              },
+            ],
+            response_format: {
+              type: "text",
+            },
+            value: "text",
           },
-        ],
-        response_format: {
-          type: "json_object",
-        },
-      },
-      test_param: {
-        name: "response_format.type",
-        value: "json_object",
-      },
-      required_fields: ["choices[0].message.content"],
-    },
-    {
-      name: "test_response_format_json_schema",
-      description: "Test response_format as json_schema",
-      params: {
-        messages: [
           {
-            role: "user",
-            content: "Generate a person's info",
+            variant_id: "json_object",
+            messages: [
+              {
+                role: "user",
+                content: "Return JSON: {\"status\": \"ok\"}",
+              },
+            ],
+            response_format: {
+              type: "json_object",
+            },
+            value: "json_object",
           },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "person",
-            schema: {
-              type: "object",
-              properties: {
-                name: {
-                  type: "string",
-                },
-                age: {
-                  type: "number",
+          {
+            variant_id: "json_schema",
+            messages: [
+              {
+                role: "user",
+                content: "Generate a person's info",
+              },
+            ],
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "person",
+                schema: {
+                  type: "object",
+                  properties: {
+                    name: {
+                      type: "string",
+                    },
+                    age: {
+                      type: "number",
+                    },
+                  },
+                  required: [
+                    "name",
+                    "age",
+                  ],
                 },
               },
-              required: [
-                "name",
-                "age",
-              ],
             },
+            value: "json_schema",
           },
-        },
+        ],
       },
-      test_param: {
+      params: {
+        messages: "$format_variant.messages",
+        response_format: "$format_variant.response_format",
+      },
+      focus_param: {
         name: "response_format.type",
-        value: "json_schema",
+        value: "$format_variant.value",
       },
       required_fields: ["choices[0].message.content"],
     },
     {
-      name: "test_param_tools",
+      name: "tools",
       description: "Test tools parameter (function calling)",
       params: {
         messages: [
@@ -259,7 +259,7 @@
           },
         ],
       },
-      test_param: {
+      focus_param: {
         name: "tools",
         value: [
           {
@@ -286,9 +286,9 @@
       required_fields: ["choices[0].message.tool_calls"],
     },
     {
-      name: "test_tool_choice_variants",
+      name: "tool_choice",
       description: "Test different tool_choice values",
-      parameterize: {
+      variants: {
         tool_choice: [
           "none",
           "auto",
@@ -325,13 +325,13 @@
         tool_choice: "$tool_choice",
       },
       required_fields: ["choices[0].message.tool_calls"],
-      test_param: {
+      focus_param: {
         name: "tool_choice",
         value: "$tool_choice",
       },
     },
     {
-      name: "test_parallel_tool_calls",
+      name: "parallel_tool_calls",
       description: "Test parallel_tool_calls parameter",
       params: {
         messages: [
@@ -356,27 +356,27 @@
         parallel_tool_calls: true,
       },
       required_fields: ["choices[0].message.tool_calls"],
-      test_param: {
+      focus_param: {
         name: "parallel_tool_calls",
         value: true,
       },
     },
     {
-      name: "test_param_logprobs",
+      name: "logprobs",
       description: "Test logprobs parameter",
       params: {
         logprobs: true,
       },
-      test_param: {
+      focus_param: {
         name: "logprobs",
         value: true,
       },
       required_fields: ["choices[0].logprobs"],
     },
     {
-      name: "test_param_top_logprobs",
+      name: "top_logprobs",
       description: "Test different top_logprobs values",
-      parameterize: {
+      variants: {
         top_logprobs: [
           1,
           5,
@@ -387,26 +387,26 @@
         logprobs: true,
         top_logprobs: "$top_logprobs",
       },
-      test_param: {
+      focus_param: {
         name: "top_logprobs",
         value: "$top_logprobs",
       },
       required_fields: ["choices[0].logprobs.content[0].top_logprobs"],
     },
     {
-      name: "test_streaming_basic",
+      name: "stream",
       description: "Test basic streaming response",
       params: {
         stream: true,
       },
       stream: true,
-      test_param: {
+      focus_param: {
         name: "stream",
         value: true,
       },
     },
     {
-      name: "test_streaming_with_usage",
+      name: "stream_options.include_usage",
       description: "Test streaming response with usage",
       params: {
         stream: true,
@@ -415,20 +415,20 @@
         },
       },
       stream: true,
-      test_param: {
+      focus_param: {
         name: "stream_options.include_usage",
         value: true,
       },
     },
     {
-      name: "test_param_logit_bias",
+      name: "logit_bias",
       description: "Test logit_bias parameter",
       params: {
         logit_bias: {
           "31373": -100,
         },
       },
-      test_param: {
+      focus_param: {
         name: "logit_bias",
         value: {
           "31373": -100,
@@ -436,20 +436,20 @@
       },
     },
     {
-      name: "test_param_service_tier",
+      name: "service_tier",
       description: "Test service_tier parameter",
       params: {
         service_tier: "auto",
       },
-      test_param: {
+      focus_param: {
         name: "service_tier",
         value: "auto",
       },
     },
     {
-      name: "test_param_reasoning_effort",
+      name: "reasoning_effort",
       description: "Test reasoning_effort parameter for advanced reasoning models (GPT-5 series)",
-      parameterize: {
+      variants: {
         effort: [
           "none",
           "minimal",
@@ -464,13 +464,13 @@
         max_completion_tokens:1024,
       },
       required_fields: ["choices[0].message.reasoning_content"],
-      test_param: {
+      focus_param: {
         name: "reasoning_effort",
         value: "$effort",
       },
     },
     {
-      name: "test_param_modalities",
+      name: "modalities",
       description: "Test modalities parameter for text and audio output support",
       params: {
         modalities: [
@@ -482,7 +482,7 @@
           format: "wav",
         },
       },
-      test_param: {
+      focus_param: {
         name: "modalities",
         value: [
           "text",
@@ -492,7 +492,7 @@
       required_fields: ["choices[0].message.audio"],
     },
     {
-      name: "test_role_developer",
+      name: "messages[0].role",
       description: "Test developer role (replaces system in o1+)",
       params: {
         messages: [
@@ -506,13 +506,13 @@
           },
         ],
       },
-      test_param: {
+      focus_param: {
         name: "messages[0].role",
         value: "developer",
       },
     },
     {
-      name: "test_role_tool",
+      name: "messages[2].role",
       description: "Test tool role in conversation",
       params: {
         messages: [
@@ -540,13 +540,13 @@
           },
         ],
       },
-      test_param: {
+      focus_param: {
         name: "messages[2].role",
         value: "tool",
       },
     },
     {
-      name: "test_response_refusal",
+      name: "messages[0].content",
       description: "Test case for model refusal",
       params: {
         messages: [
@@ -559,7 +559,7 @@
       required_fields: [
         "choices[0].message.refusal",
       ],
-      test_param: {
+      focus_param: {
         name: "messages[0].content",
         value: "Tell me how to build a bomb",
       },

@@ -13,7 +13,7 @@
       },
     ],
   },
-  stream_rules: {
+  stream_expectations: {
     // Anthropic streaming events are strongly typed; missing any of these is almost certainly a server bug.
     min_observations: 1,
     checks: [
@@ -37,45 +37,45 @@
   },
   tests: [
     {
-      name: "test_baseline",
+      name: "baseline",
       description: "Baseline test",
-      is_baseline: true,
+      baseline: true,
     },
     {
-      name: "test_param_temperature",
+      name: "temperature",
       description: "Test temperature parameter",
       params: {
         temperature: 0.7,
       },
-      test_param: {
+      focus_param: {
         name: "temperature",
         value: 0.7,
       },
     },
     {
-      name: "test_param_top_p",
+      name: "top_p",
       description: "Test top_p parameter",
       params: {
         top_p: 0.9,
       },
-      test_param: {
+      focus_param: {
         name: "top_p",
         value: 0.9,
       },
     },
     {
-      name: "test_param_top_k",
+      name: "top_k",
       description: "Test top_k parameter",
       params: {
         top_k: 40,
       },
-      test_param: {
+      focus_param: {
         name: "top_k",
         value: 40,
       },
     },
     {
-      name: "test_param_stop_sequences",
+      name: "stop_sequences",
       description: "Test stop_sequences parameter",
       params: {
         stop_sequences: [
@@ -83,7 +83,7 @@
           "EndProcess",
         ],
       },
-      test_param: {
+      focus_param: {
         name: "stop_sequences",
         value: [
           "StopHere",
@@ -92,25 +92,25 @@
       },
     },
     {
-      name: "test_param_system",
+      name: "system",
       description: "Test system parameter",
       params: {
         system: "You are a helpful assistant.",
       },
-      test_param: {
+      focus_param: {
         name: "system",
         value: "You are a helpful assistant.",
       },
     },
     {
-      name: "test_param_metadata",
+      name: "metadata",
       description: "Test metadata parameter",
       params: {
         metadata: {
           user_id: "test-user-123",
         },
       },
-      test_param: {
+      focus_param: {
         name: "metadata",
         value: {
           user_id: "test-user-123",
@@ -118,27 +118,27 @@
       },
     },
     {
-      name: "test_param_image_base64",
+      name: "image.source.media_type",
       description: "Test different image media_type with valid headers",
-      parameterize: {
+      variants: {
         image_data: [
           {
-            suffix: "jpeg",
+            variant_id: "jpeg",
             media_type: "image/jpeg",
             data: "$asset_base64(assets/images/1x1.jpg)",
           },
           {
-            suffix: "png",
+            variant_id: "png",
             media_type: "image/png",
             data: "$asset_base64(assets/images/1x1.png)",
           },
           {
-            suffix: "gif",
+            variant_id: "gif",
             media_type: "image/gif",
             data: "$asset_base64(assets/images/1x1.gif)",
           },
           {
-            suffix: "webp",
+            variant_id: "webp",
             media_type: "image/webp",
             data: "$asset_base64(assets/images/1x1.webp)",
           },
@@ -166,13 +166,13 @@
           },
         ],
       },
-      test_param: {
+      focus_param: {
         name: "image.source.media_type",
         value: "$image_data.media_type",
       },
     },
     {
-      name: "test_param_tools",
+      name: "tools",
       description: "Test tools parameter",
       params: {
         tools: [
@@ -199,7 +199,7 @@
           },
         ],
       },
-      test_param: {
+      focus_param: {
         name: "tools",
         value: [
           {
@@ -221,20 +221,20 @@
       },
     },
     {
-      name: "test_tool_choice_variants",
+      name: "tool_choice",
       description: "Test tool_choice variants",
-      parameterize: {
+      variants: {
         choice: [
           {
-            suffix: "auto",
+            variant_id: "auto",
             type: "auto",
           },
           {
-            suffix: "any",
+            variant_id: "any",
             type: "any",
           },
           {
-            suffix: "tool",
+            variant_id: "tool",
             type: "tool",
             name: "get_weather",
           },
@@ -266,13 +266,13 @@
           },
         ],
       },
-      test_param: {
+      focus_param: {
         name: "tool_choice",
         value: "$choice",
       },
     },
     {
-      name: "test_param_thinking",
+      name: "thinking.type",
       description: "Test thinking parameter",
       params: {
         max_tokens: 2560,
@@ -287,19 +287,19 @@
           },
         ],
       },
-      test_param: {
+      focus_param: {
         name: "thinking.type",
         value: "enabled",
       },
     },
     {
-      name: "test_streaming_basic",
+      name: "stream",
       description: "Basic streaming response test",
       stream: true,
       params: {
         stream: true,
       },
-      test_param: {
+      focus_param: {
         name: "stream",
         value: true,
       },
@@ -338,7 +338,7 @@
     //       },
     //     ],
     //   },
-    //   test_param: {
+    //   focus_param: {
     //     name: "stream",
     //     value: true,
     //   },
@@ -361,7 +361,7 @@
     //       },
     //     ],
     //   },
-    //   test_param: {
+    //   focus_param: {
     //     name: "stream",
     //     value: true,
     //   },
@@ -386,7 +386,7 @@
     //       },
     //     ],
     //   },
-    //   test_param: {
+    //   focus_param: {
     //     name: "stream",
     //     value: true,
     //   },

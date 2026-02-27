@@ -171,12 +171,12 @@ class ConfigDrivenTestRunner:
     @staticmethod
     def _build_tested_param(test: SpecTestCase) -> TestedParameter | None:
         """Build normalized tested_param payload."""
-        if not test.test_param:
+        if not test.focus_param:
             return None
-        param_name = test.test_param.get("name")
+        param_name = test.focus_param.get("name")
         if not isinstance(param_name, str) or not param_name:
             return None
-        return {"name": param_name, "value": test.test_param.get("value")}
+        return {"name": param_name, "value": test.focus_param.get("value")}
 
     @staticmethod
     def _make_test_result(
@@ -208,7 +208,7 @@ class ConfigDrivenTestRunner:
             "missing_fields": missing_fields or [],
             "expected_fields": expected_fields or [],
             "tested_param": tested_param,
-            "is_baseline": test.is_baseline,
+            "is_baseline": test.baseline,
             "missing_events": missing_events or [],
         }
         if request_ok is not None:
@@ -847,7 +847,7 @@ class ConfigDrivenTestRunner:
                     return False
 
             # Stage 4: validate required observations/events
-            effective_stream_rules = test.stream_rules or self.suite.stream_rules
+            effective_stream_rules = test.stream_expectations or self.suite.stream_expectations
             observations = extract_observations(
                 provider=self.suite.provider,
                 endpoint=endpoint,
@@ -1361,7 +1361,7 @@ class ConfigDrivenTestRunner:
             # Stage 3: validate stream rules
             stream_rules_ok = True
             stream_errors: list[str] = []
-            stream_rules = test.stream_rules or self.suite.stream_rules
+            stream_rules = test.stream_expectations or self.suite.stream_expectations
 
             if stream_rules:
                 try:

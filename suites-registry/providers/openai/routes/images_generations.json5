@@ -10,25 +10,33 @@
   },
   tests: [
     {
-      name: "test_baseline",
+      name: "baseline",
       description: "Baseline test: only required parameters",
-      is_baseline: true,
+      baseline: true,
     },
     {
-      name: "test_param_size",
+      name: "size",
       description: "Test size parameter (dall-e-3 default size)",
-      params: {
-        size: "1024x1024",
+      variants: {
+        size: [
+          {
+            variant_id: "default_1024x1024",
+            value: "1024x1024",
+          },
+        ],
       },
-      test_param: {
+      params: {
+        size: "$size.value",
+      },
+      focus_param: {
         name: "size",
-        value: "1024x1024",
+        value: "$size.value",
       },
     },
     {
-      name: "test_param_size_dalle2",
+      name: "size",
       description: "Test size parameter (dall-e-2 size variants)",
-      parameterize: {
+      variants: {
         size: [
           "512x512",
           "256x256",
@@ -37,15 +45,15 @@
       params: {
         size: "$size",
       },
-      test_param: {
+      focus_param: {
         name: "size",
         value: "$size",
       },
     },
     {
-      name: "test_param_size_dalle3",
+      name: "size",
       description: "Test dall-e-3 size variants",
-      parameterize: {
+      variants: {
         size: [
           "1792x1024",
           "1024x1792",
@@ -54,15 +62,15 @@
       params: {
         size: "$size",
       },
-      test_param: {
+      focus_param: {
         name: "size",
         value: "$size",
       },
     },
     {
-      name: "test_param_quality_dalle3",
+      name: "quality",
       description: "Test quality parameter (dall-e-3)",
-      parameterize: {
+      variants: {
         quality: [
           "hd",
           "standard",
@@ -71,15 +79,15 @@
       params: {
         quality: "$quality",
       },
-      test_param: {
+      focus_param: {
         name: "quality",
         value: "$quality",
       },
     },
     {
-      name: "test_param_response_format",
+      name: "response_format",
       description: "Test response_format parameter (dall-e-3/dall-e-2)",
-      parameterize: {
+      variants: {
         response_format: [
           "url",
           "b64_json",
@@ -88,15 +96,15 @@
       params: {
         response_format: "$response_format",
       },
-      test_param: {
+      focus_param: {
         name: "response_format",
         value: "$response_format",
       },
     },
     {
-      name: "test_param_style",
+      name: "style",
       description: "Test style parameter (dall-e-3)",
-      parameterize: {
+      variants: {
         style: [
           "vivid",
           "natural",
@@ -105,50 +113,73 @@
       params: {
         style: "$style",
       },
-      test_param: {
+      focus_param: {
         name: "style",
         value: "$style",
       },
     },
     {
-      name: "test_param_n_dalle2",
-      description: "Test n parameter (dall-e-2 supports multiple)",
-      params: {
-        n: 2,
+      name: "n",
+      description: "Test n parameter variants",
+      variants: {
+        n_variant: [
+          {
+            variant_id: "dalle2",
+            prompt: "A cute cat",
+            value: 2,
+          },
+          {
+            variant_id: "gpt_image_multiple",
+            prompt: "A set of minimal icons",
+            value: 2,
+          },
+        ],
       },
-      test_param: {
+      params: {
+        prompt: "$n_variant.prompt",
+        n: "$n_variant.value",
+      },
+      focus_param: {
         name: "n",
-        value: 2,
+        value: "$n_variant.value",
       },
     },
     {
-      name: "test_param_user",
+      name: "user",
       description: "Test user parameter",
       params: {
         user: "user-123",
       },
-      test_param: {
+      focus_param: {
         name: "user",
         value: "user-123",
       },
     },
     {
-      name: "test_gpt_image_background_transparent",
+      name: "background",
       description: "Test background parameter (transparent background, GPT image model)",
+      variants: {
+        background: [
+          {
+            variant_id: "transparent_png",
+            value: "transparent",
+          },
+        ],
+      },
       params: {
         prompt: "A simple logo with a transparent background",
-        background: "transparent",
+        background: "$background.value",
         output_format: "png",
       },
-      test_param: {
+      focus_param: {
         name: "background",
-        value: "transparent",
+        value: "$background.value",
       },
     },
     {
-      name: "test_gpt_image_output_formats",
+      name: "output_format",
       description: "Test output_format variants (GPT image model)",
-      parameterize: {
+      variants: {
         output_format: [
           "png",
           "jpeg",
@@ -159,41 +190,44 @@
         prompt: "A minimal illustration of a rocket",
         output_format: "$output_format",
       },
-      test_param: {
+      focus_param: {
         name: "output_format",
         value: "$output_format",
       },
     },
     {
-      name: "test_gpt_image_output_webp_compression",
-      description: "Test output_format=webp + output_compression (GPT image model)",
-      params: {
-        prompt: "A futuristic city skyline",
-        output_format: "webp",
-        output_compression: 80,
+      name: "output_compression",
+      description: "Test output_compression variants (GPT image model)",
+      variants: {
+        compression_variant: [
+          {
+            variant_id: "webp_80",
+            prompt: "A futuristic city skyline",
+            output_format: "webp",
+            value: 80,
+          },
+          {
+            variant_id: "jpeg_80",
+            prompt: "A portrait photo realistic style",
+            output_format: "jpeg",
+            value: 80,
+          },
+        ],
       },
-      test_param: {
+      params: {
+        prompt: "$compression_variant.prompt",
+        output_format: "$compression_variant.output_format",
+        output_compression: "$compression_variant.value",
+      },
+      focus_param: {
         name: "output_compression",
-        value: 80,
+        value: "$compression_variant.value",
       },
     },
     {
-      name: "test_gpt_image_output_jpeg_compression",
-      description: "Test output_format=jpeg + output_compression (GPT image model)",
-      params: {
-        prompt: "A portrait photo realistic style",
-        output_format: "jpeg",
-        output_compression: 80,
-      },
-      test_param: {
-        name: "output_compression",
-        value: 80,
-      },
-    },
-    {
-      name: "test_gpt_image_background_variants",
+      name: "background",
       description: "Test background variants (GPT image model)",
-      parameterize: {
+      variants: {
         background: [
           "transparent",
           "opaque",
@@ -204,51 +238,61 @@
         prompt: "A product icon with specified background",
         background: "$background",
       },
-      test_param: {
+      focus_param: {
         name: "background",
         value: "$background",
       },
     },
     {
-      name: "test_gpt_image_moderation_low",
-      description: "Test moderation=low (GPT image model)",
-      params: {
-        prompt: "A landscape painting with trees and river",
-        moderation: "low",
+      name: "moderation",
+      description: "Test moderation variants (GPT image model)",
+      variants: {
+        moderation_variant: [
+          {
+            variant_id: "low",
+            prompt: "A landscape painting with trees and river",
+            value: "low",
+          },
+          {
+            variant_id: "auto",
+            prompt: "A sketch of a city skyline",
+            value: "auto",
+          },
+        ],
       },
-      test_param: {
+      params: {
+        prompt: "$moderation_variant.prompt",
+        moderation: "$moderation_variant.value",
+      },
+      focus_param: {
         name: "moderation",
-        value: "low",
+        value: "$moderation_variant.value",
       },
     },
     {
-      name: "test_gpt_image_moderation_auto",
-      description: "Test moderation=auto (GPT image model)",
-      params: {
-        prompt: "A sketch of a city skyline",
-        moderation: "auto",
-      },
-      test_param: {
-        name: "moderation",
-        value: "auto",
-      },
-    },
-    {
-      name: "test_gpt_image_quality_high",
+      name: "quality",
       description: "Test quality=high (GPT image model)",
+      variants: {
+        quality: [
+          {
+            variant_id: "high",
+            value: "high",
+          },
+        ],
+      },
       params: {
         prompt: "A detailed illustration of a spaceship cockpit",
-        quality: "high",
+        quality: "$quality.value",
       },
-      test_param: {
+      focus_param: {
         name: "quality",
-        value: "high",
+        value: "$quality.value",
       },
     },
     {
-      name: "test_gpt_image_quality_variants",
+      name: "quality",
       description: "Test other quality values (GPT image model)",
-      parameterize: {
+      variants: {
         quality: [
           "medium",
           "low",
@@ -259,27 +303,15 @@
         prompt: "A clean line-art illustration",
         quality: "$quality",
       },
-      test_param: {
+      focus_param: {
         name: "quality",
         value: "$quality",
       },
     },
     {
-      name: "test_gpt_image_n_multiple",
-      description: "Test n parameter (GPT image model, multiple generation)",
-      params: {
-        prompt: "A set of minimal icons",
-        n: 2,
-      },
-      test_param: {
-        name: "n",
-        value: 2,
-      },
-    },
-    {
-      name: "test_gpt_image_sizes",
+      name: "size",
       description: "Test size parameter (GPT image model)",
-      parameterize: {
+      variants: {
         size: [
           "1024x1024",
           "1536x1024",
@@ -290,13 +322,13 @@
         prompt: "A landscape or portrait illustration",
         size: "$size",
       },
-      test_param: {
+      focus_param: {
         name: "size",
         value: "$size",
       },
     },
     {
-      name: "test_gpt_image_partial_streaming",
+      name: "stream",
       description: "Test partial_images + stream (GPT image model streaming)",
       params: {
         prompt: "A painting of a mountain lake",
@@ -304,7 +336,7 @@
         stream: true,
       },
       stream: true,
-      test_param: {
+      focus_param: {
         name: "stream",
         value: true,
       },

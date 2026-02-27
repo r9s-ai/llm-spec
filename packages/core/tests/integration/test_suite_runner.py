@@ -11,7 +11,7 @@ Usage:
     pytest packages/core/tests/integration/test_suite_runner.py -k "openai" -v
 
     # Run a specific test
-    pytest packages/core/tests/integration/test_suite_runner.py -k "test_param_temperature" -v
+    pytest packages/core/tests/integration/test_suite_runner.py -k "temperature" -v
 """
 
 from __future__ import annotations

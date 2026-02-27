@@ -13,7 +13,7 @@ export function getTestRows(version: SuiteVersion | undefined): TestRow[] {
       if (typeof item !== "object" || !item) return null;
       const obj = item as Record<string, unknown>;
       const name = typeof obj.name === "string" ? obj.name : "unknown";
-      const tp = (obj.test_param ?? {}) as Record<string, unknown>;
+      const tp = (obj.focus_param ?? {}) as Record<string, unknown>;
       const paramName = typeof tp.name === "string" ? tp.name : "baseline";
       const valueText = tp.value === undefined ? "-" : JSON.stringify(tp.value);
       return { name, paramName, valueText };

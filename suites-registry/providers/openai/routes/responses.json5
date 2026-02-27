@@ -9,7 +9,7 @@
   base_params: {
     input: "Say hello",
   },
-  stream_rules: {
+  stream_expectations: {
     // OpenAI Responses streaming ends with "data: [DONE]" (parser maps it to "[DONE]").
     min_observations: 1,
     checks: [
@@ -35,90 +35,85 @@
   },
   tests: [
     {
-      name: "test_baseline",
+      name: "baseline",
       description: "Baseline test: only required parameters",
-      is_baseline: true,
+      baseline: true,
     },
     {
-      name: "test_input_string",
-      description: "Test input parameter (string format)",
-      params: {
-        input: "Hello, how are you?",
-      },
-      test_param: {
-        name: "input",
-        value: "Hello, how are you?",
-      },
-    },
-    {
-      name: "test_input_array_text",
-      description: "Test input parameter (array format, text messages)",
-      params: {
-        input: [
+      name: "input",
+      description: "Test input parameter variants",
+      variants: {
+        input_variant: [
           {
-            type: "message",
-            role: "user",
-            content: "Say hello",
+            variant_id: "string",
+            value: "Hello, how are you?",
+          },
+          {
+            variant_id: "array_text",
+            value: [
+              {
+                type: "message",
+                role: "user",
+                content: "Say hello",
+              },
+            ],
           },
         ],
       },
-      test_param: {
+      params: {
+        input: "$input_variant.value",
+      },
+      focus_param: {
         name: "input",
-        value: [
-          {
-            type: "message",
-            role: "user",
-            content: "Say hello",
-          },
-        ],
+        value: "$input_variant.value",
       },
     },
     {
-      name: "test_param_instructions",
+      name: "instructions",
       description: "Test instructions parameter",
       params: {
         instructions: "You are a helpful assistant.",
       },
-      test_param: {
+      focus_param: {
         name: "instructions",
         value: "You are a helpful assistant.",
       },
     },
     {
-      name: "test_param_temperature",
+      name: "temperature",
       description: "Test temperature parameter",
       params: {
         temperature: 0.7,
       },
-      test_param: {
+      focus_param: {
         name: "temperature",
         value: 0.7,
       },
     },
     {
-      name: "test_param_top_p",
+      name: "top_p",
       description: "Test top_p parameter",
       params: {
         top_p: 0.9,
       },
-      test_param: {
+      focus_param: {
         name: "top_p",
         value: 0.9,
       },
     },
     {
-      name: "test_param_max_output_tokens",
+      name: "max_output_tokens",
       description: "Test max_output_tokens parameter",
       params: {
         max_output_tokens: 100,
       },
-      test_param: {
+      focus_param: {
         name: "max_output_tokens",
         value: 100,
       },
     },
     {
-      name: "test_param_metadata",
+      name: "metadata",
       description: "Test metadata parameter",
       params: {
         metadata: {
@@ -126,7 +121,7 @@
           session: "abc",
         },
       },
-      test_param: {
+      focus_param: {
         name: "metadata",
         value: {
           user_id: "123",
@@ -135,183 +130,134 @@
       },
     },
     {
-      name: "test_text_format_text",
-      description: "Test text parameter (format: text)",
-      params: {
-        text: {
-          format: {
-            type: "text",
-          },
-        },
-      },
-      test_param: {
-        name: "text.format.type",
-        value: "text",
-      },
-    },
-    {
-      name: "test_text_format_json_object",
-      description: "Test text parameter (format: json_object)",
-      params: {
-        input: "Return JSON: {\"status\": \"ok\"}",
-        text: {
-          format: {
-            type: "json_object",
-          },
-        },
-      },
-      test_param: {
-        name: "text.format.type",
-        value: "json_object",
-      },
-    },
-    {
-      name: "test_text_format_json_schema",
-      description: "Test text parameter (format: json_schema)",
-      params: {
-        input: "Generate a person's info",
-        text: {
-          format: {
-            type: "json_schema",
-            schema: {
-              type: "object",
-              properties: {
-                name: {
-                  type: "string",
-                },
-                age: {
-                  type: "number",
-                },
-              },
-              required: [
-                "name",
-                "age",
-              ],
-            },
-          },
-        },
-      },
-      test_param: {
-        name: "text.format.type",
-        value: "json_schema",
-      },
-    },
-    {
-      name: "test_tools_function",
-      description: "Test tools parameter (custom function)",
-      params: {
-        input: "What's the weather in Beijing?",
-        tools: [
+      name: "text.format.type",
+      description: "Test text.format.type variants",
+      variants: {
+        format_variant: [
           {
-            type: "function",
-            "function": {
-              name: "get_weather",
-              description: "Get current weather",
-              parameters: {
+            variant_id: "text",
+            input: "Say hello",
+            format: {
+              type: "text",
+            },
+            value: "text",
+          },
+          {
+            variant_id: "json_object",
+            input: "Return JSON: {\"status\": \"ok\"}",
+            format: {
+              type: "json_object",
+            },
+            value: "json_object",
+          },
+          {
+            variant_id: "json_schema",
+            input: "Generate a person's info",
+            format: {
+              type: "json_schema",
+              schema: {
                 type: "object",
                 properties: {
-                  location: {
+                  name: {
                     type: "string",
-                    description: "City name",
+                  },
+                  age: {
+                    type: "number",
                   },
                 },
                 required: [
-                  "location",
+                  "name",
+                  "age",
                 ],
               },
             },
+            value: "json_schema",
           },
         ],
       },
-      test_param: {
-        name: "tools",
-        value: [
+      params: {
+        input: "$format_variant.input",
+        text: {
+          format: "$format_variant.format",
+        },
+      },
+      focus_param: {
+        name: "text.format.type",
+        value: "$format_variant.value",
+      },
+    },
+    {
+      name: "tools",
+      description: "Test tools parameter variants",
+      variants: {
+        tool_variant: [
           {
-            type: "function",
-            "function": {
-              name: "get_weather",
-              description: "Get current weather",
-              parameters: {
-                type: "object",
-                properties: {
-                  location: {
-                    type: "string",
-                    description: "City name",
+            variant_id: "function",
+            input: "What's the weather in Beijing?",
+            value: [
+              {
+                type: "function",
+                "function": {
+                  name: "get_weather",
+                  description: "Get current weather",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      location: {
+                        type: "string",
+                        description: "City name",
+                      },
+                    },
+                    required: [
+                      "location",
+                    ],
                   },
                 },
-                required: [
-                  "location",
-                ],
               },
-            },
+            ],
+          },
+          {
+            variant_id: "file_search",
+            input: "Search for documentation",
+            value: [
+              {
+                type: "file_search",
+              },
+            ],
+          },
+          {
+            variant_id: "web_search",
+            input: "Search the web for latest news",
+            value: [
+              {
+                type: "web_search",
+              },
+            ],
+          },
+          {
+            variant_id: "code_interpreter",
+            input: "Calculate 15 * 27",
+            value: [
+              {
+                type: "code_interpreter",
+              },
+            ],
           },
         ],
       },
-    },
-    {
-      name: "test_tools_file_search",
-      description: "Test tools parameter (built-in file search tool)",
       params: {
-        input: "Search for documentation",
-        tools: [
-          {
-            type: "file_search",
-          },
-        ],
+        input: "$tool_variant.input",
+        tools: "$tool_variant.value",
       },
-      test_param: {
+      focus_param: {
         name: "tools",
-        value: [
-          {
-            type: "file_search",
-          },
-        ],
+        value: "$tool_variant.value",
       },
     },
     {
-      name: "test_tools_web_search",
-      description: "Test tools parameter (built-in web search tool)",
-      params: {
-        input: "Search the web for latest news",
-        tools: [
-          {
-            type: "web_search",
-          },
-        ],
-      },
-      test_param: {
-        name: "tools",
-        value: [
-          {
-            type: "web_search",
-          },
-        ],
-      },
-    },
-    {
-      name: "test_tools_code_interpreter",
-      description: "Test tools parameter (built-in code interpreter tool)",
-      params: {
-        input: "Calculate 15 * 27",
-        tools: [
-          {
-            type: "code_interpreter",
-          },
-        ],
-      },
-      test_param: {
-        name: "tools",
-        value: [
-          {
-            type: "code_interpreter",
-          },
-        ],
-      },
-    },
-    {
-      name: "test_tool_choice_variants",
+      name: "tool_choice",
       description: "Test different tool_choice values",
-      parameterize: {
+      variants: {
         tool_choice: [
           "none",
           "auto",
@@ -342,13 +288,13 @@
         ],
         tool_choice: "$tool_choice",
       },
-      test_param: {
+      focus_param: {
         name: "tool_choice",
         value: "$tool_choice",
       },
     },
     {
-      name: "test_parallel_tool_calls",
+      name: "parallel_tool_calls",
       description: "Test parallel_tool_calls parameter",
       params: {
         input: "Call functions",
@@ -367,46 +313,46 @@
         ],
         parallel_tool_calls: true,
       },
-      test_param: {
+      focus_param: {
         name: "parallel_tool_calls",
         value: true,
       },
     },
     {
-      name: "test_param_store",
+      name: "store",
       description: "Test store parameter",
       params: {
         store: false,
       },
-      test_param: {
+      focus_param: {
         name: "store",
         value: false,
       },
     },
     {
-      name: "test_param_service_tier",
+      name: "service_tier",
       description: "Test service_tier parameter",
       params: {
         service_tier: "auto",
       },
-      test_param: {
+      focus_param: {
         name: "service_tier",
         value: "auto",
       },
     },
     {
-      name: "test_param_safety_identifier",
+      name: "safety_identifier",
       description: "Test safety_identifier parameter",
       params: {
         safety_identifier: "user_hash_123",
       },
-      test_param: {
+      focus_param: {
         name: "safety_identifier",
         value: "user_hash_123",
       },
     },
     {
-      name: "test_param_max_tool_calls",
+      name: "max_tool_calls",
       description: "Test max_tool_calls parameter",
       params: {
         input: "Search for information",
@@ -417,30 +363,30 @@
         ],
         max_tool_calls: 5,
       },
-      test_param: {
+      focus_param: {
         name: "max_tool_calls",
         value: 5,
       },
     },
     {
-      name: "test_param_truncation",
+      name: "truncation",
       description: "Test truncation parameter",
       params: {
         truncation: "auto",
       },
-      test_param: {
+      focus_param: {
         name: "truncation",
         value: "auto",
       },
     },
     {
-      name: "test_streaming_basic",
+      name: "stream",
       description: "Test basic streaming response",
       params: {
         stream: true,
       },
       stream: true,
-      test_param: {
+      focus_param: {
         name: "stream",
         value: true,
       },

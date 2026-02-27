@@ -18,7 +18,7 @@
   },
   // Gemini streaming is not SSE-event-typed like OpenAI/Anthropic; validate it by requiring
   // at least one chunk containing candidate text content.
-  stream_rules: {
+  stream_expectations: {
     min_observations: 1,
     checks: [
       {
@@ -29,52 +29,52 @@
   },
   tests: [
     {
-      name: "test_baseline",
+      name: "baseline",
       description: "Baseline streaming test: minimal required parameters",
-      is_baseline: true,
+      baseline: true,
       stream: true,
     },
     {
-      name: "test_param_temperature",
+      name: "generationConfig.temperature",
       description: "Test generationConfig.temperature (streaming)",
       stream: true,
       params: { generationConfig: { temperature: 0.7 } },
-      test_param: { name: "generationConfig.temperature", value: 0.7 },
+      focus_param: { name: "generationConfig.temperature", value: 0.7 },
     },
     {
-      name: "test_param_max_output_tokens",
+      name: "generationConfig.maxOutputTokens",
       description: "Test generationConfig.maxOutputTokens (streaming)",
       stream: true,
       params: { generationConfig: { maxOutputTokens: 64 } },
-      test_param: { name: "generationConfig.maxOutputTokens", value: 64 },
+      focus_param: { name: "generationConfig.maxOutputTokens", value: 64 },
     },
     {
-      name: "test_param_top_p",
+      name: "generationConfig.topP",
       description: "Test generationConfig.topP (streaming)",
       stream: true,
       params: { generationConfig: { topP: 0.9 } },
-      test_param: { name: "generationConfig.topP", value: 0.9 },
+      focus_param: { name: "generationConfig.topP", value: 0.9 },
     },
     {
-      name: "test_param_top_k",
+      name: "generationConfig.topK",
       description: "Test generationConfig.topK (streaming)",
       stream: true,
       params: { generationConfig: { topK: 20 } },
-      test_param: { name: "generationConfig.topK", value: 20 },
+      focus_param: { name: "generationConfig.topK", value: 20 },
     },
     {
-      name: "test_param_candidate_count",
+      name: "generationConfig.candidateCount",
       description: "Test generationConfig.candidateCount (streaming)",
       stream: true,
       params: { generationConfig: { candidateCount: 2 } },
-      test_param: { name: "generationConfig.candidateCount", value: 2 },
+      focus_param: { name: "generationConfig.candidateCount", value: 2 },
     },
     {
-      name: "test_param_stop_sequences",
+      name: "generationConfig.stopSequences",
       description: "Test generationConfig.stopSequences (streaming)",
       stream: true,
       params: { generationConfig: { stopSequences: ["END"] } },
-      test_param: { name: "generationConfig.stopSequences", value: ["END"] },
+      focus_param: { name: "generationConfig.stopSequences", value: ["END"] },
     },
   ],
 }

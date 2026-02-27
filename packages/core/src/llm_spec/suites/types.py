@@ -20,16 +20,16 @@ class SpecTestCase:
     params: dict[str, Any] = field(default_factory=dict)
     """Test params (merged with suite base_params)."""
 
-    test_param: dict[str, Any] | None = None
-    """Target parameter for this test: {"name": "...", "value": ...}."""
+    focus_param: dict[str, Any] | None = None
+    """Primary parameter to display for this test: {"name": "...", "value": ...}."""
 
-    is_baseline: bool = False
+    baseline: bool = False
     """Whether this is a baseline test (records all params)."""
 
     stream: Any = False
     """Whether this is a streaming test."""
 
-    stream_rules: dict[str, Any] | None = None
+    stream_expectations: dict[str, Any] | None = None
     """Streaming validation rules (e.g. required events)."""
 
     endpoint_override: str | None = None
@@ -73,7 +73,7 @@ class SpecTestSuite:
     required_fields: list[str] = field(default_factory=list)
     """Suite-level required fields."""
 
-    stream_rules: dict[str, Any] | None = None
+    stream_expectations: dict[str, Any] | None = None
     """Suite-level stream rules (can be overridden per test)."""
 
     config_path: Path | None = None

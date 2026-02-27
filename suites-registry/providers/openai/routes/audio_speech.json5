@@ -9,14 +9,14 @@
   },
   tests: [
     {
-      name: "test_baseline",
+      name: "baseline",
       description: "Baseline test: only required parameters",
-      is_baseline: true,
+      baseline: true,
     },
     {
-      name: "test_voice_variants",
+      name: "voice",
       description: "Test different voice variants",
-      parameterize: {
+      variants: {
         voice: [
           "alloy",
           "echo",
@@ -36,15 +36,15 @@
       params: {
         voice: "$voice",
       },
-      test_param: {
+      focus_param: {
         name: "voice",
         value: "$voice",
       },
     },
     {
-      name: "test_response_format_variants",
+      name: "response_format",
       description: "Test different response_format variants",
-      parameterize: {
+      variants: {
         response_format: [
           "mp3",
           "opus",
@@ -57,15 +57,15 @@
       params: {
         response_format: "$response_format",
       },
-      test_param: {
+      focus_param: {
         name: "response_format",
         value: "$response_format",
       },
     },
     {
-      name: "test_speed_variants",
+      name: "speed",
       description: "Test different speed variants",
-      parameterize: {
+      variants: {
         speed: [
           0.25,
           0.5,
@@ -78,34 +78,34 @@
       params: {
         speed: "$speed",
       },
-      test_param: {
+      focus_param: {
         name: "speed",
         value: "$speed",
       },
     },
     {
-      name: "test_param_instructions",
+      name: "instructions",
       description: "Test instructions parameter",
       params: {
         instructions: "Speak in a cheerful and energetic tone.",
       },
-      test_param: {
+      focus_param: {
         name: "instructions",
         value: "Speak in a cheerful and energetic tone.",
       },
     },
     {
-      name: "test_param_stream_format",
+      name: "stream_format",
       description: "Test stream_format parameter variants",
-      parameterize: {
+      variants: {
         variant: [
           {
-            suffix: "audio",
+            variant_id: "audio",
             value: "audio",
             stream: false,
           },
           {
-            suffix: "sse",
+            variant_id: "sse",
             value: "sse",
             stream: true,
           },
@@ -115,7 +115,7 @@
         stream_format: "$variant.value",
       },
       stream: "$variant.stream",
-      test_param: {
+      focus_param: {
         name: "stream_format",
         value: "$variant.value",
       },

@@ -1,0 +1,35 @@
+{
+  "status_code": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "responseId": "resp_mock_gemini_image_001",
+    "candidates": [
+      {
+        "content": {
+          "role": "model",
+          "parts": [
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
+              }
+            },
+            {
+              "text": "Here is a tiny PNG image."
+            }
+          ]
+        },
+        "finishReason": "STOP",
+        "index": 0
+      }
+    ],
+    "usageMetadata": {
+      "promptTokenCount": 5,
+      "candidatesTokenCount": 20,
+      "totalTokenCount": 25
+    },
+    "modelVersion": "gemini-3-flash-image"
+  }
+}

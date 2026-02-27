@@ -33,7 +33,7 @@ def test_runner_required_fields_validation():
     test_case = SpecTestCase(
         name="test_missing_required",
         params={"model": "gpt-4"},
-        test_param={"name": "model", "value": "gpt-4"},
+        focus_param={"name": "model", "value": "gpt-4"},
     )
 
     # Run test
@@ -72,7 +72,7 @@ def test_runner_test_level_required_fields():
     test_case = SpecTestCase(
         name="test_extra_required",
         params={"model": "gpt-4"},
-        test_param={"name": "model", "value": "gpt-4"},
+        focus_param={"name": "model", "value": "gpt-4"},
         required_fields=[
             "choices[0].message.reasoning_content"
         ],  # This is missing in mock response
