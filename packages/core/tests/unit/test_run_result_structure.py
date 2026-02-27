@@ -1,6 +1,6 @@
-from llm_spec.cli import _build_run_result
 from llm_spec.reporting.collector import EndpointResultBuilder
 from llm_spec.reporting.report_types import ReportData
+from llm_spec.reporting.run_result import build_run_result
 
 
 def test_collector_report_contains_endpoint_tests_array() -> None:
@@ -78,7 +78,7 @@ def test_build_run_result_with_provider_endpoint_tests_structure() -> None:
             }
         ],
     }
-    run_result = _build_run_result(
+    run_result = build_run_result(
         run_id="20260218_120000",
         started_at="2026-02-18T12:00:00Z",
         finished_at="2026-02-18T12:00:10Z",

@@ -55,9 +55,6 @@ Homepage = "https://github.com/r9s-ai/llm-spec"
 Repository = "https://github.com/r9s-ai/llm-spec"
 Documentation = "https://github.com/r9s-ai/llm-spec#readme"
 
-[project.scripts]
-llm-spec = "llm_spec.cli:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

@@ -1,5 +1,4 @@
 .PHONY: help pre-commit-install pre-commit pre-commit-all pre-commit-files pre-commit-update \
-	llm-spec-run-all llm-spec-run-openai llm-spec-run-anthropic llm-spec-run-gemini llm-spec-run-xai \
 	test-core test-integration test-mock-all test-mock-openai test-mock-anthropic \
 	web-backend web-frontend
 
@@ -15,12 +14,6 @@ help:
 	@echo "  pre-commit-all      Run hooks on all files"
 	@echo "  pre-commit-files    Run hooks on given files (make pre-commit-files FILES='a.py b.py')"
 	@echo "  pre-commit-update   Update hook revisions"
-	@echo ""
-	@echo "  llm-spec-run-all       Run all suites"
-	@echo "  llm-spec-run-openai    Run OpenAI suites"
-	@echo "  llm-spec-run-anthropic Run Anthropic suites"
-	@echo "  llm-spec-run-gemini    Run Gemini suites"
-	@echo "  llm-spec-run-xai       Run xAI suites"
 	@echo ""
 	@echo "  test-mock-all          Run all integration tests in mock mode"
 	@echo "  test-mock-openai       Run OpenAI integration tests in mock mode"
@@ -45,18 +38,6 @@ pre-commit-files:
 
 pre-commit-update:
 	@$(PRE_COMMIT) autoupdate
-
-# --- llm-spec run commands (real API) ---
-llm-spec-run-all:
-	uv run python -m llm_spec run
-llm-spec-run-openai:
-	uv run python -m llm_spec run --provider openai
-llm-spec-run-anthropic:
-	uv run python -m llm_spec run --provider anthropic
-llm-spec-run-gemini:
-	uv run python -m llm_spec run --provider gemini
-llm-spec-run-xai:
-	uv run python -m llm_spec run --provider xai
 
 # --- Integration tests (Mock mode) ---
 test-core:

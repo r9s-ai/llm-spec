@@ -16,7 +16,6 @@ Usage:
 
 from __future__ import annotations
 
-from collections.abc import Generator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -26,11 +25,8 @@ import respx
 from mock_loader import MockDataLoader
 
 from llm_spec.adapters.base import ProviderAdapter
-from llm_spec.cli import _build_run_result
 from llm_spec.registry import ExpandedSuite, load_registry_suites
 from llm_spec.reporting.collector import EndpointResultBuilder
-from llm_spec.reporting.report_types import ReportData
-from llm_spec.reporting.run_result_formatter import RunResultFormatter
 from llm_spec.runners import (
     ConfigDrivenTestRunner,
     SpecTestCase,
@@ -163,8 +159,6 @@ def test_from_config(
     runner = ConfigDrivenTestRunner(suite, client, collector, logger)
     success = runner.run_test(test_case)
 
-    # Run-level report generation is handled at session end (see conftest.py)
-
     # Assert
     assert success, f"Test '{test_name}' failed"
 
@@ -282,44 +276,3 @@ class TestGeminiFromConfig:
     """Gemini config-driven tests."""
 
     pass
-
-
-@pytest.fixture(scope="session", autouse=True)
-def finalize_config_reports(request: pytest.FixtureRequest) -> Generator[None, None, None]:
-    """Finalize run_result + run-level views at session end."""
-    yield
-
-    output_dir = getattr(request.config, "run_reports_dir", "./reports")
-
-    if not _COLLECTORS:
-        return
-
-    print(f"\nFinalizing run_result reports (to {output_dir})...")
-    reports_by_provider: dict[str, list[ReportData]] = {}
-    for collector in _COLLECTORS.values():
-        report_data = collector.build_report_data()
-        provider = str(report_data.get("provider", "unknown"))
-        reports_by_provider.setdefault(provider, []).append(report_data)
-
-    run_id = Path(output_dir).name
-    run_result = _build_run_result(
-        run_id=run_id,
-        started_at="N/A",
-        finished_at="N/A",
-        reports_by_provider=reports_by_provider,
-    )
-
-    output_dir_path = Path(output_dir)
-    run_result_path = output_dir_path / "run_result.json"
-    import json
-
-    run_result_path.write_text(
-        json.dumps(run_result, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-
-    formatter = RunResultFormatter(run_result)
-    md_path = formatter.save_markdown(output_dir)
-    html_path = formatter.save_html(output_dir)
-    print(f"✅ run_result generated: {run_result_path}")
-    print(f"✅ markdown generated: {md_path}")
-    print(f"✅ html generated: {html_path}")
