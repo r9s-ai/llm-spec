@@ -179,7 +179,7 @@
       params: {
         stream: true,
       },
-      stream: true,
+      check_stream: true,
       files: {
         file: "assets/audio/hello_en.mp3",
       },

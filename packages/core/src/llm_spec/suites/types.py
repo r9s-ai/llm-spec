@@ -26,8 +26,8 @@ class SpecTestCase:
     baseline: bool = False
     """Whether this is a baseline test (records all params)."""
 
-    stream: Any = False
-    """Whether this is a streaming test."""
+    check_stream: Any = False
+    """Whether runner should execute this case in streaming mode."""
 
     stream_expectations: dict[str, Any] | None = None
     """Streaming validation rules (e.g. required events)."""

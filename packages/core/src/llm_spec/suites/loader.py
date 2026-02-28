@@ -22,7 +22,7 @@ class _RawTestCase(PydanticBaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
     focus_param: dict[str, Any] | None = None
     baseline: bool = False
-    stream: Any = False
+    check_stream: Any = False
     stream_expectations: dict[str, Any] | None = None
     endpoint_override: str | None = None
     files: dict[str, str] | None = None
@@ -35,17 +35,19 @@ class _RawTestCase(PydanticBaseModel):
     @model_validator(mode="after")
     def _validate_required_non_baseline_fields(self) -> _RawTestCase:
         if self.baseline:
-            if isinstance(self.stream, str) and not self.variants:
+            if isinstance(self.check_stream, str) and not self.variants:
                 raise ValueError(
-                    f"Invalid stream value for baseline test '{self.name}': {self.stream}"
+                    f"Invalid check_stream value for baseline test '{self.name}': {self.check_stream}"
                 )
             return self
         if self.focus_param is None:
             raise ValueError(f"Missing 'focus_param' for non-baseline test '{self.name}'")
         if "name" not in self.focus_param:
             raise ValueError(f"Missing focus_param.name for test '{self.name}'")
-        if isinstance(self.stream, str) and not self.variants:
-            raise ValueError(f"Invalid stream value for test '{self.name}': {self.stream}")
+        if isinstance(self.check_stream, str) and not self.variants:
+            raise ValueError(
+                f"Invalid check_stream value for test '{self.name}': {self.check_stream}"
+            )
         return self
 
 
@@ -103,9 +105,9 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
 
         variant_name = f"{test_config['name']}[{suffix}]"
 
-        stream = test_config.get("stream", False)
-        if isinstance(value, dict) and "stream" in value:
-            stream = value["stream"]
+        check_stream = test_config.get("check_stream", False)
+        if isinstance(value, dict) and "check_stream" in value:
+            check_stream = value["check_stream"]
 
         yield SpecTestCase(
             name=variant_name,
@@ -113,7 +115,7 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
             params=params,
             focus_param=focus_param,
             baseline=test_config.get("baseline", False),
-            stream=stream,
+            check_stream=check_stream,
             stream_expectations=test_config.get("stream_expectations"),
             endpoint_override=test_config.get("endpoint_override"),
             files=test_config.get("files"),
@@ -177,7 +179,7 @@ def load_test_suite_from_dict(
                     params=t.params,
                     focus_param=t.focus_param,
                     baseline=t.baseline,
-                    stream=t.stream if isinstance(t.stream, bool) else False,
+                    check_stream=t.check_stream if isinstance(t.check_stream, bool) else False,
                     stream_expectations=t.stream_expectations,
                     endpoint_override=t.endpoint_override,
                     files=t.files,

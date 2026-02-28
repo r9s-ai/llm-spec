@@ -123,7 +123,7 @@ class SuiteService:
                     "params": test.params,
                     "focus_param": test.focus_param,
                     "baseline": test.baseline,
-                    "stream": test.stream,
+                    "check_stream": test.check_stream,
                     "stream_expectations": test.stream_expectations,
                     "endpoint_override": test.endpoint_override,
                     "files": test.files,
