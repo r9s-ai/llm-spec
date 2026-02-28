@@ -142,9 +142,6 @@ def test_from_config(
         pytest.fail(f"Test '{test_name}' not found in config")
         return
 
-    # Logger is attached to adapters
-    logger = getattr(client, "logger", None)
-
     # Mock mode: setup respx route for this specific test
     if mock_mode and respx_mock:
         _setup_mock_route(
@@ -156,7 +153,7 @@ def test_from_config(
         )
 
     # Run
-    runner = ConfigDrivenTestRunner(suite, client, collector, logger)
+    runner = ConfigDrivenTestRunner(suite, client, collector)
     success = runner.run_test(test_case)
 
     # Assert

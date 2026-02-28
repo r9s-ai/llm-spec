@@ -3,14 +3,14 @@
   schemas: {
     stream_chunk: "openai.AudioStreamEvent",
   },
-  base_params: {
-    input: "Hello, world!",
-    voice: "alloy",
-  },
   tests: [
     {
       name: "baseline",
       description: "Baseline test: only required parameters",
+      params: {
+        input: "Hello, world!",
+        voice: "alloy",
+      },
       baseline: true,
     },
     {

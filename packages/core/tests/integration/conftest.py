@@ -14,7 +14,6 @@ from llm_spec.adapters.openai import OpenAIAdapter
 from llm_spec.adapters.xai import XAIAdapter
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import AppConfig, load_config
-from llm_spec.logger import RequestLogger
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -83,14 +82,10 @@ def openai_client(
     """
     provider_config = config.get_provider_config("openai")
 
-    # Logger
-    logger = RequestLogger(config.log)
-
     # HTTP client (transport only)
     http_client = HTTPClient(default_timeout=provider_config.timeout)
 
-    # Adapter holds the logger for runner-level logging
-    adapter = OpenAIAdapter(provider_config, http_client, logger)
+    adapter = OpenAIAdapter(provider_config, http_client)
 
     # Attach mock loader in mock mode (for test setup)
     if mock_mode:
@@ -112,9 +107,8 @@ def anthropic_client(
     Supports both real API calls and mock mode.
     """
     provider_config = config.get_provider_config("anthropic")
-    logger = RequestLogger(config.log)
     http_client = HTTPClient(default_timeout=provider_config.timeout)
-    adapter = AnthropicAdapter(provider_config, http_client, logger)
+    adapter = AnthropicAdapter(provider_config, http_client)
 
     # Attach mock loader in mock mode
     if mock_mode:
@@ -136,9 +130,8 @@ def gemini_client(
     Supports both real API calls and mock mode.
     """
     provider_config = config.get_provider_config("gemini")
-    logger = RequestLogger(config.log)
     http_client = HTTPClient(default_timeout=provider_config.timeout)
-    adapter = GeminiAdapter(provider_config, http_client, logger)
+    adapter = GeminiAdapter(provider_config, http_client)
 
     # Attach mock loader in mock mode
     if mock_mode:
@@ -160,9 +153,8 @@ def xai_client(
     Supports both real API calls and mock mode.
     """
     provider_config = config.get_provider_config("xai")
-    logger = RequestLogger(config.log)
     http_client = HTTPClient(default_timeout=provider_config.timeout)
-    adapter = XAIAdapter(provider_config, http_client, logger)
+    adapter = XAIAdapter(provider_config, http_client)
 
     # Attach mock loader in mock mode
     if mock_mode:

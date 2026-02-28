@@ -5,18 +5,6 @@
 # 2) Fill in each provider's api_key / base_url
 # 3) Run pytest integration suites
 
-
-# Logging configuration
-[log]
-enabled = true                 # Enable logging
-level = "INFO"                 # DEBUG, INFO, WARNING, ERROR
-console = true                 # Log to console
-file = "./logs/llm-spec.log"   # Log file path (optional)
-log_request_body = true        # Log request body
-log_response_body = false      # Log response body (may be large)
-max_body_length = 1000         # Max body length to log
-
-
 # Provider configuration (new style: [providers.<name>])
 # timeout unit: seconds
 

@@ -45,12 +45,6 @@ class ProviderService:
         lines.append("# Provider config is managed in TOML only.")
         lines.append("")
 
-        if "log" in data and isinstance(data["log"], dict):
-            lines.append("[log]")
-            for k, v in data["log"].items():
-                lines.append(f"{k} = {self._format_toml_value(v)}")
-            lines.append("")
-
         providers = data.get("providers", {})
         if isinstance(providers, dict):
             for provider in sorted(providers.keys()):

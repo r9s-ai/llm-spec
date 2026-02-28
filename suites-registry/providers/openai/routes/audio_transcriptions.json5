@@ -4,12 +4,11 @@
     response: "openai.AudioTranscriptionResponse",
     stream_chunk: "openai.AudioStreamEvent",
   },
-  base_params: {
-  },
   tests: [
     {
       name: "baseline",
       description: "Baseline test: only required parameters",
+      params: {},
       files: {
         file: "assets/audio/hello_en.mp3",
       },

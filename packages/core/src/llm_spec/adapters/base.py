@@ -12,7 +12,6 @@ import httpx
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import ProviderConfig
 from llm_spec.json_types import Headers, JSONValue
-from llm_spec.logger import RequestLogger
 
 
 def _serialize_form_data(params: Any) -> dict[str, Any]:
@@ -39,18 +38,15 @@ class ProviderAdapter(ABC):
         self,
         config: ProviderConfig,
         http_client: HTTPClient,
-        logger: RequestLogger | None = None,
     ):
         """Initialize a provider adapter.
 
         Args:
             config: provider config
             http_client: HTTP client instance
-            logger: request logger instance (used by runner for structured logs)
         """
         self.config = config
         self.http_client = http_client
-        self.logger = logger
 
     @abstractmethod
     def prepare_headers(self, additional_headers: Headers | None = None) -> dict[str, str]:

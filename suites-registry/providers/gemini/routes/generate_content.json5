@@ -7,18 +7,18 @@
   schemas: {
     response: "gemini.GenerateContentResponse",
   },
-  base_params: {
-    contents: [
-      {
-        role: "user",
-        parts: [{ text: "Say hello" }],
-      },
-    ],
-  },
   tests: [
     {
       name: "baseline",
       description: "Baseline test: minimal required parameters",
+      params: {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: "Say hello" }],
+          },
+        ],
+      },
       baseline: true,
       required_fields: ["candidates[0].content.parts[0].text"],
     },

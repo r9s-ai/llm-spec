@@ -3,12 +3,11 @@
   schemas: {
     response: "openai.AudioTranslationResponse",
   },
-  base_params: {
-  },
   tests: [
     {
       name: "baseline",
       description: "Baseline test: only required parameters",
+      params: {},
       files: {
         file: "assets/audio/hello_en.mp3",
       },

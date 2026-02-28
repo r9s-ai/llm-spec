@@ -15,8 +15,7 @@ from llm_spec.adapters.gemini import GeminiAdapter
 from llm_spec.adapters.openai import OpenAIAdapter
 from llm_spec.adapters.xai import XAIAdapter
 from llm_spec.client.http_client import HTTPClient
-from llm_spec.config.loader import LogConfig, ProviderConfig, load_config
-from llm_spec.logger import RequestLogger
+from llm_spec.config.loader import ProviderConfig, load_config
 from llm_spec.reporting.collector import EndpointResultBuilder
 from llm_spec.reporting.run_result import build_run_result
 from llm_spec.runners import ConfigDrivenTestRunner
@@ -41,7 +40,6 @@ def create_provider_client(
     provider: str,
     config: ProviderConfig,
     mode: str,
-    logger: RequestLogger | None,
     http_client: HTTPClient,
 ):
     """Create a provider client based on mode and provider type.
@@ -50,7 +48,6 @@ def create_provider_client(
         provider: Provider name.
         config: Provider configuration.
         mode: Execution mode ("real" or "mock").
-        logger: Request logger.
         http_client: HTTP client instance.
 
     Returns:
@@ -73,7 +70,7 @@ def create_provider_client(
     if adapter_class is None:
         raise ValueError(f"Unsupported provider/api_family: {provider}/{config.api_family}")
 
-    return adapter_class(config, http_client, logger)
+    return adapter_class(config, http_client)
 
 
 def load_suite_from_version(parsed_json: dict[str, Any]) -> SpecTestSuite:
@@ -321,18 +318,8 @@ class RunService:
                     headers=provider_cfg.headers,
                 )
 
-            logger = RequestLogger(
-                LogConfig(
-                    enabled=True,
-                    level="INFO",
-                    console=False,
-                    file="./logs/llm-spec-web.log",
-                )
-            )
             http_client = HTTPClient(default_timeout=config.timeout)
-            client = create_provider_client(
-                run_job.provider, config, run_job.mode, logger, http_client
-            )
+            client = create_provider_client(run_job.provider, config, run_job.mode, http_client)
 
             local_collector = EndpointResultBuilder(
                 provider=suite.provider,
@@ -340,7 +327,7 @@ class RunService:
                 base_url=client.get_base_url(),
             )
             local_runner = ConfigDrivenTestRunner(
-                suite=suite, client=client, collector=local_collector, logger=None
+                suite=suite, client=client, collector=local_collector
             )
 
             test_record: dict[str, Any]
@@ -618,18 +605,8 @@ class RunService:
                     api_family=provider_cfg.api_family,
                     headers=provider_cfg.headers,
                 )
-            logger = RequestLogger(
-                LogConfig(
-                    enabled=True,
-                    level="INFO",
-                    console=False,
-                    file="./logs/llm-spec-web.log",
-                )
-            )
             http_client = HTTPClient(default_timeout=config.timeout)
-            client = create_provider_client(
-                run_job.provider, config, run_job.mode, logger, http_client
-            )
+            client = create_provider_client(run_job.provider, config, run_job.mode, http_client)
 
             # Progress tracking (no locks needed in async)
             progress_done = 0
@@ -662,7 +639,7 @@ class RunService:
                         base_url=client.get_base_url(),
                     )
                     local_runner = ConfigDrivenTestRunner(
-                        suite=suite, client=client, collector=local_collector, logger=None
+                        suite=suite, client=client, collector=local_collector
                     )
 
                     # Push test start event
