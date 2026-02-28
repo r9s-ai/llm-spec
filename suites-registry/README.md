@@ -87,10 +87,14 @@ routes_from = "openai"
 
 - Defines one endpoint template and its test set.
 - Should not contain `provider`; provider comes from directory name.
-- `base_params` should not hardcode model for non-Gemini routes; model is injected at runtime.
+- Exactly one `tests[]` entry must set `baseline: true`.
+- Baseline defaults live in `baseline.params`.
+- If there are no default baseline parameters, set `baseline.params` to `{}` explicitly.
+- For non-Gemini routes, do not hardcode `model` in `baseline.params`; runtime injects it.
 - For Gemini-style URLs, use `{model}` in `endpoint` and runtime will replace it.
 - `tests[]` entries follow existing suite format (`name`, `params`, `focus_param`, `baseline`, `tags`, etc.).
-- Parameter precedence at runtime is: `base_params` -> `test.params` (test-level values override same keys in `base_params`).
+- `baseline` cannot be skipped.
+- Parameter precedence at runtime is: `baseline.params` -> `test.params` (test-level values override same keys in baseline params).
 
 Complete template example (non-Gemini):
 
@@ -103,13 +107,6 @@ Complete template example (non-Gemini):
     stream_chunk: "openai.ChatCompletionChunkResponse",
   },
 
-  base_params: {
-    messages: [
-      { role: "user", content: "Say hello in one short sentence." },
-    ],
-    max_tokens: 64,
-  },
-
   stream_expectations: {
     min_observations: 2,
     checks: [
@@ -120,6 +117,12 @@ Complete template example (non-Gemini):
   tests: [
     {
       name: "baseline",
+      params: {
+        messages: [
+          { role: "user", content: "Say hello in one short sentence." },
+        ],
+        max_tokens: 64,
+      },
       baseline: true,
       tags: ["core"],
     },
@@ -152,16 +155,20 @@ Gemini-style endpoint template:
   schemas: {
     response: "gemini.GenerateContentResponse",
   },
-  base_params: {
-    contents: [
-      {
-        role: "user",
-        parts: [{ text: "Say hello" }],
-      },
-    ],
-  },
   tests: [
-    { name: "baseline", baseline: true, tags: ["core"] },
+    {
+      name: "baseline",
+      baseline: true,
+      params: {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: "Say hello" }],
+          },
+        ],
+      },
+      tags: ["core"],
+    },
   ],
 }
 ```
@@ -170,10 +177,10 @@ Gemini-style endpoint template:
 
 - File name is the model ID.
 - `routes = [...]` is required and lists supported route names.
-- Optional `skip_tests = [...]` removes route tests by test name.
-- Optional `[base_params_override]` deep-merges into route `base_params`.
+- Optional `skip_tests = [...]` removes route tests by test name, but cannot include `baseline`.
+- Optional `[baseline_params_override]` deep-merges into route baseline params.
 - Optional `[[extra_tests]]` appends model-specific tests (use `route = "<route_name>"` to target route).
-- `[[extra_tests]]` entries use the same test schema as `routes[].tests`; if an extra test includes `params`, those values also override `base_params` when that test runs.
+- `[[extra_tests]]` entries use the same test schema as `routes[].tests`; if an extra test includes `params`, those values also override baseline params when that test runs.
 
 Minimal template:
 
@@ -196,8 +203,8 @@ skip_tests = [
   "service_tier",
 ]
 
-# Optional: override route base_params (deep merge)
-[base_params_override]
+# Optional: override route baseline params (deep merge)
+[baseline_params_override]
 max_completion_tokens = 1024
 temperature = 0.2
 
@@ -258,8 +265,8 @@ Notes for variants:
 - Each selected `model × route` pair becomes one expanded suite.
 - Expansion pipeline:
   1. start from route template
-  2. inject model (`base_params.model` for non-Gemini, endpoint placeholder replacement for Gemini)
-  3. apply `base_params_override`
+  2. inject model (`baseline.params.model` for non-Gemini, endpoint placeholder replacement for Gemini)
+  3. apply `baseline_params_override`
   4. remove `skip_tests`
   5. append `extra_tests`
 

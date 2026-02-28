@@ -4,14 +4,6 @@
     response: "openai.ChatCompletionResponse",
     stream_chunk: "openai.ChatCompletionChunkResponse",
   },
-  base_params: {
-    messages: [
-      {
-        role: "user",
-        content: "Say hello",
-      },
-    ],
-  },
   stream_expectations: {
     // OpenAI chat.completions streaming ends with "data: [DONE]" (parser maps it to "[DONE]").
     min_observations: 2,
@@ -26,6 +18,14 @@
     {
       name: "baseline",
       description: "Baseline test: only required parameters",
+      params: {
+        messages: [
+          {
+            role: "user",
+            content: "Say hello",
+          },
+        ],
+      },
       baseline: true,
     },
     {

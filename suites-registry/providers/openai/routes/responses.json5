@@ -6,9 +6,6 @@
     stream_chunk: "openai.ResponsesStreamEvent",
   },
   method: "POST",
-  base_params: {
-    input: "Say hello",
-  },
   stream_expectations: {
     // OpenAI Responses streaming ends with "data: [DONE]" (parser maps it to "[DONE]").
     min_observations: 1,
@@ -37,6 +34,9 @@
     {
       name: "baseline",
       description: "Baseline test: only required parameters",
+      params: {
+        input: [{ role: "user", content: "hi" }],
+      },
       baseline: true,
     },
     {

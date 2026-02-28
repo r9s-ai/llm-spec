@@ -3,13 +3,13 @@
   schemas: {
     response: "openai.EmbeddingResponse",
   },
-  base_params: {
-    input: "Hello, world!",
-  },
   tests: [
     {
       name: "baseline",
       description: "Baseline test: only required parameters",
+      params: {
+        input: "Hello, world!",
+      },
       baseline: true,
     },
     {

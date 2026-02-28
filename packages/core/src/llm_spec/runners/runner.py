@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from pydantic import BaseModel
 
 from llm_spec.adapters.base import ProviderAdapter
-from llm_spec.logger import RequestLogger, current_test_name
+from llm_spec.logger import current_test_name
 from llm_spec.path_utils import get_value_at_path
 from llm_spec.reporting.collector import EndpointResultBuilder
 from llm_spec.reporting.report_types import TestExecutionResult
@@ -27,7 +27,7 @@ from llm_spec.suites import (
     SpecTestCase,
     SpecTestSuite,
 )
-from llm_spec.validation.validator import ResponseValidator, ValidationResult
+from llm_spec.validation.validator import ResponseValidator
 
 from .schema_registry import get_schema
 
@@ -36,7 +36,7 @@ class ConfigDrivenTestRunner:
     """Config-driven test runner.
 
     Responsibilities:
-    1. Build request params (merge base_params with test params)
+    1. Build request params (merge baseline_params with test params)
     2. Execute requests (non-streaming or streaming)
     3. Validate responses (schema + stream rules)
     4. Record results into EndpointResultBuilder
@@ -47,7 +47,6 @@ class ConfigDrivenTestRunner:
         suite: SpecTestSuite,
         client: ProviderAdapter,
         collector: EndpointResultBuilder,
-        logger: RequestLogger | None = None,
     ):
         """Initialize the runner.
 
@@ -55,12 +54,10 @@ class ConfigDrivenTestRunner:
             suite: test suite
             client: provider adapter (OpenAIAdapter, GeminiAdapter, ...)
             collector: report collector
-            logger: request logger
         """
         self.suite = suite
         self.client = client
         self.collector = collector
-        self.logger = logger
         self._asset_bytes_cache: dict[Path, bytes] = {}
 
         # Resolve schema classes
@@ -76,8 +73,8 @@ class ConfigDrivenTestRunner:
         Returns:
             merged request params
         """
-        # Test params override same-name keys in suite base_params.
-        base = copy.deepcopy(self.suite.base_params)
+        # Test params override same-name keys in suite baseline_params.
+        base = copy.deepcopy(self.suite.baseline_params)
 
         test_params = copy.deepcopy(test.params)
         base.update(test_params)
@@ -135,38 +132,6 @@ class ConfigDrivenTestRunner:
         if isinstance(value, str):
             return self._resolve_asset_function_string(value)
         return value
-
-    def _log_validation_error(
-        self,
-        test_name: str,
-        result: ValidationResult,
-        status_code: int,
-        response_body: Any,
-    ) -> None:
-        """Log schema validation errors.
-
-        Args:
-            test_name: test name
-            result: validation result
-            status_code: HTTP status code
-            response_body: response body
-        """
-        # Build structured error details
-        error_details = {
-            "test_name": test_name,
-            "type": "schema_validation_error",
-            "status_code": status_code,
-            "error": result.error_message,
-            "missing_fields": result.missing_fields,
-            "expected_fields": result.expected_fields,
-            "response_body": response_body,
-        }
-
-        # Emit via logger (error level)
-        if self.logger:
-            import json
-
-            self.logger.logger.error(json.dumps(error_details, ensure_ascii=False))
 
     @staticmethod
     def _build_tested_param(test: SpecTestCase) -> Any | None:
@@ -227,54 +192,10 @@ class ConfigDrivenTestRunner:
             result["latency_ms"] = latency_ms
         return result
 
-    def _build_redacted_request_headers(self) -> dict[str, Any]:
-        """Build request headers with sensitive values redacted."""
-        if not hasattr(self.client, "prepare_headers"):
-            return {}
-        headers = self.client.prepare_headers() or {}
-        if not isinstance(headers, dict):
-            return {}
-        return {
-            k: v if k.lower() != "authorization" and "key" not in k.lower() else "***"
-            for k, v in headers.items()
-        }
-
-    def _log_outbound_request(
-        self,
-        *,
-        request_id: str | None,
-        endpoint: str,
-        method: str,
-        params: dict[str, Any],
-        file_entries: list[dict[str, Any]] | None = None,
-    ) -> None:
-        """Log request metadata and a safe body snapshot."""
-        if not self.logger or not request_id:
-            return
-
-        base_url = getattr(self.client, "get_base_url", lambda: "")() or ""
-        endpoint_path = endpoint if endpoint.startswith("/") else f"/{endpoint}"
-        url = base_url.rstrip("/") + endpoint_path
-        headers = self._build_redacted_request_headers()
-        body: Any = params
-        if file_entries:
-            body = {
-                "params": params,
-                "files": file_entries,
-            }
-
-        self.logger.log_request(
-            request_id=request_id,
-            method=method,
-            url=url,
-            headers=headers,
-            body=body,
-        )
-
     def _prepare_upload_files(
         self, test: SpecTestCase
     ) -> tuple[dict[str, Any] | None, list[Any], list[dict[str, Any]]]:
-        """Prepare multipart files and safe file metadata for logging."""
+        """Prepare multipart files and file metadata."""
         files: dict[str, Any] | None = None
         opened_files: list[Any] = []
         file_entries: list[dict[str, Any]] = []
@@ -399,8 +320,6 @@ class ConfigDrivenTestRunner:
             # Clear context
             current_test_name.reset(token)
 
-    # _get_logger removed
-
     def _run_normal_test(
         self,
         test: SpecTestCase,
@@ -410,19 +329,10 @@ class ConfigDrivenTestRunner:
         *,
         method: str,
     ) -> bool:
-        """Run a non-streaming request test (with optional logging)."""
+        """Run a non-streaming request test."""
         started_at = datetime.now(UTC).isoformat()
         start_monotonic = time.monotonic()
-        files, opened_files, file_entries = self._prepare_upload_files(test)
-        request_id = self.logger.generate_request_id() if self.logger else None
-
-        self._log_outbound_request(
-            request_id=request_id,
-            endpoint=endpoint,
-            method=method,
-            params=params,
-            file_entries=file_entries or None,
-        )
+        files, opened_files, _file_entries = self._prepare_upload_files(test)
 
         try:
             response = self.client.request(
@@ -436,16 +346,8 @@ class ConfigDrivenTestRunner:
             for f in opened_files:
                 f.close()
         status_code = response.status_code
-        # Parse response body (needed regardless of logging)
+        # Parse response body
         response_body = ResponseParser.parse_response(response)
-
-        # Log response
-        if self.logger and request_id:
-            self.logger.log_response(
-                request_id=request_id,
-                status_code=status_code,
-                body=response_body,
-            )
 
         # Validate response (schema only on HTTP success)
         http_success = 200 <= status_code < 300
@@ -468,7 +370,6 @@ class ConfigDrivenTestRunner:
                 schema_valid = False
                 schema_missing_fields = list(result.missing_fields)
                 validation_errors.append(result.error_message or "Schema validation failed")
-                self._log_validation_error(test.name, result, status_code, response_body)
 
         # Check required fields (both suite-level and test-level)
         all_required_fields = list(self.suite.required_fields)
@@ -547,18 +448,9 @@ class ConfigDrivenTestRunner:
         all_raw_chunks: list[bytes] = []
         http_status_code = 200
         files, opened_files, file_entries = self._prepare_upload_files(test)
-        request_id = self.logger.generate_request_id() if self.logger else None
         # Reuse a single parser across stages to avoid duplicate parsing.
         parser = StreamResponseParser(self.suite.provider)
         parsed_chunks: list[dict[str, Any]] = []
-
-        self._log_outbound_request(
-            request_id=request_id,
-            endpoint=endpoint,
-            method=method,
-            params=params,
-            file_entries=file_entries or None,
-        )
 
         try:
             # Stage 1: establish connection and collect all raw chunks
@@ -576,22 +468,6 @@ class ConfigDrivenTestRunner:
 
                 # If we did not receive any chunks at all, fail early.
                 if not all_raw_chunks:
-                    if self.logger and request_id:
-                        self.logger.log_response(
-                            request_id=request_id,
-                            status_code=http_status_code,
-                            body={"error": "No raw chunks received"},
-                        )
-                        self.logger.log_error(
-                            request_id=request_id,
-                            error_type="stream_stage1_no_raw_chunks",
-                            error_message="No raw chunks received",
-                            details={
-                                "provider": self.suite.provider,
-                                "endpoint": endpoint,
-                                "test_name": test.name,
-                            },
-                        )
                     self.collector.record_result(
                         self._make_test_result(
                             test=test,
@@ -614,23 +490,6 @@ class ConfigDrivenTestRunner:
                 # HTTP error (4xx/5xx)
                 http_status_code = e.response.status_code
                 error_body = ResponseParser.parse_response(e.response)
-                if self.logger and request_id:
-                    self.logger.log_response(
-                        request_id=request_id,
-                        status_code=http_status_code,
-                        body=error_body,
-                    )
-                    self.logger.log_error(
-                        request_id=request_id,
-                        error_type="stream_stage1_http_error",
-                        error_message=f"HTTP {http_status_code}",
-                        details={
-                            "provider": self.suite.provider,
-                            "endpoint": endpoint,
-                            "test_name": test.name,
-                            "response_body": error_body,
-                        },
-                    )
                 self.collector.record_result(
                     self._make_test_result(
                         test=test,
@@ -651,22 +510,6 @@ class ConfigDrivenTestRunner:
                 return False
             except Exception as e:
                 # Other errors (network/timeout/etc.)
-                if self.logger and request_id:
-                    self.logger.log_response(
-                        request_id=request_id,
-                        status_code=0,
-                        body={"error": f"Connection error: {e}"},
-                    )
-                    self.logger.log_error(
-                        request_id=request_id,
-                        error_type="stream_stage1_connection_error",
-                        error_message=str(e),
-                        details={
-                            "provider": self.suite.provider,
-                            "endpoint": endpoint,
-                            "test_name": test.name,
-                        },
-                    )
                 self.collector.record_result(
                     self._make_test_result(
                         test=test,
@@ -699,23 +542,6 @@ class ConfigDrivenTestRunner:
                         "raw_size_bytes": sum(len(c) for c in all_raw_chunks),
                         "parse_error": str(e),
                     }
-                    if self.logger and request_id:
-                        self.logger.log_response(
-                            request_id=request_id,
-                            status_code=http_status_code,
-                            body=error_body,
-                        )
-                        self.logger.log_error(
-                            request_id=request_id,
-                            error_type="stream_stage2_parse_error",
-                            error_message=str(e),
-                            details={
-                                "provider": self.suite.provider,
-                                "endpoint": endpoint,
-                                "test_name": test.name,
-                                "raw_chunks_count": len(all_raw_chunks),
-                            },
-                        )
                     self.collector.record_result(
                         self._make_test_result(
                             test=test,
@@ -743,23 +569,6 @@ class ConfigDrivenTestRunner:
                         "error": "No parsed chunks received",
                         "formatted": formatted_response,
                     }
-                    if self.logger and request_id:
-                        self.logger.log_response(
-                            request_id=request_id,
-                            status_code=http_status_code,
-                            body=error_body,
-                        )
-                        self.logger.log_error(
-                            request_id=request_id,
-                            error_type="stream_stage2_no_parsed_chunks",
-                            error_message="No parsed chunks received",
-                            details={
-                                "provider": self.suite.provider,
-                                "endpoint": endpoint,
-                                "test_name": test.name,
-                                "raw_chunks_count": len(all_raw_chunks),
-                            },
-                        )
                     self.collector.record_result(
                         self._make_test_result(
                             test=test,
@@ -778,13 +587,6 @@ class ConfigDrivenTestRunner:
                         )
                     )
                     return False
-                if self.logger and request_id:
-                    self.logger.log_response(
-                        request_id=request_id,
-                        status_code=http_status_code,
-                        body=formatted_response,
-                    )
-
             # Stage 3: validate stream chunks against schema (if configured)
             validation_errors: list[str] = []
             if self.chunk_schema and parsed_chunks:
@@ -805,20 +607,6 @@ class ConfigDrivenTestRunner:
                                 "chunk": parsed,
                             }
                         )
-                if validation_errors and self.logger and request_id:
-                    self.logger.log_error(
-                        request_id=request_id,
-                        error_type="stream_stage3_chunk_schema_invalid",
-                        error_message="Chunk schema validation failed",
-                        details={
-                            "provider": self.suite.provider,
-                            "endpoint": endpoint,
-                            "test_name": test.name,
-                            "errors": validation_errors[:20],
-                            "invalid_chunks": invalid_chunks[:5],
-                            "total_errors": len(validation_errors),
-                        },
-                    )
                 if validation_errors:
                     # Stage 3 failed: return early to avoid duplicate summary logs in stage 4.
                     content = parser.get_complete_content()
@@ -865,37 +653,11 @@ class ConfigDrivenTestRunner:
                 validation_errors.append(
                     f"Missing required stream events: {', '.join(missing_events)}"
                 )
-                if self.logger and request_id:
-                    self.logger.log_error(
-                        request_id=request_id,
-                        error_type="stream_stage4_required_events_missing",
-                        error_message="Missing required stream events",
-                        details={
-                            "provider": self.suite.provider,
-                            "endpoint": endpoint,
-                            "test_name": test.name,
-                            "missing": missing_events,
-                        },
-                    )
-
             # Extract complete text content
             content = parser.get_complete_content()
 
             # If there are validation errors, record failure
             if validation_errors:
-                if self.logger and request_id:
-                    self.logger.log_error(
-                        request_id=request_id,
-                        error_type="stream_validation_failed",
-                        error_message="Stream validation failed",
-                        details={
-                            "provider": self.suite.provider,
-                            "endpoint": endpoint,
-                            "test_name": test.name,
-                            "errors": validation_errors[:50],
-                            "total_errors": len(validation_errors),
-                        },
-                    )
                 self.collector.record_result(
                     self._make_test_result(
                         test=test,
@@ -946,22 +708,6 @@ class ConfigDrivenTestRunner:
 
         except Exception as e:
             # Fallback: unexpected error
-            if self.logger and request_id:
-                self.logger.log_response(
-                    request_id=request_id,
-                    status_code=500,
-                    body={"error": f"Unexpected error: {e}"},
-                )
-                self.logger.log_error(
-                    request_id=request_id,
-                    error_type="stream_unexpected_error",
-                    error_message=str(e),
-                    details={
-                        "provider": self.suite.provider,
-                        "endpoint": endpoint,
-                        "test_name": test.name,
-                    },
-                )
             self.collector.record_result(
                 self._make_test_result(
                     test=test,
@@ -1046,16 +792,7 @@ class ConfigDrivenTestRunner:
         """Run a non-streaming request test asynchronously."""
         started_at = datetime.now(UTC).isoformat()
         start_monotonic = time.monotonic()
-        files, opened_files, file_entries = self._prepare_upload_files(test)
-        request_id = self.logger.generate_request_id() if self.logger else None
-
-        self._log_outbound_request(
-            request_id=request_id,
-            endpoint=endpoint,
-            method=method,
-            params=params,
-            file_entries=file_entries or None,
-        )
+        files, opened_files, _file_entries = self._prepare_upload_files(test)
 
         try:
             response = await self.client.request_async(
@@ -1069,16 +806,8 @@ class ConfigDrivenTestRunner:
             for f in opened_files:
                 f.close()
         status_code = response.status_code
-        # Parse response body (needed regardless of logging)
+        # Parse response body
         response_body = ResponseParser.parse_response(response)
-
-        # Log response
-        if self.logger and request_id:
-            self.logger.log_response(
-                request_id=request_id,
-                status_code=status_code,
-                body=response_body,
-            )
 
         # Validate response (schema only on HTTP success)
         http_success = 200 <= status_code < 300
@@ -1100,7 +829,6 @@ class ConfigDrivenTestRunner:
                 schema_valid = False
                 schema_missing_fields = list(result.missing_fields)
                 validation_errors.append(result.error_message or "Schema validation failed")
-                self._log_validation_error(test.name, result, status_code, response_body)
 
         # Check required fields (both suite-level and test-level)
         all_required_fields = list(self.suite.required_fields)
@@ -1177,17 +905,8 @@ class ConfigDrivenTestRunner:
         all_raw_chunks: list[bytes] = []
         http_status_code = 200
         files, opened_files, file_entries = self._prepare_upload_files(test)
-        request_id = self.logger.generate_request_id() if self.logger else None
         parser = StreamResponseParser(self.suite.provider)
         parsed_chunks: list[dict[str, Any]] = []
-
-        self._log_outbound_request(
-            request_id=request_id,
-            endpoint=endpoint,
-            method=method,
-            params=params,
-            file_entries=file_entries or None,
-        )
 
         try:
             # Stage 1: establish connection and collect all raw chunks
@@ -1205,22 +924,6 @@ class ConfigDrivenTestRunner:
 
                 # If we did not receive any chunks at all, fail early.
                 if not all_raw_chunks:
-                    if self.logger and request_id:
-                        self.logger.log_response(
-                            request_id=request_id,
-                            status_code=http_status_code,
-                            body={"error": "No raw chunks received"},
-                        )
-                        self.logger.log_error(
-                            request_id=request_id,
-                            error_type="stream_stage1_no_raw_chunks",
-                            error_message="No raw chunks received",
-                            details={
-                                "provider": self.suite.provider,
-                                "endpoint": endpoint,
-                                "test_name": test.name,
-                            },
-                        )
                     self.collector.record_result(
                         self._make_test_result(
                             test=test,
@@ -1243,23 +946,6 @@ class ConfigDrivenTestRunner:
                 # HTTP error (4xx/5xx)
                 http_status_code = e.response.status_code
                 error_body = ResponseParser.parse_response(e.response)
-                if self.logger and request_id:
-                    self.logger.log_response(
-                        request_id=request_id,
-                        status_code=http_status_code,
-                        body=error_body,
-                    )
-                    self.logger.log_error(
-                        request_id=request_id,
-                        error_type="stream_stage1_http_error",
-                        error_message=f"HTTP {http_status_code}",
-                        details={
-                            "provider": self.suite.provider,
-                            "endpoint": endpoint,
-                            "test_name": test.name,
-                            "response_body": error_body,
-                        },
-                    )
                 self.collector.record_result(
                     self._make_test_result(
                         test=test,
@@ -1280,22 +966,6 @@ class ConfigDrivenTestRunner:
                 return False
             except Exception as e:
                 # Other errors (network/timeout/etc.)
-                if self.logger and request_id:
-                    self.logger.log_response(
-                        request_id=request_id,
-                        status_code=0,
-                        body={"error": f"Connection error: {e}"},
-                    )
-                    self.logger.log_error(
-                        request_id=request_id,
-                        error_type="stream_stage1_connection_error",
-                        error_message=str(e),
-                        details={
-                            "provider": self.suite.provider,
-                            "endpoint": endpoint,
-                            "test_name": test.name,
-                        },
-                    )
                 self.collector.record_result(
                     self._make_test_result(
                         test=test,
@@ -1319,18 +989,6 @@ class ConfigDrivenTestRunner:
             try:
                 formatted_response, parsed_chunks = parser.format_stream_response(all_raw_chunks)
             except Exception as e:
-                if self.logger and request_id:
-                    self.logger.log_error(
-                        request_id=request_id,
-                        error_type="stream_stage2_parse_error",
-                        error_message=str(e),
-                        details={
-                            "provider": self.suite.provider,
-                            "endpoint": endpoint,
-                            "test_name": test.name,
-                            "raw_chunks_count": len(all_raw_chunks),
-                        },
-                    )
                 self.collector.record_result(
                     self._make_test_result(
                         test=test,
@@ -1351,13 +1009,6 @@ class ConfigDrivenTestRunner:
                 return False
 
             # Log the aggregated stream response
-            if self.logger and request_id:
-                self.logger.log_response(
-                    request_id=request_id,
-                    status_code=http_status_code,
-                    body={"chunks": parsed_chunks},
-                )
-
             # Stage 3: validate stream rules
             stream_rules_ok = True
             stream_errors: list[str] = []
@@ -1384,33 +1035,9 @@ class ConfigDrivenTestRunner:
                         if missing_events
                         else []
                     )
-                    if not stream_rules_ok and self.logger and request_id:
-                        self.logger.log_error(
-                            request_id=request_id,
-                            error_type="stream_stage3_validation_error",
-                            error_message="Stream rules validation failed",
-                            details={
-                                "provider": self.suite.provider,
-                                "endpoint": endpoint,
-                                "test_name": test.name,
-                                "errors": stream_errors,
-                            },
-                        )
                 except Exception as e:
                     stream_rules_ok = False
                     stream_errors = [str(e)]
-                    if self.logger and request_id:
-                        self.logger.log_error(
-                            request_id=request_id,
-                            error_type="stream_stage3_exception",
-                            error_message=str(e),
-                            details={
-                                "provider": self.suite.provider,
-                                "endpoint": endpoint,
-                                "test_name": test.name,
-                            },
-                        )
-
             # Build final result
             error_msg = "; ".join(stream_errors) if stream_errors else None
             self.collector.record_result(
@@ -1434,17 +1061,6 @@ class ConfigDrivenTestRunner:
             return stream_rules_ok
         except Exception as e:
             # Catch-all for unexpected errors
-            if self.logger and request_id:
-                self.logger.log_error(
-                    request_id=request_id,
-                    error_type="stream_unexpected_error",
-                    error_message=str(e),
-                    details={
-                        "provider": self.suite.provider,
-                        "endpoint": endpoint,
-                        "test_name": test.name,
-                    },
-                )
             self.collector.record_result(
                 self._make_test_result(
                     test=test,

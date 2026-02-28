@@ -4,13 +4,13 @@
     response: "openai.ImageResponse",
     stream_chunk: "openai.ImageStreamEvent",
   },
-  base_params: {
-    prompt: "Replace the background with a blue sky.",
-  },
   tests: [
     {
       name: "baseline",
       description: "Baseline test: gpt-image-1.5 single image + prompt",
+      params: {
+        prompt: "Replace the background with a blue sky.",
+      },
       files: {
         image: "assets/images/test_base.png",
       },

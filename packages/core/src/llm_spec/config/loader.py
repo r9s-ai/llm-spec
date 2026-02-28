@@ -8,18 +8,6 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 
-class LogConfig(BaseModel):
-    """Logging configuration."""
-
-    enabled: bool = True
-    level: str = "INFO"
-    console: bool = False
-    file: str = "./logs/llm-spec.log"
-    log_request_body: bool = True
-    log_response_body: bool = False
-    max_body_length: int = 1000
-
-
 class ProviderConfig(BaseModel):
     """Provider configuration."""
 
@@ -53,8 +41,6 @@ class ChannelConfig(BaseModel):
 class AppConfig(BaseModel):
     """App configuration."""
 
-    log: LogConfig = Field(default_factory=LogConfig)
-
     # Dynamically loaded provider configs (Pydantic v2 disallows leading-underscore field names)
     provider_configs: dict[str, ProviderConfig] = Field(default_factory=dict, exclude=True)
     channels: list[ChannelConfig] = Field(default_factory=list, exclude=True)
@@ -75,9 +61,6 @@ class AppConfig(BaseModel):
 
         with open(config_path, "rb") as f:
             data = tomllib.load(f)
-
-        # Parse log section
-        log_config = LogConfig(**data.get("log", {}))
 
         # Parse provider sections (old style: [openai], [anthropic], ...)
         provider_configs = {}
@@ -106,7 +89,7 @@ class AppConfig(BaseModel):
                     continue
                 channels.append(ChannelConfig(**item))
 
-        config = cls(log=log_config, channels=channels)
+        config = cls(channels=channels)
         config.provider_configs = provider_configs
 
         return config

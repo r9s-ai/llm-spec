@@ -8,14 +8,6 @@
     response: "gemini.GenerateContentResponse",
     stream_chunk: "gemini.GeminiStreamChunk",
   },
-  base_params: {
-    contents: [
-      {
-        role: "user",
-        parts: [{ text: "Say hello" }],
-      },
-    ],
-  },
   // Gemini streaming is not SSE-event-typed like OpenAI/Anthropic; validate it by requiring
   // at least one chunk containing candidate text content.
   stream_expectations: {
@@ -31,6 +23,14 @@
     {
       name: "baseline",
       description: "Baseline streaming test: minimal required parameters",
+      params: {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: "Say hello" }],
+          },
+        ],
+      },
       baseline: true,
       stream: true,
     },

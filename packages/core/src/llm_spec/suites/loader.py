@@ -55,12 +55,20 @@ class _RawSuite(PydanticBaseModel):
     provider: str
     endpoint: str
     schemas: dict[str, str] = Field(default_factory=dict)
-    base_params: dict[str, Any] = Field(default_factory=dict)
     tests: list[_RawTestCase] = Field(default_factory=list)
     required_fields: list[str] = Field(default_factory=list)
     stream_expectations: dict[str, Any] | None = None
     method: str = "POST"
     suite_name: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_baseline_exists_once(self) -> _RawSuite:
+        baseline_tests = [t for t in self.tests if t.baseline]
+        if len(baseline_tests) != 1:
+            raise ValueError(
+                f"Suite '{self.endpoint}' must contain exactly one baseline test, got {len(baseline_tests)}"
+            )
+        return self
 
 
 def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTestCase]:
@@ -153,9 +161,12 @@ def load_test_suite_from_dict(
     raw_suite = _RawSuite.model_validate(data)
 
     tests: list[SpecTestCase] = []
+    baseline_params: dict[str, Any] = {}
 
     for t in raw_suite.tests:
         t_dict = t.model_dump()
+        if t.baseline:
+            baseline_params = copy.deepcopy(t.params)
         if t.variants:
             tests.extend(expand_parameterized_tests(t_dict))
         else:
@@ -181,7 +192,7 @@ def load_test_suite_from_dict(
         provider=raw_suite.provider,
         endpoint=raw_suite.endpoint,
         schemas=raw_suite.schemas,
-        base_params=raw_suite.base_params,
+        baseline_params=baseline_params,
         tests=tests,
         required_fields=raw_suite.required_fields,
         stream_expectations=raw_suite.stream_expectations,

@@ -4,14 +4,14 @@
     response: "openai.ImageResponse",
     stream_chunk: "openai.ImageStreamEvent",
   },
-  base_params: {
-    prompt: "A cute cat",
-    n: 1,
-  },
   tests: [
     {
       name: "baseline",
       description: "Baseline test: only required parameters",
+      params: {
+        prompt: "A cute cat",
+        n: 1,
+      },
       baseline: true,
     },
     {

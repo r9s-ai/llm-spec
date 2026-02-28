@@ -18,7 +18,7 @@ class SpecTestCase:
     """Test description."""
 
     params: dict[str, Any] = field(default_factory=dict)
-    """Test params (merged with suite base_params)."""
+    """Test params (merged with suite baseline_params)."""
 
     focus_param: dict[str, Any] | None = None
     """Primary parameter to display for this test: {"name": "...", "value": ...}."""
@@ -64,8 +64,8 @@ class SpecTestSuite:
     schemas: dict[str, str] = field(default_factory=dict)
     """Schema references, e.g. {"response": "openai.ChatCompletionResponse"}."""
 
-    base_params: dict[str, Any] = field(default_factory=dict)
-    """Baseline params (required params)."""
+    baseline_params: dict[str, Any] = field(default_factory=dict)
+    """Default params sourced from the baseline test params."""
 
     tests: list[SpecTestCase] = field(default_factory=list)
     """List of test cases."""

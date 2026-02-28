@@ -197,7 +197,7 @@ Default values can be found in:
 Key points:
 
 - `provider.toml` defines provider metadata, `api_family`, optional `routes_from` inheritance.
-- `routes/*.json5` defines endpoint/base params/tests template.
+- `routes/*.json5` defines endpoint/baseline params/tests template.
 - `models/*.toml` defines model route coverage and optional overrides.
 - Shared upload assets should be placed in `suites-registry/assets/`.
 

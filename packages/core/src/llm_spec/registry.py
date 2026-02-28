@@ -75,9 +75,11 @@ def _load_local_routes(provider_dir: Path) -> dict[str, tuple[Path, dict[str, An
         route_name = path.stem
         payload = copy.deepcopy(_read_json5(path))
         payload.pop("provider", None)
-        base_params = payload.get("base_params")
-        if isinstance(base_params, dict):
-            base_params.pop("model", None)
+        if "base_params" in payload:
+            raise ValueError(
+                f"Route '{path}' uses deprecated 'base_params'. "
+                "Move defaults into tests[].baseline.params."
+            )
         routes[route_name] = (path, payload)
     return routes
 
@@ -176,7 +178,16 @@ def load_registry_suites(
             if not isinstance(routes_for_model, list):
                 raise ValueError(f"models/{model_id}.toml routes must be a list")
             skip_tests = set(model_data.get("skip_tests", []) or [])
-            base_params_override = model_data.get("base_params_override", {}) or {}
+            if "baseline" in skip_tests:
+                raise ValueError(
+                    f"models/{model_id}.toml cannot skip baseline test; baseline is required."
+                )
+            if "base_params_override" in model_data:
+                raise ValueError(
+                    f"models/{model_id}.toml uses deprecated [base_params_override]. "
+                    "Use [baseline_params_override]."
+                )
+            baseline_params_override = model_data.get("baseline_params_override", {}) or {}
             extra_tests = model_data.get("extra_tests", []) or []
 
             for route_name in routes_for_model:
@@ -193,17 +204,6 @@ def load_registry_suites(
                 if meta.api_family == "gemini":
                     endpoint = endpoint.replace("{model}", model_id)
                 suite["endpoint"] = endpoint
-
-                base_params = suite.get("base_params", {})
-                if not isinstance(base_params, dict):
-                    base_params = {}
-                base_params = copy.deepcopy(base_params)
-                if meta.api_family == "gemini":
-                    base_params.pop("model", None)
-                else:
-                    base_params["model"] = model_id
-                base_params = _deep_merge(base_params, base_params_override)
-                suite["base_params"] = base_params
 
                 tests = suite.get("tests", [])
                 if not isinstance(tests, list):
@@ -224,6 +224,27 @@ def load_registry_suites(
                         continue
                     extra_test = {k: copy.deepcopy(v) for k, v in extra.items() if k != "route"}
                     filtered_tests.append(extra_test)
+
+                baseline_tests = [
+                    t for t in filtered_tests if isinstance(t, dict) and t.get("baseline") is True
+                ]
+                if len(baseline_tests) != 1:
+                    raise ValueError(
+                        f"Provider '{provider}' model '{model_id}' route '{route_name}' must "
+                        f"have exactly one baseline test after expansion, got {len(baseline_tests)}"
+                    )
+
+                baseline = baseline_tests[0]
+                baseline_params = baseline.get("params", {})
+                if not isinstance(baseline_params, dict):
+                    baseline_params = {}
+                baseline_params = copy.deepcopy(baseline_params)
+                if meta.api_family == "gemini":
+                    baseline_params.pop("model", None)
+                else:
+                    baseline_params["model"] = model_id
+                baseline_params = _deep_merge(baseline_params, baseline_params_override)
+                baseline["params"] = baseline_params
 
                 suite["tests"] = filtered_tests
                 expanded.append(

@@ -16,7 +16,8 @@ def test_registry_expands_openai_chat_model() -> None:
     )
     assert match.suite_dict["provider"] == "openai"
     assert match.suite_dict["endpoint"] == "/v1/chat/completions"
-    assert match.suite_dict["base_params"]["model"] == "gpt-4o-mini"
+    baseline = next(t for t in match.suite_dict["tests"] if t.get("baseline") is True)
+    assert baseline["params"]["model"] == "gpt-4o-mini"
 
 
 def test_registry_expands_gemini_endpoint_placeholder() -> None:
@@ -32,7 +33,8 @@ def test_registry_expands_gemini_endpoint_placeholder() -> None:
     )
     assert "{model}" not in match.suite_dict["endpoint"]
     assert "gemini-3-flash-preview" in match.suite_dict["endpoint"]
-    assert "model" not in match.suite_dict["base_params"]
+    baseline = next(t for t in match.suite_dict["tests"] if t.get("baseline") is True)
+    assert "model" not in baseline.get("params", {})
 
 
 def test_registry_resolves_routes_from_inheritance() -> None:
