@@ -5,7 +5,7 @@ import {
   deleteBatch,
   getBatch,
   getBatches,
-  getRunResult,
+  getRunTaskResult,
   retryRunTest,
   streamRunEvents,
   updateBatch,
@@ -83,7 +83,7 @@ export function useBatches() {
   // Load run result
   const loadRunResult = useCallback(async (runId: string): Promise<void> => {
     try {
-      const result = await getRunResult(runId);
+      const result = await getRunTaskResult(runId);
       setRunResultById((prev) => ({ ...prev, [runId]: result }));
     } catch {
       // Ignore errors
@@ -170,7 +170,7 @@ export function useBatches() {
         // Load run result FIRST before updating batch state
         // Use flushSync to ensure the result is available immediately
         try {
-          const result = await getRunResult(runId);
+          const result = await getRunTaskResult(runId);
           flushSync(() => {
             setRunResultById((prev) => ({ ...prev, [runId]: result }));
           });
@@ -331,7 +331,7 @@ export function useBatches() {
     async (run: RunJob, testName: string, onNotice: (msg: string) => void): Promise<void> => {
       onNotice(`Retrying ${testName}...`);
       const updatedRun = await retryRunTest(run.id, testName);
-      const updatedResult = await getRunResult(run.id);
+      const updatedResult = await getRunTaskResult(run.id);
 
       setRunResultById((prev) => ({ ...prev, [run.id]: updatedResult }));
 

@@ -28,18 +28,9 @@ interface TestResultRow {
 }
 
 interface RunResultData {
-  schema_version?: string;
+  version?: string;
   run_id?: string;
-  providers?: Array<{
-    provider: string;
-    endpoints?: Array<{
-      endpoint: string;
-      tests?: TestResultRow[];
-      summary?: RunSummary;
-    }>;
-    summary?: RunSummary;
-  }>;
-  summary?: RunSummary;
+  cases?: TestResultRow[];
 }
 
 interface CompletedRunCardProps {
@@ -90,46 +81,21 @@ export function CompletedRunCard({ run, summary, result, onRetryFailedTest }: Co
   const duration = calculateDuration(run.started_at, run.finished_at);
   const relativeTime = formatRelativeTime(run.finished_at);
 
-  // Extract tests from result - navigate providers[].endpoints[].tests[]
+  // Extract tests from task result cases
   const tests = useMemo((): TestResultRow[] => {
-    if (!result?.providers) return [];
+    if (!result?.cases || !Array.isArray(result.cases)) return [];
+    return result.cases;
+  }, [result]);
 
-    // Find the matching provider/endpoint
-    for (const provider of result.providers) {
-      if (provider.provider !== run.provider) continue;
-      if (!provider.endpoints) continue;
-
-      for (const endpoint of provider.endpoints) {
-        if (endpoint.endpoint === run.endpoint && endpoint.tests) {
-          return endpoint.tests;
-        }
-      }
-      // If no matching endpoint, return first endpoint's tests
-      if (provider.endpoints.length > 0 && provider.endpoints[0].tests) {
-        return provider.endpoints[0].tests;
-      }
-    }
-    return [];
-  }, [result, run.provider, run.endpoint]);
-
-  // Get summary from result
+  // Get summary from run progress
   const resultSummary = useMemo((): RunSummary | undefined => {
     if (summary) return summary;
-    if (!result?.providers) return undefined;
-
-    for (const provider of result.providers) {
-      if (provider.provider !== run.provider) continue;
-      if (provider.endpoints) {
-        for (const endpoint of provider.endpoints) {
-          if (endpoint.endpoint === run.endpoint) {
-            return endpoint.summary;
-          }
-        }
-      }
-      return provider.summary;
-    }
-    return result.summary;
-  }, [result, run.provider, run.endpoint, summary]);
+    return {
+      total: run.progress_total,
+      passed: run.progress_passed,
+      failed: run.progress_failed,
+    };
+  }, [run.progress_failed, run.progress_passed, run.progress_total, summary]);
 
   return (
     <div className="border-b border-slate-100 last:border-b-0">

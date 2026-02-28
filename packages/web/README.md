@@ -17,4 +17,4 @@ Env:
 - Testing: pick multiple providers/routes/test cases and run in batch
 - Suites: read-only registry browser (`provider/route/model`)
 - Settings: read/write `llm-spec.toml`
-- SSE realtime events + run_result.json rendering
+- SSE realtime events + `task_result.v1` (`cases[]`) rendering

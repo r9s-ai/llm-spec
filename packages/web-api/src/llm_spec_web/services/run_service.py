@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Sequence
 from copy import deepcopy
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy.orm import Session
 
@@ -16,14 +16,14 @@ from llm_spec.adapters.openai import OpenAIAdapter
 from llm_spec.adapters.xai import XAIAdapter
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import ProviderConfig, load_config
-from llm_spec.reporting.collector import EndpointResultBuilder
-from llm_spec.reporting.run_result import build_run_result
+from llm_spec.results.result_types import CaseResult, TaskResult
+from llm_spec.results.task_result import build_task_result
 from llm_spec.runners import ConfigDrivenTestRunner
 from llm_spec.suites import SpecTestSuite, load_test_suite_from_dict
 from llm_spec_web.config import settings
 from llm_spec_web.core.event_bus import event_bus
 from llm_spec_web.core.exceptions import ConfigurationError, NotFoundError, ValidationError
-from llm_spec_web.models.run import RunBatch, RunEvent, RunJob, RunResult, RunTestResult
+from llm_spec_web.models.run import RunBatch, RunEvent, RunJob, RunTestResult, TaskResultRecord
 from llm_spec_web.repositories.run_repo import RunRepository
 from llm_spec_web.services.suite_service import SuiteService
 
@@ -90,6 +90,19 @@ class RunService:
 
     This class orchestrates run operations and manages transactions.
     """
+
+    @staticmethod
+    def _case_status(case: CaseResult) -> str:
+        result = case.get("result")
+        if isinstance(result, dict):
+            value = result.get("status")
+            if isinstance(value, str):
+                return value
+        return "fail"
+
+    @staticmethod
+    def _case_passed(case: CaseResult) -> bool:
+        return RunService._case_status(case) == "pass"
 
     def create_run(
         self,
@@ -219,24 +232,24 @@ class RunService:
         run_repo = RunRepository(db)
         return run_repo.list_events(run_id, after_seq=after_seq)
 
-    def get_result(self, db: Session, run_id: str) -> dict[str, Any]:
-        """Get the result for a run.
+    def get_task_result(self, db: Session, run_id: str) -> dict[str, Any]:
+        """Get the task result for a run.
 
         Args:
             db: Database session.
             run_id: Run job ID.
 
         Returns:
-            Run result JSON.
+            Task result JSON.
 
         Raises:
-            NotFoundError: If result not found.
+            NotFoundError: If task result not found.
         """
         run_repo = RunRepository(db)
-        result = run_repo.get_result(run_id)
+        result = run_repo.get_task_result(run_id)
         if result is None:
-            raise NotFoundError("RunResult", run_id)
-        return result.run_result_json
+            raise NotFoundError("TaskResult", run_id)
+        return result.task_result_json
 
     def list_test_results(self, db: Session, run_id: str) -> list[dict]:
         """List test results for a run.
@@ -321,23 +334,19 @@ class RunService:
             http_client = HTTPClient(default_timeout=config.timeout)
             client = create_provider_client(run_job.provider, config, run_job.mode, http_client)
 
-            local_collector = EndpointResultBuilder(
-                provider=suite.provider,
-                endpoint=suite.endpoint,
-                base_url=client.get_base_url(),
-            )
-            local_runner = ConfigDrivenTestRunner(
-                suite=suite, client=client, collector=local_collector
-            )
+            local_runner = ConfigDrivenTestRunner(suite=suite, client=client)
 
-            test_record: dict[str, Any]
+            case_result: CaseResult
             try:
-                await local_runner.run_test_async(target_test)
-                test_record = dict(local_collector.tests[-1])
+                case_result = await local_runner.run_test_async(target_test)
             except Exception as exc:
-                test_record = {
+                case_result = {
+                    "version": "case_result.v1",
                     "test_id": f"{suite.provider}/{suite.endpoint.lstrip('/')}::{target_test.name}",
                     "test_name": target_test.name,
+                    "provider": suite.provider,
+                    "endpoint": suite.endpoint,
+                    "parameter": {"name": None, "value": None, "value_type": "none"},
                     "result": {
                         "status": "fail",
                         "fail_stage": "request",
@@ -354,42 +363,42 @@ class RunService:
                     },
                 }
 
-            result_record = test_record.get("result")
+            result_record = case_result.get("result")
             result_record_dict = result_record if isinstance(result_record, dict) else {}
-            request_record = test_record.get("request")
+            request_record = case_result.get("request")
             request_record_dict = request_record if isinstance(request_record, dict) else {}
-            parameter_record = test_record.get("parameter")
+            parameter_record = case_result.get("parameter")
             parameter_record_dict = parameter_record if isinstance(parameter_record, dict) else {}
             status = str(result_record_dict.get("status", "fail"))
             run_repo.upsert_test_result_by_name(
                 run_id=run_job.id,
-                test_name=str(test_record.get("test_name", target_test.name)),
-                test_id=str(test_record.get("test_id", "")),
+                test_name=str(case_result.get("test_name", target_test.name)),
+                test_id=str(case_result.get("test_id", "")),
                 parameter_value=parameter_record_dict.get("value"),
                 status=status,
                 fail_stage=result_record_dict.get("fail_stage"),
                 reason_code=result_record_dict.get("reason_code"),
                 latency_ms=request_record_dict.get("latency_ms"),
-                raw_record=test_record,
+                raw_record=dict(case_result),
             )
 
-            run_result_row = run_repo.get_result(run_job.id)
-            if run_result_row is None:
-                raise NotFoundError("RunResult", run_job.id)
-            updated_run_result = self._merge_test_record_into_run_result(
-                run_result_row.run_result_json,
-                run_job=run_job,
+            task_result_row = run_repo.get_task_result(run_job.id)
+            if task_result_row is None:
+                raise NotFoundError("TaskResult", run_job.id)
+            updated_task_result = self._merge_case_result_into_task_result(
+                task_result_row.task_result_json,
                 test_name=target_test.name,
-                new_test_record=test_record,
+                new_case_result=case_result,
             )
-            run_result_row.run_result_json = updated_run_result
-            run_repo.save_result(run_result_row)
+            task_result_row.task_result_json = dict(updated_task_result)
+            run_repo.save_task_result(task_result_row)
 
-            summary = updated_run_result.get("summary", {})
-            run_job.progress_total = int(summary.get("total", run_job.progress_total))
+            cases = updated_task_result.get("cases", [])
+            case_rows = [c for c in cases if isinstance(c, dict)]
+            run_job.progress_total = len(case_rows)
             run_job.progress_done = run_job.progress_total
-            run_job.progress_passed = int(summary.get("passed", run_job.progress_passed))
-            run_job.progress_failed = int(summary.get("failed", run_job.progress_failed))
+            run_job.progress_passed = sum(1 for c in case_rows if self._case_passed(c))
+            run_job.progress_failed = run_job.progress_total - run_job.progress_passed
             run_job.status = "success" if run_job.progress_failed == 0 else "failed"
             run_job.error_message = None if run_job.status == "success" else run_job.error_message
             run_job.finished_at = datetime.now(UTC)
@@ -408,98 +417,25 @@ class RunService:
             if http_client is not None and isinstance(http_client, HTTPClient):
                 await http_client.close_async()
 
-    def _merge_test_record_into_run_result(
+    def _merge_case_result_into_task_result(
         self,
-        run_result_json: dict[str, Any],
+        task_result_json: TaskResult | dict[str, Any],
         *,
-        run_job: RunJob,
         test_name: str,
-        new_test_record: dict[str, Any],
-    ) -> dict[str, Any]:
-        merged = deepcopy(run_result_json)
-        providers = merged.get("providers")
-        if not isinstance(providers, list):
-            raise ValidationError(f"run result format invalid for run {run_job.id}")
-
-        target_provider_node: dict[str, Any] | None = None
-        target_endpoint_node: dict[str, Any] | None = None
-        for provider_node in providers:
-            if provider_node.get("provider") != run_job.provider:
-                continue
-            endpoints = provider_node.get("endpoints")
-            if not isinstance(endpoints, list):
-                continue
-            for endpoint_node in endpoints:
-                if endpoint_node.get("endpoint") == run_job.endpoint:
-                    target_provider_node = provider_node
-                    target_endpoint_node = endpoint_node
-                    break
-            if target_endpoint_node is not None:
-                break
-
-        if target_provider_node is None or target_endpoint_node is None:
-            raise ValidationError(f"run result endpoint node missing for run {run_job.id}")
-
-        tests = target_endpoint_node.get("tests")
-        if not isinstance(tests, list):
-            tests = []
-            target_endpoint_node["tests"] = tests
-
+        new_case_result: CaseResult,
+    ) -> TaskResult:
+        merged = cast(TaskResult, deepcopy(task_result_json))
+        cases = merged.get("cases")
+        if not isinstance(cases, list):
+            raise ValidationError("task result format invalid: missing cases")
         replaced = False
-        for idx, row in enumerate(tests):
+        for idx, row in enumerate(cases):
             if isinstance(row, dict) and str(row.get("test_name", "")) == test_name:
-                tests[idx] = new_test_record
+                cases[idx] = new_case_result
                 replaced = True
                 break
         if not replaced:
-            tests.append(new_test_record)
-
-        def _count(items: list[dict[str, Any]]) -> tuple[int, int]:
-            passed = 0
-            for item in items:
-                result = item.get("result") if isinstance(item, dict) else None
-                if isinstance(result, dict) and result.get("status") == "pass":
-                    passed += 1
-            total = len(items)
-            return total, passed
-
-        provider_total = 0
-        provider_passed = 0
-        for endpoint_node in target_provider_node.get("endpoints", []):
-            endpoint_tests = endpoint_node.get("tests")
-            endpoint_items = endpoint_tests if isinstance(endpoint_tests, list) else []
-            total, passed = _count([r for r in endpoint_items if isinstance(r, dict)])
-            endpoint_node["summary"] = {
-                "total": total,
-                "passed": passed,
-                "failed": total - passed,
-                "skipped": 0,
-            }
-            provider_total += total
-            provider_passed += passed
-
-        target_provider_node["summary"] = {
-            "total": provider_total,
-            "passed": provider_passed,
-            "failed": provider_total - provider_passed,
-            "skipped": 0,
-        }
-
-        global_total = 0
-        global_passed = 0
-        for provider_node in providers:
-            summary = provider_node.get("summary") if isinstance(provider_node, dict) else None
-            if not isinstance(summary, dict):
-                continue
-            global_total += int(summary.get("total", 0))
-            global_passed += int(summary.get("passed", 0))
-
-        merged["summary"] = {
-            "total": global_total,
-            "passed": global_passed,
-            "failed": global_total - global_passed,
-            "skipped": 0,
-        }
+            cases.append(new_case_result)
         merged["finished_at"] = datetime.now(UTC).isoformat()
         return merged
 
@@ -614,7 +550,7 @@ class RunService:
             progress_failed = 0
             cancelled = False
 
-            # Collector list for test results
+            # Collected case results
             test_results: list[dict[str, Any]] = []
 
             # Semaphore for controlling concurrency
@@ -632,27 +568,31 @@ class RunService:
                     if cancelled:
                         return {"test": test, "status": "skipped", "idx": idx}
 
-                    # Create a collector for this test
-                    local_collector = EndpointResultBuilder(
-                        provider=suite.provider,
-                        endpoint=suite.endpoint,
-                        base_url=client.get_base_url(),
-                    )
-                    local_runner = ConfigDrivenTestRunner(
-                        suite=suite, client=client, collector=local_collector
-                    )
+                    local_runner = ConfigDrivenTestRunner(suite=suite, client=client)
 
                     # Push test start event
                     event_bus.push(run_id, "test_started", {"test_name": test.name, "index": idx})
 
                     try:
-                        await local_runner.run_test_async(test)
-                        test_record = local_collector.tests[-1]
-                        status = str((test_record.get("result") or {}).get("status", "fail"))
+                        case_result = await local_runner.run_test_async(test)
+                        status = self._case_status(case_result)
                     except Exception as e:
                         status = "fail"
-                        test_record = {
+                        case_result = {
+                            "version": "case_result.v1",
+                            "test_id": f"{suite.provider}/{suite.endpoint.lstrip('/')}::{test.name}",
                             "test_name": test.name,
+                            "provider": suite.provider,
+                            "endpoint": suite.endpoint,
+                            "parameter": {"name": None, "value": None, "value_type": "none"},
+                            "request": {"ok": False, "http_status": 0, "latency_ms": 0},
+                            "validation": {
+                                "schema_ok": False,
+                                "required_fields_ok": False,
+                                "stream_rules_ok": False,
+                                "missing_fields": [],
+                                "missing_events": [],
+                            },
                             "result": {"status": "fail", "reason": str(e)},
                         }
 
@@ -669,7 +609,7 @@ class RunService:
                     test_results.append(
                         {
                             "test": test,
-                            "test_record": test_record,
+                            "case_result": case_result,
                             "status": status,
                             "idx": idx,
                         }
@@ -688,11 +628,11 @@ class RunService:
                             "progress_passed": progress_passed,
                             "progress_failed": progress_failed,
                             "test_result": {
-                                "test_name": test_record.get("test_name", test.name),
-                                "parameter": test_record.get("parameter"),
-                                "request": test_record.get("request"),
-                                "result": test_record.get("result"),
-                                "validation": test_record.get("validation"),
+                                "test_name": case_result.get("test_name", test.name),
+                                "parameter": case_result.get("parameter"),
+                                "request": case_result.get("request"),
+                                "result": case_result.get("result"),
+                                "validation": case_result.get("validation"),
                             },
                         },
                     )
@@ -765,33 +705,25 @@ class RunService:
                 event_bus.end_run(run_id)
                 return
 
-            # Build final result from all test results
-            final_collector = EndpointResultBuilder(
-                provider=suite.provider,
-                endpoint=suite.endpoint,
-                base_url=client.get_base_url(),
-            )
-
-            # Sort results by idx and add to collector
+            # Sort and persist case results
             test_results.sort(key=lambda x: x["idx"])
+            case_results: list[CaseResult] = []
             for result in test_results:
-                test_record = result["test_record"]
+                case_result = result["case_result"]
                 # Save test result to database
                 run_test_row = RunTestResult(
                     run_id=run_id,
-                    test_id=str(test_record.get("test_id", "")),
-                    test_name=str(test_record.get("test_name", result["test"].name)),
-                    parameter_value=(test_record.get("parameter") or {}).get("value"),
+                    test_id=str(case_result.get("test_id", "")),
+                    test_name=str(case_result.get("test_name", result["test"].name)),
+                    parameter_value=(case_result.get("parameter") or {}).get("value"),
                     status=result["status"],
-                    fail_stage=(test_record.get("result") or {}).get("fail_stage"),
-                    reason_code=(test_record.get("result") or {}).get("reason_code"),
-                    latency_ms=(test_record.get("request") or {}).get("latency_ms"),
-                    raw_record=test_record,
+                    fail_stage=(case_result.get("result") or {}).get("fail_stage"),
+                    reason_code=(case_result.get("result") or {}).get("reason_code"),
+                    latency_ms=(case_result.get("request") or {}).get("latency_ms"),
+                    raw_record=dict(case_result),
                 )
                 run_repo.add_test_result(run_test_row)
-
-                # Add to final collector for report
-                final_collector.tests.append(test_record)
+                case_results.append(case_result)
 
             # Update run job with final progress
             run_job.progress_done = progress_done
@@ -799,17 +731,20 @@ class RunService:
             run_job.progress_failed = progress_failed
 
             # Build and save result
-            report_data = final_collector.build_report_data()
-            run_result = build_run_result(
+            task_result = build_task_result(
                 run_id=run_id,
                 started_at=run_job.started_at.isoformat() if run_job.started_at else "",
                 finished_at=datetime.now(UTC).isoformat(),
-                reports_by_provider={run_job.provider: [report_data]},
+                provider=run_job.provider,
+                model=run_job.model,
+                route=run_job.route,
+                endpoint=run_job.endpoint,
+                cases=case_results,
             )
-            run_repo.save_result(
-                RunResult(
+            run_repo.save_task_result(
+                TaskResultRecord(
                     run_id=run_id,
-                    run_result_json=run_result,
+                    task_result_json=dict(task_result),
                 )
             )
 

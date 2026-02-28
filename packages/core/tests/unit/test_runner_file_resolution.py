@@ -6,7 +6,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llm_spec.reporting.collector import EndpointResultBuilder
 from llm_spec.runners.runner import ConfigDrivenTestRunner, SpecTestCase, SpecTestSuite
 
 
@@ -26,13 +25,8 @@ def test_file_resolution_prefers_registry_root_assets(tmp_path: Path) -> None:
         endpoint="/v1/images/edits",
         config_path=config_path,
     )
-    collector = EndpointResultBuilder(
-        provider="openai",
-        endpoint="/v1/images/edits",
-        base_url="https://api.openai.com",
-    )
     client = MagicMock()
-    runner = ConfigDrivenTestRunner(suite, client, collector)
+    runner = ConfigDrivenTestRunner(suite, client)
 
     resolved = runner._resolve_test_file_path("assets/images/test.png")
     assert resolved == asset_path
@@ -49,12 +43,7 @@ def _make_runner(tmp_path: Path) -> tuple[ConfigDrivenTestRunner, Path]:
         endpoint="/v1/chat/completions",
         config_path=config_path,
     )
-    collector = EndpointResultBuilder(
-        provider="openai",
-        endpoint="/v1/chat/completions",
-        base_url="https://api.openai.com",
-    )
-    runner = ConfigDrivenTestRunner(suite, MagicMock(), collector)
+    runner = ConfigDrivenTestRunner(suite, MagicMock())
     return runner, registry_root
 
 

@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from llm_spec_web.models.run import RunBatch, RunEvent, RunJob, RunResult, RunTestResult
+from llm_spec_web.models.run import RunBatch, RunEvent, RunJob, RunTestResult, TaskResultRecord
 
 
 class RunRepository:
@@ -242,27 +242,27 @@ class RunRepository:
         )
         return self.db.execute(stmt).scalars().all()
 
-    # ==================== RunResult Operations ====================
+    # ==================== TaskResult Operations ====================
 
-    def get_result(self, run_id: str) -> RunResult | None:
-        """Get the result for a run.
+    def get_task_result(self, run_id: str) -> TaskResultRecord | None:
+        """Get the task result for a run.
 
         Args:
             run_id: Run job ID.
 
         Returns:
-            RunResult instance or None if not found.
+            TaskResultRecord instance or None if not found.
         """
-        return self.db.get(RunResult, run_id)
+        return self.db.get(TaskResultRecord, run_id)
 
-    def save_result(self, result: RunResult) -> RunResult:
-        """Save a run result.
+    def save_task_result(self, result: TaskResultRecord) -> TaskResultRecord:
+        """Save a task result.
 
         Args:
-            result: RunResult instance to save.
+            result: TaskResultRecord instance to save.
 
         Returns:
-            Saved RunResult instance.
+            Saved TaskResultRecord instance.
         """
         self.db.merge(result)
         self.db.flush()

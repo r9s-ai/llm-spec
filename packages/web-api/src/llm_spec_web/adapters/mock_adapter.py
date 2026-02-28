@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import random
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
@@ -14,7 +15,6 @@ from llm_spec.adapters.base import ProviderAdapter
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import ProviderConfig
 from llm_spec.json_types import Headers, JSONValue
-from llm_spec.logger import current_test_name
 from packages.core.tests.integration.mock_loader import MockDataLoader
 
 # Mock delay configuration
@@ -49,6 +49,11 @@ class MockProviderAdapter(ProviderAdapter):
         super().__init__(config=config, http_client=HTTPClient(default_timeout=config.timeout))
         self.loader = MockDataLoader(Path(base_dir))
         self.provider_name = provider_name
+        # Task-local test name to avoid cross-test contamination under async concurrency.
+        self._current_test_name: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+            "mock_current_test_name",
+            default=None,
+        )
 
     def prepare_headers(self, additional_headers: Headers | None = None) -> dict[str, str]:
         """Prepare request headers.
@@ -62,17 +67,17 @@ class MockProviderAdapter(ProviderAdapter):
         del additional_headers
         return {"content-type": "application/json"}
 
-    @staticmethod
-    def _resolve_test_name() -> str:
+    def _resolve_test_name(self) -> str:
         """Resolve the current test name from context.
 
         Returns:
             Test name for loading mock data.
         """
-        full_name = current_test_name.get() or ""
-        if "::" not in full_name:
-            return "baseline"
-        return full_name.split("::", 1)[1]
+        return self._current_test_name.get() or "baseline"
+
+    def set_current_test_name(self, test_name: str | None) -> None:
+        """Set current test name used to pick mock fixture files."""
+        self._current_test_name.set(test_name)
 
     def request(
         self,

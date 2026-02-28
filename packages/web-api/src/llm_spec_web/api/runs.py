@@ -252,13 +252,13 @@ async def stream_run_events(
     )
 
 
-@router.get("/{run_id}/result")
-def get_run_result(
+@router.get("/{run_id}/task-result")
+def get_task_result(
     run_id: str,
     db: Session = Depends(get_db),
     service: RunService = Depends(get_run_service),
 ) -> dict:
-    """Get the result for a run.
+    """Get the task result for a run.
 
     Args:
         run_id: Run job ID.
@@ -266,9 +266,9 @@ def get_run_result(
         service: Run service.
 
     Returns:
-        Run result JSON.
+        Task result JSON.
     """
-    return service.get_result(db, run_id)
+    return service.get_task_result(db, run_id)
 
 
 @router.get("/{run_id}/tests")

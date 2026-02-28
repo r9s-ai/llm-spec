@@ -17,10 +17,8 @@ if TYPE_CHECKING:
     from pydantic import BaseModel
 
 from llm_spec.adapters.base import ProviderAdapter
-from llm_spec.logger import current_test_name
 from llm_spec.path_utils import get_value_at_path
-from llm_spec.reporting.collector import EndpointResultBuilder
-from llm_spec.reporting.report_types import TestExecutionResult
+from llm_spec.results.result_types import CaseResult
 from llm_spec.runners.parsers import ResponseParser, StreamResponseParser
 from llm_spec.runners.stream_rules import extract_observations, validate_stream
 from llm_spec.suites import (
@@ -39,25 +37,22 @@ class ConfigDrivenTestRunner:
     1. Build request params (merge baseline_params with test params)
     2. Execute requests (non-streaming or streaming)
     3. Validate responses (schema + stream rules)
-    4. Record results into EndpointResultBuilder
+    4. Return normalized case results (no reporting side effects)
     """
 
     def __init__(
         self,
         suite: SpecTestSuite,
         client: ProviderAdapter,
-        collector: EndpointResultBuilder,
     ):
         """Initialize the runner.
 
         Args:
             suite: test suite
             client: provider adapter (OpenAIAdapter, GeminiAdapter, ...)
-            collector: report collector
         """
         self.suite = suite
         self.client = client
-        self.collector = collector
         self._asset_bytes_cache: dict[Path, bytes] = {}
 
         # Resolve schema classes
@@ -143,8 +138,8 @@ class ConfigDrivenTestRunner:
             return None
         return test.focus_param.get("value")
 
-    @staticmethod
     def _make_test_result(
+        self,
         *,
         test: SpecTestCase,
         params: dict[str, Any],
@@ -162,35 +157,86 @@ class ConfigDrivenTestRunner:
         started_at: str | None = None,
         finished_at: str | None = None,
         latency_ms: int | None = None,
-    ) -> TestExecutionResult:
-        """Create one stable result object used by reporting."""
-        result: TestExecutionResult = {
+    ) -> CaseResult:
+        """Create one stable case result object."""
+        endpoint = test.endpoint_override or self.suite.endpoint
+        path = endpoint.lstrip("/")
+        http_status = int(status_code)
+        req_ok = bool(request_ok) if request_ok is not None else (200 <= http_status < 300)
+        schema_ok_value = bool(schema_ok) if schema_ok is not None else error is None
+        required_ok_value = (
+            bool(required_fields_ok) if required_fields_ok is not None else not bool(missing_fields)
+        )
+        stream_ok_value = bool(stream_rules_ok) if stream_rules_ok is not None else True
+
+        status: str = "pass"
+        fail_stage: str | None = None
+        reason_code: str | None = None
+        if not req_ok:
+            status = "fail"
+            fail_stage = "request"
+            reason_code = f"HTTP_{http_status}" if http_status else "REQUEST_ERROR"
+        elif not schema_ok_value:
+            status = "fail"
+            fail_stage = "schema"
+            reason_code = "SCHEMA_INVALID"
+        elif not required_ok_value:
+            status = "fail"
+            fail_stage = "required_fields"
+            reason_code = "REQUIRED_FIELDS_MISSING"
+        elif not stream_ok_value:
+            status = "fail"
+            fail_stage = "stream_rules"
+            reason_code = "STREAM_RULES_FAILED"
+
+        param_name = test.focus_param.get("name") if isinstance(test.focus_param, dict) else None
+        model_value = params.get("model")
+        return {
+            "version": "case_result.v1",
+            "test_id": f"{self.suite.provider}/{path}::{test.name}",
             "test_name": test.name,
-            "params": params,
-            "status_code": status_code,
-            "response_body": response_body,
-            "error": error,
-            "missing_fields": missing_fields or [],
-            "expected_fields": expected_fields or [],
-            "tested_param": tested_param,
             "is_baseline": test.baseline,
-            "missing_events": missing_events or [],
+            "provider": self.suite.provider,
+            "model": str(model_value) if isinstance(model_value, str) else None,
+            "route": None,
+            "endpoint": endpoint,
+            "parameter": {
+                "name": str(param_name) if isinstance(param_name, str) else None,
+                "value": tested_param,
+                "value_type": type(tested_param).__name__ if tested_param is not None else "none",
+            },
+            "request": {
+                "method": test.method or self.suite.method,
+                "endpoint": endpoint,
+                "params": params,
+                "ok": req_ok,
+                "http_status": http_status,
+                "latency_ms": latency_ms or 0,
+            },
+            "response": {
+                "http_status": http_status,
+                "body": response_body,
+            },
+            "validation": {
+                "schema_ok": schema_ok_value,
+                "required_fields_ok": required_ok_value,
+                "stream_rules_ok": stream_ok_value,
+                "missing_fields": list(missing_fields or []),
+                "missing_events": list(missing_events or []),
+            },
+            "result": {
+                "status": status,
+                "fail_stage": fail_stage,
+                "reason_code": reason_code,
+                "reason": error,
+            },
+            "started_at": started_at or "",
+            "finished_at": finished_at or "",
+            "meta": {
+                "expected_fields": list(expected_fields or []),
+                "stream": bool(test.stream),
+            },
         }
-        if request_ok is not None:
-            result["request_ok"] = request_ok
-        if schema_ok is not None:
-            result["schema_ok"] = schema_ok
-        if required_fields_ok is not None:
-            result["required_fields_ok"] = required_fields_ok
-        if stream_rules_ok is not None:
-            result["stream_rules_ok"] = stream_rules_ok
-        if started_at is not None:
-            result["started_at"] = started_at
-        if finished_at is not None:
-            result["finished_at"] = finished_at
-        if latency_ms is not None:
-            result["latency_ms"] = latency_ms
-        return result
 
     def _prepare_upload_files(
         self, test: SpecTestCase
@@ -287,38 +333,33 @@ class ConfigDrivenTestRunner:
 
         return raw
 
-    def run_test(self, test: SpecTestCase) -> bool:
+    def run_test(self, test: SpecTestCase) -> CaseResult:
         """Run a single test.
 
         Args:
             test: test case
 
         Returns:
-            True if the test passes
+            Normalized case result
         """
-        # Full test name: provider/endpoint::test_name
-        endpoint_path = (test.endpoint_override or self.suite.endpoint).lstrip("/")
-        test_full_name = f"{self.suite.provider}/{endpoint_path}::{test.name}"
+        endpoint = test.endpoint_override or self.suite.endpoint
+        params = self.build_params(test)
+        method = test.method or self.suite.method
 
-        # Set context
-        token = current_test_name.set(test_full_name)
+        set_test_name = getattr(self.client, "set_current_test_name", None)
+        if callable(set_test_name):
+            set_test_name(test.name)
         try:
-            endpoint = test.endpoint_override or self.suite.endpoint
-            params = self.build_params(test)
-            method = test.method or self.suite.method
-
             if test.stream:
                 return self._run_stream_test(test, endpoint, params, method=method)
-            else:
-                # Resolve schema overrides
-                response_schema = self.response_schema
-                if test.schemas and "response" in test.schemas:
-                    response_schema = get_schema(test.schemas["response"])
-
-                return self._run_normal_test(test, endpoint, params, response_schema, method=method)
+            # Resolve schema overrides
+            response_schema = self.response_schema
+            if test.schemas and "response" in test.schemas:
+                response_schema = get_schema(test.schemas["response"])
+            return self._run_normal_test(test, endpoint, params, response_schema, method=method)
         finally:
-            # Clear context
-            current_test_name.reset(token)
+            if callable(set_test_name):
+                set_test_name(None)
 
     def _run_normal_test(
         self,
@@ -328,7 +369,7 @@ class ConfigDrivenTestRunner:
         response_schema: type[BaseModel] | None = None,
         *,
         method: str,
-    ) -> bool:
+    ) -> CaseResult:
         """Run a non-streaming request test."""
         started_at = datetime.now(UTC).isoformat()
         start_monotonic = time.monotonic()
@@ -384,8 +425,6 @@ class ConfigDrivenTestRunner:
                     missing_required.append(field_path)
                     validation_errors.append(f"Missing required field: {field_path}")
 
-        is_valid = schema_valid and not missing_required
-
         if not http_success:
             # HTTP failure: skip schema validation
             error_message = f"HTTP {status_code}: {response_body}"
@@ -401,33 +440,29 @@ class ConfigDrivenTestRunner:
         http_success = 200 <= status_code < 300
         schema_ok = http_success and schema_valid
         required_fields_ok = http_success and not bool(missing_fields)
-        self.collector.record_result(
-            self._make_test_result(
-                test=test,
-                params=params,
-                status_code=status_code,
-                response_body=response_body,
-                error=error_message,
-                missing_fields=missing_fields,
-                expected_fields=expected_fields,
-                tested_param=tested_param,
-                request_ok=http_success,
-                schema_ok=schema_ok,
-                required_fields_ok=required_fields_ok,
-                stream_rules_ok=True,
-                started_at=started_at,
-                finished_at=finished_at,
-                latency_ms=latency_ms,
-            )
+        return self._make_test_result(
+            test=test,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_message,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+            tested_param=tested_param,
+            request_ok=http_success,
+            schema_ok=schema_ok,
+            required_fields_ok=required_fields_ok,
+            stream_rules_ok=True,
+            started_at=started_at,
+            finished_at=finished_at,
+            latency_ms=latency_ms,
         )
-
-        return http_success and is_valid
 
     # _format_stream_response removed (moved to StreamParser.format_stream_response)
 
     def _run_stream_test(
         self, test: SpecTestCase, endpoint: str, params: dict[str, Any], *, method: str
-    ) -> bool:
+    ) -> CaseResult:
         """Run a streaming request test (this layer collects chunks and logs)."""
         started_at = datetime.now(UTC).isoformat()
         start_monotonic = time.monotonic()
@@ -468,66 +503,57 @@ class ConfigDrivenTestRunner:
 
                 # If we did not receive any chunks at all, fail early.
                 if not all_raw_chunks:
-                    self.collector.record_result(
-                        self._make_test_result(
-                            test=test,
-                            params=params,
-                            status_code=http_status_code,
-                            response_body=None,
-                            error="No chunks received",
-                            tested_param=tested_param,
-                            request_ok=False,
-                            schema_ok=False,
-                            required_fields_ok=False,
-                            stream_rules_ok=False,
-                            started_at=started_at,
-                            finished_at=_finish_timing()[0],
-                            latency_ms=_finish_timing()[1],
-                        )
+                    return self._make_test_result(
+                        test=test,
+                        params=params,
+                        status_code=http_status_code,
+                        response_body=None,
+                        error="No chunks received",
+                        tested_param=tested_param,
+                        request_ok=False,
+                        schema_ok=False,
+                        required_fields_ok=False,
+                        stream_rules_ok=False,
+                        started_at=started_at,
+                        finished_at=_finish_timing()[0],
+                        latency_ms=_finish_timing()[1],
                     )
-                    return False
             except httpx.HTTPStatusError as e:
                 # HTTP error (4xx/5xx)
                 http_status_code = e.response.status_code
                 error_body = ResponseParser.parse_response(e.response)
-                self.collector.record_result(
-                    self._make_test_result(
-                        test=test,
-                        params=params,
-                        status_code=http_status_code,
-                        response_body=error_body,
-                        error=f"HTTP {http_status_code}: {e.response.text}",
-                        tested_param=tested_param,
-                        request_ok=False,
-                        schema_ok=False,
-                        required_fields_ok=False,
-                        stream_rules_ok=False,
-                        started_at=started_at,
-                        finished_at=_finish_timing()[0],
-                        latency_ms=_finish_timing()[1],
-                    )
+                return self._make_test_result(
+                    test=test,
+                    params=params,
+                    status_code=http_status_code,
+                    response_body=error_body,
+                    error=f"HTTP {http_status_code}: {e.response.text}",
+                    tested_param=tested_param,
+                    request_ok=False,
+                    schema_ok=False,
+                    required_fields_ok=False,
+                    stream_rules_ok=False,
+                    started_at=started_at,
+                    finished_at=_finish_timing()[0],
+                    latency_ms=_finish_timing()[1],
                 )
-                return False
             except Exception as e:
                 # Other errors (network/timeout/etc.)
-                self.collector.record_result(
-                    self._make_test_result(
-                        test=test,
-                        params=params,
-                        status_code=0,
-                        response_body=None,
-                        error=f"Connection error: {e}",
-                        tested_param=tested_param,
-                        request_ok=False,
-                        schema_ok=False,
-                        required_fields_ok=False,
-                        stream_rules_ok=False,
-                        started_at=started_at,
-                        finished_at=_finish_timing()[0],
-                        latency_ms=_finish_timing()[1],
-                    )
+                return self._make_test_result(
+                    test=test,
+                    params=params,
+                    status_code=0,
+                    response_body=None,
+                    error=f"Connection error: {e}",
+                    tested_param=tested_param,
+                    request_ok=False,
+                    schema_ok=False,
+                    required_fields_ok=False,
+                    stream_rules_ok=False,
+                    started_at=started_at,
+                    finished_at=_finish_timing()[0],
+                    latency_ms=_finish_timing()[1],
                 )
-                return False
 
             # Stage 2: log the full response (runner responsibility).
             # Convert raw SSE/stream bytes into a human-friendly JSON structure (single pass).
@@ -542,24 +568,21 @@ class ConfigDrivenTestRunner:
                         "raw_size_bytes": sum(len(c) for c in all_raw_chunks),
                         "parse_error": str(e),
                     }
-                    self.collector.record_result(
-                        self._make_test_result(
-                            test=test,
-                            params=params,
-                            status_code=http_status_code,
-                            response_body=error_body,
-                            error=f"Stream parse error: {e}",
-                            tested_param=tested_param,
-                            request_ok=True,
-                            schema_ok=False,
-                            required_fields_ok=True,
-                            stream_rules_ok=False,
-                            started_at=started_at,
-                            finished_at=_finish_timing()[0],
-                            latency_ms=_finish_timing()[1],
-                        )
+                    return self._make_test_result(
+                        test=test,
+                        params=params,
+                        status_code=http_status_code,
+                        response_body=error_body,
+                        error=f"Stream parse error: {e}",
+                        tested_param=tested_param,
+                        request_ok=True,
+                        schema_ok=False,
+                        required_fields_ok=True,
+                        stream_rules_ok=False,
+                        started_at=started_at,
+                        finished_at=_finish_timing()[0],
+                        latency_ms=_finish_timing()[1],
                     )
-                    return False
 
                 # Stage 2: if parsing produced no structured chunks, fail early.
                 if not parsed_chunks:
@@ -569,24 +592,21 @@ class ConfigDrivenTestRunner:
                         "error": "No parsed chunks received",
                         "formatted": formatted_response,
                     }
-                    self.collector.record_result(
-                        self._make_test_result(
-                            test=test,
-                            params=params,
-                            status_code=http_status_code,
-                            response_body=error_body,
-                            error="No chunks received",
-                            tested_param=tested_param,
-                            request_ok=True,
-                            schema_ok=False,
-                            required_fields_ok=True,
-                            stream_rules_ok=False,
-                            started_at=started_at,
-                            finished_at=_finish_timing()[0],
-                            latency_ms=_finish_timing()[1],
-                        )
+                    return self._make_test_result(
+                        test=test,
+                        params=params,
+                        status_code=http_status_code,
+                        response_body=error_body,
+                        error="No chunks received",
+                        tested_param=tested_param,
+                        request_ok=True,
+                        schema_ok=False,
+                        required_fields_ok=True,
+                        stream_rules_ok=False,
+                        started_at=started_at,
+                        finished_at=_finish_timing()[0],
+                        latency_ms=_finish_timing()[1],
                     )
-                    return False
             # Stage 3: validate stream chunks against schema (if configured)
             validation_errors: list[str] = []
             if self.chunk_schema and parsed_chunks:
@@ -610,29 +630,26 @@ class ConfigDrivenTestRunner:
                 if validation_errors:
                     # Stage 3 failed: return early to avoid duplicate summary logs in stage 4.
                     content = parser.get_complete_content()
-                    self.collector.record_result(
-                        self._make_test_result(
-                            test=test,
-                            params=params,
-                            status_code=http_status_code,
-                            response_body={
-                                "chunks_count": len(parser.all_chunks),
-                                "content_length": len(content),
-                                "validation_errors": validation_errors,
-                                "invalid_chunks": invalid_chunks[:5],
-                            },
-                            error="; ".join(validation_errors),
-                            tested_param=tested_param,
-                            request_ok=True,
-                            schema_ok=False,
-                            required_fields_ok=True,
-                            stream_rules_ok=True,
-                            started_at=started_at,
-                            finished_at=_finish_timing()[0],
-                            latency_ms=_finish_timing()[1],
-                        )
+                    return self._make_test_result(
+                        test=test,
+                        params=params,
+                        status_code=http_status_code,
+                        response_body={
+                            "chunks_count": len(parser.all_chunks),
+                            "content_length": len(content),
+                            "validation_errors": validation_errors,
+                            "invalid_chunks": invalid_chunks[:5],
+                        },
+                        error="; ".join(validation_errors),
+                        tested_param=tested_param,
+                        request_ok=True,
+                        schema_ok=False,
+                        required_fields_ok=True,
+                        stream_rules_ok=True,
+                        started_at=started_at,
+                        finished_at=_finish_timing()[0],
+                        latency_ms=_finish_timing()[1],
                     )
-                    return False
 
             # Stage 4: validate required observations/events
             effective_stream_rules = test.stream_expectations or self.suite.stream_expectations
@@ -658,83 +675,73 @@ class ConfigDrivenTestRunner:
 
             # If there are validation errors, record failure
             if validation_errors:
-                self.collector.record_result(
-                    self._make_test_result(
-                        test=test,
-                        params=params,
-                        status_code=http_status_code,
-                        response_body={
-                            "chunks_count": len(parser.all_chunks),
-                            "content_length": len(content),
-                            "validation_errors": validation_errors,
-                        },
-                        error="; ".join(validation_errors),
-                        tested_param=tested_param,
-                        request_ok=True,
-                        schema_ok=True,
-                        required_fields_ok=True,
-                        stream_rules_ok=False,
-                        missing_events=missing_events,
-                        started_at=started_at,
-                        finished_at=_finish_timing()[0],
-                        latency_ms=_finish_timing()[1],
-                    )
-                )
-                return False
-
-            # Record success
-            self.collector.record_result(
-                self._make_test_result(
+                return self._make_test_result(
                     test=test,
                     params=params,
                     status_code=http_status_code,
                     response_body={
                         "chunks_count": len(parser.all_chunks),
                         "content_length": len(content),
+                        "validation_errors": validation_errors,
                     },
-                    error=None,
+                    error="; ".join(validation_errors),
                     tested_param=tested_param,
                     request_ok=True,
                     schema_ok=True,
                     required_fields_ok=True,
-                    stream_rules_ok=True,
+                    stream_rules_ok=False,
+                    missing_events=missing_events,
                     started_at=started_at,
                     finished_at=_finish_timing()[0],
                     latency_ms=_finish_timing()[1],
                 )
-            )
 
-            return True
+            # Record success
+            return self._make_test_result(
+                test=test,
+                params=params,
+                status_code=http_status_code,
+                response_body={
+                    "chunks_count": len(parser.all_chunks),
+                    "content_length": len(content),
+                },
+                error=None,
+                tested_param=tested_param,
+                request_ok=True,
+                schema_ok=True,
+                required_fields_ok=True,
+                stream_rules_ok=True,
+                started_at=started_at,
+                finished_at=_finish_timing()[0],
+                latency_ms=_finish_timing()[1],
+            )
 
         except Exception as e:
             # Fallback: unexpected error
-            self.collector.record_result(
-                self._make_test_result(
-                    test=test,
-                    params=params,
-                    status_code=500,
-                    response_body=None,
-                    error=f"Unexpected error: {e}",
-                    tested_param=tested_param,
-                    request_ok=False,
-                    schema_ok=False,
-                    required_fields_ok=False,
-                    stream_rules_ok=False,
-                    started_at=started_at,
-                    finished_at=_finish_timing()[0],
-                    latency_ms=_finish_timing()[1],
-                )
+            return self._make_test_result(
+                test=test,
+                params=params,
+                status_code=500,
+                response_body=None,
+                error=f"Unexpected error: {e}",
+                tested_param=tested_param,
+                request_ok=False,
+                schema_ok=False,
+                required_fields_ok=False,
+                stream_rules_ok=False,
+                started_at=started_at,
+                finished_at=_finish_timing()[0],
+                latency_ms=_finish_timing()[1],
             )
-            return False
         finally:
             for f in opened_files:
                 f.close()
 
-    def run_all(self) -> dict[str, bool]:
+    def run_all(self) -> dict[str, CaseResult]:
         """Run all tests in the suite.
 
         Returns:
-            Mapping of test name -> pass/fail
+            Mapping of test name -> case result
         """
         results = {}
 
@@ -745,40 +752,35 @@ class ConfigDrivenTestRunner:
 
     # ==================== Async Methods ====================
 
-    async def run_test_async(self, test: SpecTestCase) -> bool:
+    async def run_test_async(self, test: SpecTestCase) -> CaseResult:
         """Run a single test asynchronously.
 
         Args:
             test: test case
 
         Returns:
-            True if the test passes
+            Normalized case result
         """
-        # Full test name: provider/endpoint::test_name
-        endpoint_path = (test.endpoint_override or self.suite.endpoint).lstrip("/")
-        test_full_name = f"{self.suite.provider}/{endpoint_path}::{test.name}"
+        endpoint = test.endpoint_override or self.suite.endpoint
+        params = self.build_params(test)
+        method = test.method or self.suite.method
 
-        # Set context
-        token = current_test_name.set(test_full_name)
+        set_test_name = getattr(self.client, "set_current_test_name", None)
+        if callable(set_test_name):
+            set_test_name(test.name)
         try:
-            endpoint = test.endpoint_override or self.suite.endpoint
-            params = self.build_params(test)
-            method = test.method or self.suite.method
-
             if test.stream:
                 return await self._run_stream_test_async(test, endpoint, params, method=method)
-            else:
-                # Resolve schema overrides
-                response_schema = self.response_schema
-                if test.schemas and "response" in test.schemas:
-                    response_schema = get_schema(test.schemas["response"])
-
-                return await self._run_normal_test_async(
-                    test, endpoint, params, response_schema, method=method
-                )
+            # Resolve schema overrides
+            response_schema = self.response_schema
+            if test.schemas and "response" in test.schemas:
+                response_schema = get_schema(test.schemas["response"])
+            return await self._run_normal_test_async(
+                test, endpoint, params, response_schema, method=method
+            )
         finally:
-            # Clear context
-            current_test_name.reset(token)
+            if callable(set_test_name):
+                set_test_name(None)
 
     async def _run_normal_test_async(
         self,
@@ -788,7 +790,7 @@ class ConfigDrivenTestRunner:
         response_schema: type[BaseModel] | None = None,
         *,
         method: str,
-    ) -> bool:
+    ) -> CaseResult:
         """Run a non-streaming request test asynchronously."""
         started_at = datetime.now(UTC).isoformat()
         start_monotonic = time.monotonic()
@@ -843,8 +845,6 @@ class ConfigDrivenTestRunner:
                     missing_required.append(field_path)
                     validation_errors.append(f"Missing required field: {field_path}")
 
-        is_valid = schema_valid and not missing_required
-
         if not http_success:
             # HTTP failure: skip schema validation
             error_message = f"HTTP {status_code}: {response_body}"
@@ -860,31 +860,27 @@ class ConfigDrivenTestRunner:
         http_success = 200 <= status_code < 300
         schema_ok = http_success and schema_valid
         required_fields_ok = http_success and not bool(missing_fields)
-        self.collector.record_result(
-            self._make_test_result(
-                test=test,
-                params=params,
-                status_code=status_code,
-                response_body=response_body,
-                error=error_message,
-                missing_fields=missing_fields,
-                expected_fields=expected_fields,
-                tested_param=tested_param,
-                request_ok=http_success,
-                schema_ok=schema_ok,
-                required_fields_ok=required_fields_ok,
-                stream_rules_ok=True,
-                started_at=started_at,
-                finished_at=finished_at,
-                latency_ms=latency_ms,
-            )
+        return self._make_test_result(
+            test=test,
+            params=params,
+            status_code=status_code,
+            response_body=response_body,
+            error=error_message,
+            missing_fields=missing_fields,
+            expected_fields=expected_fields,
+            tested_param=tested_param,
+            request_ok=http_success,
+            schema_ok=schema_ok,
+            required_fields_ok=required_fields_ok,
+            stream_rules_ok=True,
+            started_at=started_at,
+            finished_at=finished_at,
+            latency_ms=latency_ms,
         )
-
-        return http_success and is_valid
 
     async def _run_stream_test_async(
         self, test: SpecTestCase, endpoint: str, params: dict[str, Any], *, method: str
-    ) -> bool:
+    ) -> CaseResult:
         """Run a streaming request test asynchronously."""
         started_at = datetime.now(UTC).isoformat()
         start_monotonic = time.monotonic()
@@ -924,89 +920,77 @@ class ConfigDrivenTestRunner:
 
                 # If we did not receive any chunks at all, fail early.
                 if not all_raw_chunks:
-                    self.collector.record_result(
-                        self._make_test_result(
-                            test=test,
-                            params=params,
-                            status_code=http_status_code,
-                            response_body=None,
-                            error="No chunks received",
-                            tested_param=tested_param,
-                            request_ok=False,
-                            schema_ok=False,
-                            required_fields_ok=False,
-                            stream_rules_ok=False,
-                            started_at=started_at,
-                            finished_at=_finish_timing()[0],
-                            latency_ms=_finish_timing()[1],
-                        )
+                    return self._make_test_result(
+                        test=test,
+                        params=params,
+                        status_code=http_status_code,
+                        response_body=None,
+                        error="No chunks received",
+                        tested_param=tested_param,
+                        request_ok=False,
+                        schema_ok=False,
+                        required_fields_ok=False,
+                        stream_rules_ok=False,
+                        started_at=started_at,
+                        finished_at=_finish_timing()[0],
+                        latency_ms=_finish_timing()[1],
                     )
-                    return False
             except httpx.HTTPStatusError as e:
                 # HTTP error (4xx/5xx)
                 http_status_code = e.response.status_code
                 error_body = ResponseParser.parse_response(e.response)
-                self.collector.record_result(
-                    self._make_test_result(
-                        test=test,
-                        params=params,
-                        status_code=http_status_code,
-                        response_body=error_body,
-                        error=f"HTTP {http_status_code}: {e.response.text}",
-                        tested_param=tested_param,
-                        request_ok=False,
-                        schema_ok=False,
-                        required_fields_ok=False,
-                        stream_rules_ok=False,
-                        started_at=started_at,
-                        finished_at=_finish_timing()[0],
-                        latency_ms=_finish_timing()[1],
-                    )
+                return self._make_test_result(
+                    test=test,
+                    params=params,
+                    status_code=http_status_code,
+                    response_body=error_body,
+                    error=f"HTTP {http_status_code}: {e.response.text}",
+                    tested_param=tested_param,
+                    request_ok=False,
+                    schema_ok=False,
+                    required_fields_ok=False,
+                    stream_rules_ok=False,
+                    started_at=started_at,
+                    finished_at=_finish_timing()[0],
+                    latency_ms=_finish_timing()[1],
                 )
-                return False
             except Exception as e:
                 # Other errors (network/timeout/etc.)
-                self.collector.record_result(
-                    self._make_test_result(
-                        test=test,
-                        params=params,
-                        status_code=0,
-                        response_body=None,
-                        error=f"Connection error: {e}",
-                        tested_param=tested_param,
-                        request_ok=False,
-                        schema_ok=False,
-                        required_fields_ok=False,
-                        stream_rules_ok=False,
-                        started_at=started_at,
-                        finished_at=_finish_timing()[0],
-                        latency_ms=_finish_timing()[1],
-                    )
+                return self._make_test_result(
+                    test=test,
+                    params=params,
+                    status_code=0,
+                    response_body=None,
+                    error=f"Connection error: {e}",
+                    tested_param=tested_param,
+                    request_ok=False,
+                    schema_ok=False,
+                    required_fields_ok=False,
+                    stream_rules_ok=False,
+                    started_at=started_at,
+                    finished_at=_finish_timing()[0],
+                    latency_ms=_finish_timing()[1],
                 )
-                return False
 
             # Stage 2: parse all chunks
             try:
                 formatted_response, parsed_chunks = parser.format_stream_response(all_raw_chunks)
             except Exception as e:
-                self.collector.record_result(
-                    self._make_test_result(
-                        test=test,
-                        params=params,
-                        status_code=http_status_code,
-                        response_body=None,
-                        error=f"Parse error: {e}",
-                        tested_param=tested_param,
-                        request_ok=True,
-                        schema_ok=False,
-                        required_fields_ok=False,
-                        stream_rules_ok=False,
-                        started_at=started_at,
-                        finished_at=_finish_timing()[0],
-                        latency_ms=_finish_timing()[1],
-                    )
+                return self._make_test_result(
+                    test=test,
+                    params=params,
+                    status_code=http_status_code,
+                    response_body=None,
+                    error=f"Parse error: {e}",
+                    tested_param=tested_param,
+                    request_ok=True,
+                    schema_ok=False,
+                    required_fields_ok=False,
+                    stream_rules_ok=False,
+                    started_at=started_at,
+                    finished_at=_finish_timing()[0],
+                    latency_ms=_finish_timing()[1],
                 )
-                return False
 
             # Log the aggregated stream response
             # Stage 3: validate stream rules
@@ -1040,45 +1024,38 @@ class ConfigDrivenTestRunner:
                     stream_errors = [str(e)]
             # Build final result
             error_msg = "; ".join(stream_errors) if stream_errors else None
-            self.collector.record_result(
-                self._make_test_result(
-                    test=test,
-                    params=params,
-                    status_code=http_status_code,
-                    response_body={"chunks": parsed_chunks},
-                    error=error_msg,
-                    tested_param=tested_param,
-                    request_ok=True,
-                    schema_ok=True,
-                    required_fields_ok=True,
-                    stream_rules_ok=stream_rules_ok,
-                    started_at=started_at,
-                    finished_at=_finish_timing()[0],
-                    latency_ms=_finish_timing()[1],
-                )
+            return self._make_test_result(
+                test=test,
+                params=params,
+                status_code=http_status_code,
+                response_body={"chunks": parsed_chunks},
+                error=error_msg,
+                tested_param=tested_param,
+                request_ok=True,
+                schema_ok=True,
+                required_fields_ok=True,
+                stream_rules_ok=stream_rules_ok,
+                started_at=started_at,
+                finished_at=_finish_timing()[0],
+                latency_ms=_finish_timing()[1],
             )
-
-            return stream_rules_ok
         except Exception as e:
             # Catch-all for unexpected errors
-            self.collector.record_result(
-                self._make_test_result(
-                    test=test,
-                    params=params,
-                    status_code=500,
-                    response_body=None,
-                    error=f"Unexpected error: {e}",
-                    tested_param=tested_param,
-                    request_ok=False,
-                    schema_ok=False,
-                    required_fields_ok=False,
-                    stream_rules_ok=False,
-                    started_at=started_at,
-                    finished_at=_finish_timing()[0],
-                    latency_ms=_finish_timing()[1],
-                )
+            return self._make_test_result(
+                test=test,
+                params=params,
+                status_code=500,
+                response_body=None,
+                error=f"Unexpected error: {e}",
+                tested_param=tested_param,
+                request_ok=False,
+                schema_ok=False,
+                required_fields_ok=False,
+                stream_rules_ok=False,
+                started_at=started_at,
+                finished_at=_finish_timing()[0],
+                latency_ms=_finish_timing()[1],
             )
-            return False
         finally:
             for f in opened_files:
                 f.close()

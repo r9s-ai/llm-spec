@@ -108,8 +108,8 @@ export function retryRunTest(runId: string, testName: string): Promise<RunJob> {
   });
 }
 
-export function getRunResult(runId: string): Promise<Record<string, unknown>> {
-  return request<Record<string, unknown>>(`/api/runs/${runId}/result`);
+export function getRunTaskResult(runId: string): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/api/runs/${runId}/task-result`);
 }
 
 export function getRunEvents(runId: string, afterSeq = 0): Promise<RunEvent[]> {

@@ -1,2 +1,4 @@
 name = "gpt-5.2"
 routes = ["responses"]
+include_tests=["baseline","instructions"]
+exclude_tests=["instructions"]

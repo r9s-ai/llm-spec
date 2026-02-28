@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { createRun, getRun, getRunEvents, getRunResult, streamRunEvents } from "../api";
+import { createRun, getRun, getRunEvents, getRunTaskResult, streamRunEvents } from "../api";
 import type { RunEvent, RunJob, RunMode, TestSelectionMap } from "../types";
 
 export function useRuns() {
@@ -41,7 +41,7 @@ export function useRuns() {
       }
 
       try {
-        const result = await getRunResult(runId);
+        const result = await getRunTaskResult(runId);
         setRunResultById((prev) => ({ ...prev, [runId]: result }));
       } catch {
         // Ignore result loading failures for unfinished runs.
