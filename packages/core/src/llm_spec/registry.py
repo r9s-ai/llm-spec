@@ -177,10 +177,28 @@ def load_registry_suites(
             routes_for_model = model_data.get("routes", [])
             if not isinstance(routes_for_model, list):
                 raise ValueError(f"models/{model_id}.toml routes must be a list")
-            skip_tests = set(model_data.get("skip_tests", []) or [])
-            if "baseline" in skip_tests:
+            if "skip_tests" in model_data:
                 raise ValueError(
-                    f"models/{model_id}.toml cannot skip baseline test; baseline is required."
+                    f"models/{model_id}.toml uses deprecated 'skip_tests'. "
+                    "Use 'include_tests' and/or 'exclude_tests'."
+                )
+            include_tests_raw = model_data.get("include_tests")
+            if include_tests_raw is not None and not isinstance(include_tests_raw, list):
+                raise ValueError(f"models/{model_id}.toml include_tests must be a list")
+            include_tests = (
+                {str(name) for name in include_tests_raw}
+                if isinstance(include_tests_raw, list)
+                else None
+            )
+            if include_tests is not None and "baseline" not in include_tests:
+                raise ValueError(f"models/{model_id}.toml include_tests must include 'baseline'.")
+            exclude_tests_raw = model_data.get("exclude_tests", []) or []
+            if not isinstance(exclude_tests_raw, list):
+                raise ValueError(f"models/{model_id}.toml exclude_tests must be a list")
+            exclude_tests = {str(name) for name in exclude_tests_raw}
+            if "baseline" in exclude_tests:
+                raise ValueError(
+                    f"models/{model_id}.toml cannot exclude baseline test; baseline is required."
                 )
             if "base_params_override" in model_data:
                 raise ValueError(
@@ -208,14 +226,11 @@ def load_registry_suites(
                 tests = suite.get("tests", [])
                 if not isinstance(tests, list):
                     tests = []
-                filtered_tests = []
+                expanded_tests = []
                 for test in tests:
                     if not isinstance(test, dict):
                         continue
-                    name = str(test.get("name", ""))
-                    if name and name in skip_tests:
-                        continue
-                    filtered_tests.append(test)
+                    expanded_tests.append(test)
 
                 for extra in extra_tests:
                     if not isinstance(extra, dict):
@@ -223,7 +238,16 @@ def load_registry_suites(
                     if str(extra.get("route", "")) != route_name:
                         continue
                     extra_test = {k: copy.deepcopy(v) for k, v in extra.items() if k != "route"}
-                    filtered_tests.append(extra_test)
+                    expanded_tests.append(extra_test)
+
+                filtered_tests: list[dict[str, Any]] = []
+                for test in expanded_tests:
+                    name = str(test.get("name", ""))
+                    if include_tests is not None and name not in include_tests:
+                        continue
+                    if name and name in exclude_tests:
+                        continue
+                    filtered_tests.append(test)
 
                 baseline_tests = [
                     t for t in filtered_tests if isinstance(t, dict) and t.get("baseline") is True
