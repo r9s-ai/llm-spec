@@ -177,7 +177,9 @@ Gemini-style endpoint template:
 
 - File name is the model ID.
 - `routes = [...]` is required and lists supported route names.
-- Optional `skip_tests = [...]` removes route tests by test name, but cannot include `baseline`.
+- Optional `include_tests = [...]` keeps only listed tests by name (applies after adding `extra_tests`).
+- Optional `exclude_tests = [...]` removes listed tests by name (applies after `include_tests`).
+- `baseline` must remain after filtering (cannot be excluded; if `include_tests` is set it must contain `baseline`).
 - Optional `[baseline_params_override]` deep-merges into route baseline params.
 - Optional `[[extra_tests]]` appends model-specific tests (use `route = "<route_name>"` to target route).
 - `[[extra_tests]]` entries use the same test schema as `routes[].tests`; if an extra test includes `params`, those values also override baseline params when that test runs.
@@ -197,9 +199,15 @@ Complete template example:
 name = "GPT-4o mini"
 routes = ["chat_completions", "responses"]
 
-# Optional: skip route tests by test name
-skip_tests = [
-  "logit_bias",
+# Optional: keep only listed tests by name
+include_tests = [
+  "baseline",
+  "reasoning_effort[high]",
+  "text.verbosity[low]",
+]
+
+# Optional: remove listed tests by name
+exclude_tests = [
   "service_tier",
 ]
 
@@ -267,8 +275,9 @@ Notes for variants:
   1. start from route template
   2. inject model (`baseline.params.model` for non-Gemini, endpoint placeholder replacement for Gemini)
   3. apply `baseline_params_override`
-  4. remove `skip_tests`
-  5. append `extra_tests`
+  4. append `extra_tests`
+  5. apply `include_tests` (if configured)
+  6. apply `exclude_tests`
 
 ## Validate by Running
 

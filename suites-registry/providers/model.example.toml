@@ -1,0 +1,54 @@
+# Example model config with all supported fields.
+# Place real files at: providers/<provider>/models/<model-id>.toml
+
+name = "Example Model"
+routes = ["chat_completions", "responses"]
+
+# Optional: only keep listed tests by name (must include "baseline" when set).
+include_tests = ["baseline", "reasoning_effort[high]", "text.verbosity[low]"]
+
+# Optional: remove listed tests by name (cannot include "baseline").
+exclude_tests = ["service_tier"]
+
+# Optional: deep-merge into each route baseline test params.
+[baseline_params_override]
+temperature = 0.2
+max_completion_tokens = 512
+
+[baseline_params_override.metadata]
+owner = "example"
+env = "test"
+
+# Optional: append model-specific tests.
+[[extra_tests]]
+route = "chat_completions"
+name = "reasoning_effort[high]"
+description = "Example extra test with all test fields."
+params = { reasoning_effort = "high", max_completion_tokens = 1024 }
+focus_param = { name = "reasoning_effort", value = "high" }
+baseline = false
+stream = false
+stream_expectations = { min_observations = 2, checks = [{ type = "required_terminal", value = "[DONE]" }] }
+endpoint_override = "/v1/chat/completions"
+files = { file = "assets/audio/hello_en.mp3" }
+schemas = { response = "openai.ChatCompletionResponse", stream_chunk = "openai.ChatCompletionChunkResponse" }
+required_fields = ["id", "choices[0].message.role"]
+method = "POST"
+tags = ["core", "example"]
+variants = { reasoning_effort = ["low", "medium", "high"] }
+
+[[extra_tests]]
+route = "responses"
+name = "text.verbosity[low]"
+description = "Second example test variant."
+params = { text = { verbosity = "low" } }
+focus_param = { name = "text.verbosity", value = "low" }
+baseline = false
+stream = true
+stream_expectations = { min_observations = 1 }
+endpoint_override = "/v1/responses"
+files = { image = "assets/images/1x1.png" }
+schemas = { response = "openai.ResponseObject", stream_chunk = "openai.ResponsesStreamEvent" }
+required_fields = ["id", "output"]
+method = "POST"
+tags = ["streaming", "example"]
