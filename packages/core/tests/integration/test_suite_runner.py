@@ -26,7 +26,6 @@ from mock_loader import MockDataLoader
 
 from llm_spec.adapters.base import ProviderAdapter
 from llm_spec.registry import ExpandedSuite, load_registry_suites
-from llm_spec.reporting.collector import EndpointResultBuilder
 from llm_spec.runners import (
     ConfigDrivenTestRunner,
     SpecTestCase,
@@ -44,26 +43,13 @@ pytestmark = pytest.mark.integration
 REPO_ROOT = Path(__file__).resolve().parents[4]
 SUITES_DIR = REPO_ROOT / "suites-registry" / "providers"
 
-# Cache loaded suites and collectors
+# Cache loaded suites
 _SUITE_CACHE: dict[str, tuple[ExpandedSuite, SpecTestSuite]] = {}
-_COLLECTORS: dict[str, EndpointResultBuilder] = {}
 
 
 def _get_suite(suite_key: str) -> tuple[ExpandedSuite, SpecTestSuite]:
     """Get or load a TestSuite (cached)."""
     return _SUITE_CACHE[suite_key]
-
-
-def _get_collector(suite_key: str, client: ProviderAdapter) -> EndpointResultBuilder:
-    """Get or create a EndpointResultBuilder (cached by suite path)."""
-    if suite_key not in _COLLECTORS:
-        _expanded, suite = _get_suite(suite_key)
-        _COLLECTORS[suite_key] = EndpointResultBuilder(
-            provider=suite.provider,
-            endpoint=suite.endpoint,
-            base_url=client.get_base_url(),
-        )
-    return _COLLECTORS[suite_key]
 
 
 def discover_test_configs() -> list[tuple[str, str, str]]:
@@ -128,9 +114,6 @@ def test_from_config(
         pytest.skip(f"Client fixture '{client_fixture_name}' not found")
         return
 
-    # Shared EndpointResultBuilder per suite config
-    collector = _get_collector(suite_key, client)
-
     # Find the target test case
     test_case: SpecTestCase | None = None
     for t in suite.tests:
@@ -153,8 +136,9 @@ def test_from_config(
         )
 
     # Run
-    runner = ConfigDrivenTestRunner(suite, client, collector)
-    success = runner.run_test(test_case)
+    runner = ConfigDrivenTestRunner(suite, client)
+    case_result = runner.run_test(test_case)
+    success = (case_result.get("result") or {}).get("status") == "pass"
 
     # Assert
     assert success, f"Test '{test_name}' failed"

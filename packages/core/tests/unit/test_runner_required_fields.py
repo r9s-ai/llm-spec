@@ -1,6 +1,5 @@
 from unittest.mock import MagicMock
 
-from llm_spec.reporting.collector import EndpointResultBuilder
 from llm_spec.runners.runner import ConfigDrivenTestRunner, SpecTestCase, SpecTestSuite
 
 
@@ -10,9 +9,6 @@ def test_runner_required_fields_validation():
         provider="openai",
         endpoint="/v1/chat/completions",
         required_fields=["id", "choices[0].message.content"],
-    )
-    collector = EndpointResultBuilder(
-        provider="openai", endpoint="/v1/chat/completions", base_url="https://api.openai.com"
     )
     client = MagicMock()
 
@@ -28,7 +24,7 @@ def test_runner_required_fields_validation():
     }
     client.request.return_value = response_mock
 
-    runner = ConfigDrivenTestRunner(suite, client, collector)
+    runner = ConfigDrivenTestRunner(suite, client)
 
     test_case = SpecTestCase(
         name="test_missing_required",
@@ -37,21 +33,21 @@ def test_runner_required_fields_validation():
     )
 
     # Run test
-    passed = runner.run_test(test_case)
+    case_result = runner.run_test(test_case)
+    result = case_result.get("result")
+    result_dict = result if isinstance(result, dict) else {}
 
     # Verify
-    assert not passed
-    assert len(collector.errors) == 1
-    assert "Missing required field: choices[0].message.content" in collector.errors[0]["error"]
+    assert result_dict.get("status") == "fail"
+    assert "Missing required field: choices[0].message.content" in (
+        str(result_dict.get("reason") or "")
+    )
 
 
 def test_runner_test_level_required_fields():
     # Setup
     suite = SpecTestSuite(
         provider="openai", endpoint="/v1/chat/completions", required_fields=["id"]
-    )
-    collector = EndpointResultBuilder(
-        provider="openai", endpoint="/v1/chat/completions", base_url="https://api.openai.com"
     )
     client = MagicMock()
 
@@ -67,7 +63,7 @@ def test_runner_test_level_required_fields():
     }
     client.request.return_value = response_mock
 
-    runner = ConfigDrivenTestRunner(suite, client, collector)
+    runner = ConfigDrivenTestRunner(suite, client)
 
     test_case = SpecTestCase(
         name="test_extra_required",
@@ -79,11 +75,12 @@ def test_runner_test_level_required_fields():
     )
 
     # Run test
-    passed = runner.run_test(test_case)
+    case_result = runner.run_test(test_case)
+    result = case_result.get("result")
+    result_dict = result if isinstance(result, dict) else {}
 
     # Verify
-    assert not passed
-    assert (
-        "Missing required field: choices[0].message.reasoning_content"
-        in collector.errors[0]["error"]
+    assert result_dict.get("status") == "fail"
+    assert "Missing required field: choices[0].message.reasoning_content" in (
+        str(result_dict.get("reason") or "")
     )

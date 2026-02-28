@@ -153,8 +153,14 @@ The backend manages tables via SQLAlchemy metadata (run tables only):
 - `run_batch`
 - `run_job`
 - `run_event`
-- `run_result`
+- `task_result`
 - `run_test_result`
+
+Task result payload (`/api/runs/{run_id}/task-result`) now uses a task-centric schema:
+
+- `TaskResult` (`version = "task_result.v1"`)
+- flat `cases: CaseResult[]` list (instead of nested `providers[].endpoints[].tests[]`)
+- each `CaseResult` carries provider/model/route/endpoint/test-level execution + validation facts
 
 If you want a fresh DB:
 

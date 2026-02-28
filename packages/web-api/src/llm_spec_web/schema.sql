@@ -55,9 +55,9 @@ create table if not exists run_event (
     constraint uq_run_event_seq unique (run_id, seq)
 );
 
-create table if not exists run_result (
+create table if not exists task_result (
     run_id text primary key references run_job(id) on delete cascade,
-    run_result_json text not null,
+    task_result_json text not null,
     created_at text not null default (datetime('now'))
 );
 

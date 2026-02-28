@@ -239,15 +239,15 @@ paths:
               schema:
                 type: string
 
-  /api/runs/{run_id}/result:
+  /api/runs/{run_id}/task-result:
     get:
-      summary: Get run_result.json
-      operationId: getRunResult
+      summary: Get task_result.v1
+      operationId: getTaskResult
       parameters:
         - $ref: '#/components/parameters/RunId'
       responses:
         '200':
-          description: run result
+          description: task result
           content:
             application/json:
               schema:

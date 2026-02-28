@@ -134,29 +134,29 @@ class RunEvent(Base):
         return f"<RunEvent {self.run_id}:{self.seq} {self.event_type}>"
 
 
-class RunResult(Base):
-    """Run result model.
+class TaskResultRecord(Base):
+    """Task result model.
 
     Stores the final result of a completed run.
 
     Attributes:
         run_id: Run job ID (primary key).
-        run_result_json: Full result data as JSON.
+        task_result_json: Full result data as JSON.
         created_at: Creation timestamp.
     """
 
-    __tablename__ = "run_result"
+    __tablename__ = "task_result"
 
     run_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("run_job.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    run_result_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    task_result_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     def __repr__(self) -> str:
-        return f"<RunResult {self.run_id}>"
+        return f"<TaskResultRecord {self.run_id}>"
 
 
 class RunTestResult(Base):
