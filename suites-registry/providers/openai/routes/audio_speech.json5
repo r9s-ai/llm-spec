@@ -102,19 +102,19 @@
           {
             variant_id: "audio",
             value: "audio",
-            stream: false,
+            check_stream: false,
           },
           {
             variant_id: "sse",
             value: "sse",
-            stream: true,
+            check_stream: true,
           },
         ],
       },
       params: {
         stream_format: "$variant.value",
       },
-      stream: "$variant.stream",
+      check_stream: "$variant.check_stream",
       focus_param: {
         name: "stream_format",
         value: "$variant.value",

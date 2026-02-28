@@ -335,7 +335,7 @@
         partial_images: true,
         stream: true,
       },
-      stream: true,
+      check_stream: true,
       focus_param: {
         name: "stream",
         value: true,

@@ -295,7 +295,7 @@
     {
       name: "stream",
       description: "Basic streaming response test",
-      stream: true,
+      check_stream: true,
       params: {
         stream: true,
       },

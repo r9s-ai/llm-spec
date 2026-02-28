@@ -36,6 +36,7 @@
       description: "Baseline test: only required parameters",
       params: {
         input: [{ role: "user", content: "hi" }],
+
       },
       baseline: true,
     },
@@ -385,7 +386,7 @@
       params: {
         stream: true,
       },
-      stream: true,
+      check_stream: true,
       focus_param: {
         name: "stream",
         value: true,

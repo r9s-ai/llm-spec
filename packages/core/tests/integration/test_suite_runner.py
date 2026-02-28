@@ -168,7 +168,7 @@ def _setup_mock_route(
     endpoint = test_case.endpoint_override or suite.endpoint
     full_url = f"{base_url}{endpoint}"
 
-    is_stream = test_case.stream
+    is_stream = bool(test_case.check_stream)
 
     # Load mock data
     try:

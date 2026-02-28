@@ -234,7 +234,7 @@ class ConfigDrivenTestRunner:
             "finished_at": finished_at or "",
             "meta": {
                 "expected_fields": list(expected_fields or []),
-                "stream": bool(test.stream),
+                "check_stream": bool(test.check_stream),
             },
         }
 
@@ -350,7 +350,7 @@ class ConfigDrivenTestRunner:
         if callable(set_test_name):
             set_test_name(test.name)
         try:
-            if test.stream:
+            if test.check_stream:
                 return self._run_stream_test(test, endpoint, params, method=method)
             # Resolve schema overrides
             response_schema = self.response_schema
@@ -769,7 +769,7 @@ class ConfigDrivenTestRunner:
         if callable(set_test_name):
             set_test_name(test.name)
         try:
-            if test.stream:
+            if test.check_stream:
                 return await self._run_stream_test_async(test, endpoint, params, method=method)
             # Resolve schema overrides
             response_schema = self.response_schema

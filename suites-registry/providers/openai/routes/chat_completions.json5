@@ -399,7 +399,7 @@
       params: {
         stream: true,
       },
-      stream: true,
+      check_stream: true,
       focus_param: {
         name: "stream",
         value: true,
@@ -414,7 +414,7 @@
           include_usage: true,
         },
       },
-      stream: true,
+      check_stream: true,
       focus_param: {
         name: "stream_options.include_usage",
         value: true,
