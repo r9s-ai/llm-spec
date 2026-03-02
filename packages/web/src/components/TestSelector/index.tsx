@@ -1,13 +1,11 @@
 import { useState, useMemo, useCallback } from "react";
 import { SearchInput } from "./SearchInput";
 import { ProviderNode } from "./ProviderNode";
-import type { Suite, TestSelectionMap, VersionsMap, RunMode } from "../../types";
+import type { Suite, TestSelectionMap, RunMode } from "../../types";
 
 interface TestSelectorProps {
   providers: string[];
   suites: Suite[];
-  versionsBySuite: VersionsMap;
-  selectedVersionBySuite: Record<string, string>;
   selectedTestsBySuite: TestSelectionMap;
   expandedProviders: Set<string>;
   expandedSuites: Set<string>;
@@ -33,8 +31,6 @@ interface TestSelectorProps {
 export function TestSelector({
   providers,
   suites,
-  versionsBySuite,
-  selectedVersionBySuite,
   selectedTestsBySuite,
   expandedProviders,
   expandedSuites,
@@ -73,8 +69,8 @@ export function TestSelector({
     const routeSet = new Set<string>();
     const modelSet = new Set<string>();
     suites.forEach((suite) => {
-      routeSet.add(`${suite.provider}:${suite.route}`);
-      modelSet.add(`${suite.provider}:${suite.model}`);
+      routeSet.add(`${suite.provider}:${String(suite.route_suite.route ?? "")}`);
+      modelSet.add(`${suite.provider}:${suite.model_name}`);
     });
     return { routeCount: routeSet.size, modelCount: modelSet.size };
   }, [suites]);
@@ -264,8 +260,6 @@ export function TestSelector({
                 key={provider}
                 provider={provider}
                 suites={providerSuites}
-                versionsBySuite={versionsBySuite}
-                selectedVersionBySuite={selectedVersionBySuite}
                 selectedTestsBySuite={selectedTestsBySuite}
                 expandedSuites={expandedSuites}
                 isExpanded={expandedProviders.has(provider)}

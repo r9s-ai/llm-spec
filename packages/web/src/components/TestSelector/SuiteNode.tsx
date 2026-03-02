@@ -1,11 +1,10 @@
 import { useMemo } from "react";
 import { Checkbox } from "../UI";
 import { TestNode } from "./TestNode";
-import type { Suite, SuiteVersion, TestRow } from "../../types";
+import type { Suite, TestRow } from "../../types";
 
 interface SuiteNodeProps {
   suite: Suite;
-  version: SuiteVersion | undefined;
   tests: TestRow[];
   selectedTests: Set<string>;
   isExpanded: boolean;
@@ -77,12 +76,18 @@ export function SuiteNode({
           onChange={(e) => handleCheckboxChange(e.target.checked)}
         />
 
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-medium leading-tight text-slate-700" title={suite.route}>
-            {suite.route}
+          <div className="min-w-0 flex-1">
+          <div
+            className="truncate text-xs font-medium leading-tight text-slate-700"
+            title={String(suite.route_suite.route ?? "")}
+          >
+            {String(suite.route_suite.route ?? "")}
           </div>
-          <div className="truncate text-[10px] leading-tight text-slate-400" title={suite.endpoint}>
-            {suite.endpoint}
+          <div
+            className="truncate text-[10px] leading-tight text-slate-400"
+            title={String(suite.route_suite.endpoint ?? "")}
+          >
+            {String(suite.route_suite.endpoint ?? "")}
           </div>
         </div>
 

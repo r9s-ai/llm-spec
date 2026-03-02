@@ -58,7 +58,7 @@ def create_run(
     """
     run = service.create_run(
         db,
-        suite_version_id=payload.suite_version_id,
+        model_suite_id=payload.model_suite_id,
         mode=payload.mode,
         selected_tests=payload.selected_tests,
     )

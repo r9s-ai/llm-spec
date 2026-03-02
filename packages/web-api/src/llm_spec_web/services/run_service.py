@@ -16,7 +16,8 @@ from llm_spec.config.loader import ProviderConfig, load_config
 from llm_spec.results.result_types import CaseResult, TaskResult
 from llm_spec.results.task_result import build_task_result
 from llm_spec.runners import ConfigDrivenTestRunner
-from llm_spec.suites import SpecTestSuite, load_test_suite_from_dict
+from llm_spec.suites import SpecTestCase, SpecTestSuite
+from llm_spec.suites.registry import hydrate_executable_suite
 from llm_spec_web.config import settings
 from llm_spec_web.core.event_bus import event_bus
 from llm_spec_web.core.exceptions import ConfigurationError, NotFoundError, ValidationError
@@ -58,16 +59,16 @@ def create_provider_client(
     return create_api_family_adapter(provider=provider, config=config, http_client=http_client)
 
 
-def load_suite_from_version(parsed_json: dict[str, Any]) -> SpecTestSuite:
-    """Load test suite from a SuiteVersion.
+def load_suite_from_route_suite(route_suite: dict[str, Any]) -> SpecTestSuite:
+    """Load test suite from a model-suite ``route_suite`` payload.
 
     Args:
-        parsed_json: Parsed suite JSON.
+        route_suite: Parsed route suite JSON.
 
     Returns:
         Loaded test suite.
     """
-    return load_test_suite_from_dict(parsed_json)
+    return hydrate_executable_suite(route_suite)
 
 
 class RunService:
@@ -92,7 +93,7 @@ class RunService:
     def create_run(
         self,
         db: Session,
-        suite_version_id: str,
+        model_suite_id: str,
         mode: str | None = None,
         selected_tests: list[str] | None = None,
     ) -> RunJob:
@@ -100,7 +101,7 @@ class RunService:
 
         Args:
             db: Database session.
-            suite_version_id: Suite version ID.
+            model_suite_id: Model suite ID.
             mode: Execution mode ("real" or "mock").
             selected_tests: List of test names to run.
 
@@ -108,16 +109,15 @@ class RunService:
             Created RunJob instance.
 
         Raises:
-            NotFoundError: If suite version not found.
+            NotFoundError: If model suite not found.
         """
         run_repo = RunRepository(db)
         suite_service = SuiteService()
 
-        suite_version = suite_service.resolve_suite_by_version_id(suite_version_id)
-        suite = suite_service.get_suite(suite_version.suite_id)
-
-        provider = str(suite_version.parsed_json.get("provider"))
-        endpoint = str(suite_version.parsed_json.get("endpoint"))
+        model_suite = suite_service.resolve_model_suite(model_suite_id)
+        provider = model_suite.provider
+        endpoint = str(model_suite.route_suite.get("endpoint"))
+        route = str(model_suite.route_suite.get("route") or "")
 
         # Resolve mode
         resolved_mode = mode or ("mock" if settings.mock_mode else "real")
@@ -127,10 +127,10 @@ class RunService:
             status="queued",
             mode=resolved_mode,
             provider=provider,
-            route=suite.route,
-            model=suite.model,
+            route=route or None,
+            model=model_suite.model_name,
             endpoint=endpoint,
-            suite_version_id=suite_version_id,
+            model_suite_id=model_suite_id,
             config_snapshot={"selected_tests": selected_tests or []},
         )
         run_repo.create(run)
@@ -260,11 +260,11 @@ class RunService:
             raise NotFoundError("Run", run_id)
         if run_job.status in {"running", "queued"}:
             raise ValidationError(f"Run is still active: {run_id}")
-        if not run_job.suite_version_id:
-            raise ValidationError(f"run {run_id} has no suite_version_id")
+        if not run_job.model_suite_id:
+            raise ValidationError(f"run {run_id} has no model_suite_id")
 
-        suite_version = suite_service.resolve_suite_by_version_id(run_job.suite_version_id)
-        suite = load_suite_from_version(suite_version.parsed_json)
+        model_suite = suite_service.resolve_model_suite(run_job.model_suite_id)
+        suite = load_suite_from_route_suite(model_suite.route_suite)
         target_test = next((t for t in suite.tests if t.name == test_name), None)
         if target_test is None:
             raise NotFoundError("Test", test_name)
@@ -453,19 +453,19 @@ class RunService:
         if run_job is None:
             return
 
-        if run_job.suite_version_id is None:
+        if run_job.model_suite_id is None:
             run_job.status = "failed"
-            run_job.error_message = "suite_version_id is None"
+            run_job.error_message = "model_suite_id is None"
             run_job.finished_at = datetime.now(UTC)
             run_repo.update(run_job)
             db.commit()
             return
 
         try:
-            suite_version = suite_service.resolve_suite_by_version_id(run_job.suite_version_id)
+            model_suite = suite_service.resolve_model_suite(run_job.model_suite_id)
         except NotFoundError:
             run_job.status = "failed"
-            run_job.error_message = f"suite_version not found: {run_job.suite_version_id}"
+            run_job.error_message = f"model_suite not found: {run_job.model_suite_id}"
             run_job.finished_at = datetime.now(UTC)
             run_repo.update(run_job)
             db.commit()
@@ -491,7 +491,7 @@ class RunService:
         run_job.started_at = datetime.now(UTC)
 
         # Load suite and set progress_total before starting
-        suite = load_suite_from_version(suite_version.parsed_json)
+        suite = load_suite_from_route_suite(model_suite.route_suite)
         selected = set(run_job.config_snapshot.get("selected_tests") or [])
         tests = [t for t in suite.tests if not selected or t.name in selected]
         run_job.progress_total = len(tests)
@@ -541,34 +541,26 @@ class RunService:
             # Semaphore for controlling concurrency
             semaphore = asyncio.Semaphore(max_concurrent)
 
-            async def run_single_test(test: Any, idx: int) -> dict[str, Any]:
-                """Run a single test and return the result."""
-                nonlocal progress_done, progress_passed, progress_failed, cancelled
-
-                # Check for cancellation
-                if cancelled:
-                    return {"test": test, "status": "skipped", "idx": idx}
-
+            async def run_single_test(
+                test: SpecTestCase,
+                idx: int,
+                *,
+                suite_provider: str,
+                suite_endpoint: str,
+            ) -> dict[str, Any]:
+                """Run a single test and return execution payload."""
                 async with semaphore:
-                    if cancelled:
-                        return {"test": test, "status": "skipped", "idx": idx}
-
                     local_runner = ConfigDrivenTestRunner(suite=suite, client=client)
-
-                    # Push test start event
-                    event_bus.push(run_id, "test_started", {"test_name": test.name, "index": idx})
-
+                    case_result: CaseResult
                     try:
                         case_result = await local_runner.run_test_async(test)
-                        status = self._case_status(case_result)
                     except Exception as e:
-                        status = "fail"
                         case_result = {
                             "version": "case_result.v1",
-                            "test_id": f"{suite.provider}/{suite.endpoint.lstrip('/')}::{test.name}",
+                            "test_id": f"{suite_provider}/{suite_endpoint.lstrip('/')}::{test.name}",
                             "test_name": test.name,
-                            "provider": suite.provider,
-                            "endpoint": suite.endpoint,
+                            "provider": suite_provider,
+                            "endpoint": suite_endpoint,
                             "parameter": {"name": None, "value": None, "value_type": "none"},
                             "request": {"ok": False, "http_status": 0, "latency_ms": 0},
                             "validation": {
@@ -580,61 +572,68 @@ class RunService:
                             },
                             "result": {"status": "fail", "reason": str(e)},
                         }
-
-                    # Update progress (no lock needed in async)
-                    if cancelled:
-                        return {"test": test, "status": "skipped", "idx": idx}
-                    progress_done += 1
-                    if status == "pass":
-                        progress_passed += 1
-                    else:
-                        progress_failed += 1
-
-                    # Store result
-                    test_results.append(
-                        {
-                            "test": test,
-                            "case_result": case_result,
-                            "status": status,
-                            "idx": idx,
-                        }
-                    )
-
-                    # Push test finish event
-                    event_bus.push(
-                        run_id,
-                        "test_finished",
-                        {
-                            "test_name": test.name,
-                            "index": idx,
-                            "status": status,
-                            "progress_done": progress_done,
-                            "progress_total": len(tests),
-                            "progress_passed": progress_passed,
-                            "progress_failed": progress_failed,
-                            "test_result": {
-                                "test_name": case_result.get("test_name", test.name),
-                                "parameter": case_result.get("parameter"),
-                                "request": case_result.get("request"),
-                                "result": case_result.get("result"),
-                                "validation": case_result.get("validation"),
-                            },
-                        },
-                    )
-
-                    return {"test": test, "status": status, "idx": idx}
+                    status = self._case_status(case_result)
+                    return {
+                        "test": test,
+                        "case_result": case_result,
+                        "status": status,
+                        "idx": idx,
+                    }
 
             # Create tasks for all tests
-            tasks = [
-                asyncio.create_task(run_single_test(test, idx))
-                for idx, test in enumerate(tests, start=1)
-            ]
+            tasks = []
+            for idx, test in enumerate(tests, start=1):
+                event_bus.push(run_id, "test_started", {"test_name": test.name, "index": idx})
+                tasks.append(
+                    asyncio.create_task(
+                        run_single_test(
+                            test,
+                            idx,
+                            suite_provider=suite.provider,
+                            suite_endpoint=suite.endpoint,
+                        )
+                    )
+                )
 
             # Wait for all tasks to complete, checking for cancellation
             try:
                 for coro in asyncio.as_completed(tasks):
                     try:
-                        await coro
+                        result = await coro
+                        if cancelled:
+                            continue
+
+                        progress_done += 1
+                        if result["status"] == "pass":
+                            progress_passed += 1
+                        else:
+                            progress_failed += 1
+
+                        test_results.append(result)
+
+                        case_result = cast(dict[str, Any], result["case_result"])
+                        test_obj = cast(SpecTestCase, result["test"])
+                        event_bus.push(
+                            run_id,
+                            "test_finished",
+                            {
+                                "test_name": test_obj.name,
+                                "index": result["idx"],
+                                "status": result["status"],
+                                "progress_done": progress_done,
+                                "progress_total": len(tests),
+                                "progress_passed": progress_passed,
+                                "progress_failed": progress_failed,
+                                "test_result": {
+                                    "test_name": case_result.get("test_name", test_obj.name),
+                                    "parameter": case_result.get("parameter"),
+                                    "request": case_result.get("request"),
+                                    "result": case_result.get("result"),
+                                    "validation": case_result.get("validation"),
+                                },
+                            },
+                        )
+
                         # Check for cancellation periodically
                         db.refresh(run_job)
                         if run_job.status == "cancelled":
@@ -786,7 +785,7 @@ class RunService:
     def create_task(
         self,
         db: Session,
-        suite_version_ids: list[str],
+        model_suite_ids: list[str],
         mode: str | None = None,
         selected_tests_by_suite: dict[str, list[str]] | None = None,
         name: str | None = None,
@@ -795,7 +794,7 @@ class RunService:
 
         Args:
             db: Database session.
-            suite_version_ids: List of suite version IDs to run.
+            model_suite_ids: List of model suite IDs to run.
             mode: Execution mode ("real" or "mock").
             selected_tests_by_suite: Map of suite_id to list of test names.
             name: User-defined name for the task.
@@ -804,7 +803,7 @@ class RunService:
             Tuple of (Task instance, list of RunJob instances).
 
         Raises:
-            NotFoundError: If any suite version not found.
+            NotFoundError: If any model suite not found.
         """
         run_repo = RunRepository(db)
         suite_service = SuiteService()
@@ -817,23 +816,22 @@ class RunService:
             name=name or "Task",
             status="running",
             mode=resolved_mode,
-            total_runs=len(suite_version_ids),
+            total_runs=len(model_suite_ids),
             started_at=datetime.now(UTC),
         )
         run_repo.create_task(task)
         db.flush()
 
-        # Create runs for each suite version
+        # Create runs for each model suite
         runs: list[RunJob] = []
-        for suite_version_id in suite_version_ids:
-            suite_version = suite_service.resolve_suite_by_version_id(suite_version_id)
-            suite = suite_service.get_suite(suite_version.suite_id)
-
-            provider = str(suite_version.parsed_json.get("provider"))
-            endpoint = str(suite_version.parsed_json.get("endpoint"))
+        for model_suite_id in model_suite_ids:
+            model_suite = suite_service.resolve_model_suite(model_suite_id)
+            provider = model_suite.provider
+            endpoint = str(model_suite.route_suite.get("endpoint"))
+            route = str(model_suite.route_suite.get("route") or "")
 
             # Get selected tests for this suite
-            suite_id = suite_version.suite_id
+            suite_id = model_suite.id
             selected_tests = None
             if selected_tests_by_suite and suite_id in selected_tests_by_suite:
                 selected_tests = selected_tests_by_suite[suite_id]
@@ -843,11 +841,11 @@ class RunService:
                 status="queued",
                 mode=resolved_mode,
                 provider=provider,
-                route=suite.route,
-                model=suite.model,
+                route=route or None,
+                model=model_suite.model_name,
                 endpoint=endpoint,
                 task_id=task.id,
-                suite_version_id=suite_version.id,
+                model_suite_id=model_suite.id,
                 config_snapshot={"selected_tests": selected_tests or []},
             )
             run_repo.create(run)

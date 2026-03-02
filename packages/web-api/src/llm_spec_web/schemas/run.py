@@ -12,12 +12,12 @@ class RunCreateRequest(BaseModel):
     """Request body for creating a new run.
 
     Attributes:
-        suite_version_id: ID of the suite version to run.
+        model_suite_id: ID of the model suite to run.
         mode: Execution mode ("real" or "mock").
         selected_tests: List of test names to run (empty means all tests).
     """
 
-    suite_version_id: str = Field(..., min_length=1)
+    model_suite_id: str = Field(..., min_length=1)
     mode: Literal["real", "mock"] | None = None
     selected_tests: list[str] | None = Field(default=None, description="List of test names to run")
 
@@ -26,14 +26,14 @@ class TaskCreateRequest(BaseModel):
     """Request body for creating a new task.
 
     Attributes:
-        suite_version_ids: List of suite version IDs to run.
+        model_suite_ids: List of model suite IDs to run.
         mode: Execution mode ("real" or "mock").
         selected_tests_by_suite: Map of suite_id to list of test names.
         name: User-defined name for the task.
         max_concurrent: Maximum number of tests to run concurrently per run job.
     """
 
-    suite_version_ids: list[str] = Field(..., min_length=1)
+    model_suite_ids: list[str] = Field(..., min_length=1)
     mode: Literal["real", "mock"] | None = None
     selected_tests_by_suite: dict[str, list[str]] | None = Field(
         default=None, description="Map of suite_id to list of test names"
@@ -74,7 +74,7 @@ class RunJobResponse(BaseModel):
         model: Model ID.
         endpoint: API endpoint path.
         task_id: Task ID this run belongs to.
-        suite_version_id: Suite version ID.
+        model_suite_id: Model suite ID.
         started_at: Execution start timestamp.
         finished_at: Execution finish timestamp.
         progress_total: Total number of tests.
@@ -92,7 +92,7 @@ class RunJobResponse(BaseModel):
     model: str | None = None
     endpoint: str
     task_id: str | None = None
-    suite_version_id: str | None
+    model_suite_id: str | None
     started_at: datetime | None
     finished_at: datetime | None
     progress_total: int

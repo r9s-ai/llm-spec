@@ -1,21 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getSuites, listVersions, refreshSuiteRegistryCache } from "../api";
-import type { Suite, SuiteVersion, TestSelectionMap, VersionsMap } from "../types";
+import { getSuites, refreshSuiteRegistryCache } from "../api";
+import type { Suite, TestSelectionMap } from "../types";
 
 export function useSuites() {
   const [suites, setSuites] = useState<Suite[]>([]);
-  const [versionsBySuite, setVersionsBySuite] = useState<VersionsMap>({});
   const [selectedSuiteId, setSelectedSuiteId] = useState<string | null>(null);
   const [selectedProviders, setSelectedProviders] = useState<Set<string>>(new Set<string>());
   const [selectedSuiteIds, setSelectedSuiteIds] = useState<Set<string>>(new Set<string>());
-  const [selectedVersionBySuite, setSelectedVersionBySuite] = useState<Record<string, string>>({});
   const [selectedTestsBySuite, setSelectedTestsBySuite] = useState<TestSelectionMap>({});
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set<string>());
   const [expandedSuites, setExpandedSuites] = useState<Set<string>>(new Set<string>());
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshingRegistryCache, setIsRefreshingRegistryCache] = useState(false);
 
-  // Derived data
   const providers = useMemo(
     () => Array.from(new Set(suites.map((s) => s.provider))).sort(),
     [suites]
@@ -38,18 +35,11 @@ export function useSuites() {
     [suites]
   );
 
-  // Load data
   const loadSuites = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     try {
       const nextSuites = await getSuites();
-      const versionsEntries = await Promise.all(
-        nextSuites.map(async (suite) => [suite.id, await listVersions(suite.id)] as const)
-      );
-      const nextVersionsBySuite = Object.fromEntries(versionsEntries) as VersionsMap;
-
       setSuites(nextSuites);
-      setVersionsBySuite(nextVersionsBySuite);
 
       setSelectedSuiteId((prev) => {
         if (!nextSuites.length) return null;
@@ -66,17 +56,6 @@ export function useSuites() {
         if (prev.size > 0) return prev;
         const first = nextSuites[0]?.provider;
         return first ? new Set([first]) : prev;
-      });
-
-      setSelectedVersionBySuite((prev) => {
-        const next = { ...prev };
-        nextSuites.forEach((suite) => {
-          const versions = nextVersionsBySuite[suite.id] ?? [];
-          if (!versions.length) return;
-          const exists = versions.some((v) => v.id === next[suite.id]);
-          if (!exists) next[suite.id] = versions[0].id;
-        });
-        return next;
       });
 
       setSelectedSuiteIds((prev) => {
@@ -97,13 +76,6 @@ export function useSuites() {
     }
   }, []);
 
-  // Refresh versions for a single suite
-  const refreshVersions = useCallback(async (suiteId: string): Promise<SuiteVersion[]> => {
-    const versions = await listVersions(suiteId);
-    setVersionsBySuite((prev) => ({ ...prev, [suiteId]: versions }));
-    return versions;
-  }, []);
-
   const refreshRegistryCache = useCallback(async (): Promise<{
     status: string;
     suite_count: number;
@@ -119,7 +91,6 @@ export function useSuites() {
     }
   }, [loadSuites]);
 
-  // Provider operations
   const toggleProvider = useCallback((provider: string): void => {
     setSelectedProviders((prev) => {
       const next = new Set(prev);
@@ -152,7 +123,6 @@ export function useSuites() {
     });
   }, []);
 
-  // Suite operations
   const toggleSuite = useCallback((suiteId: string): void => {
     setSelectedSuiteIds((prev) => {
       const next = new Set(prev);
@@ -171,7 +141,6 @@ export function useSuites() {
     });
   }, []);
 
-  // Test operations
   const toggleTest = useCallback((suiteId: string, testName: string, checked: boolean): void => {
     setSelectedTestsBySuite((prev) => {
       const next = { ...prev };
@@ -183,44 +152,27 @@ export function useSuites() {
     });
   }, []);
 
-  // Version selection
-  const selectVersion = useCallback((suiteId: string, versionId: string): void => {
-    setSelectedVersionBySuite((prev) => ({ ...prev, [suiteId]: versionId }));
-  }, []);
-
-  // Initial load
   useEffect(() => {
-    const init = async () => {
-      await loadSuites();
-    };
-    void init();
+    void loadSuites();
   }, [loadSuites]);
 
   return {
-    // State
     suites,
-    versionsBySuite,
     selectedSuiteId,
     selectedProviders,
     selectedSuiteIds,
-    selectedVersionBySuite,
     selectedTestsBySuite,
     expandedProviders,
     expandedSuites,
     isLoading,
     isRefreshingRegistryCache,
-
-    // Derived data
     providers,
     visibleSuites,
     visibleSuiteIds,
     selectedTestCount,
-
-    // Methods
     getSuiteById,
     loadSuites,
     refreshRegistryCache,
-    refreshVersions,
     setSelectedSuiteId,
     toggleProvider,
     selectAllProviders,
@@ -229,9 +181,7 @@ export function useSuites() {
     toggleSuite,
     toggleSuitePanel,
     toggleTest,
-    selectVersion,
     setSelectedSuiteIds,
     setSelectedTestsBySuite,
-    setSelectedVersionBySuite,
   };
 }

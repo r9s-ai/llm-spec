@@ -9,8 +9,6 @@ export function TestingPage() {
   const {
     providers,
     suites: suiteList,
-    versionsBySuite,
-    selectedVersionBySuite,
     selectedTestsBySuite,
     expandedProviders,
     expandedSuites,
@@ -63,20 +61,17 @@ export function TestingPage() {
 
   // Handle task run
   const handleStartTaskRun = useCallback(async () => {
-    // Collect selected suite version IDs
-    const selectedSuiteVersionIds: string[] = [];
+    // Collect selected model-suite IDs
+    const selectedModelSuiteIds: string[] = [];
     suiteList.forEach((suite) => {
       const tests = selectedTestsBySuite[suite.id];
       if (tests && tests.size > 0) {
-        const versionId = selectedVersionBySuite[suite.id];
-        if (versionId) {
-          selectedSuiteVersionIds.push(versionId);
-        }
+        selectedModelSuiteIds.push(suite.id);
       }
     });
 
     await startTaskRun(
-      selectedSuiteVersionIds,
+      selectedModelSuiteIds,
       runMode,
       selectedTestsBySuite,
       setNotice,
@@ -85,7 +80,6 @@ export function TestingPage() {
   }, [
     suiteList,
     selectedTestsBySuite,
-    selectedVersionBySuite,
     runMode,
     startTaskRun,
     setNotice,
@@ -106,20 +100,17 @@ export function TestingPage() {
   const handleSelectAll = useCallback(() => {
     selectAllProviders();
     suiteList.forEach((suite) => {
-      const versions = versionsBySuite[suite.id] ?? [];
-      const versionId = selectedVersionBySuite[suite.id] ?? versions[0]?.id;
-      if (versionId) {
-        // Get tests from version and select all
-        const version = versions.find((v) => v.id === versionId);
-        if (version?.parsed_json?.tests) {
-          const tests = version.parsed_json.tests as Array<{ name: string }>;
-          tests.forEach((test) => {
-            toggleTest(suite.id, test.name, true);
-          });
-        }
+      const tests = suite.route_suite.tests;
+      if (Array.isArray(tests)) {
+        tests.forEach((test) => {
+          const row = test as { name?: unknown };
+          if (typeof row.name === "string") {
+            toggleTest(suite.id, row.name, true);
+          }
+        });
       }
     });
-  }, [selectAllProviders, suiteList, versionsBySuite, selectedVersionBySuite, toggleTest]);
+  }, [selectAllProviders, suiteList, toggleTest]);
 
   // Clear all selections
   const handleClearAll = useCallback(() => {
@@ -155,8 +146,6 @@ export function TestingPage() {
           <TestSelector
             providers={providers}
             suites={suiteList}
-            versionsBySuite={versionsBySuite}
-            selectedVersionBySuite={selectedVersionBySuite}
             selectedTestsBySuite={selectedTestsBySuite}
             expandedProviders={expandedProviders}
             expandedSuites={expandedSuites}

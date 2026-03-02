@@ -109,7 +109,7 @@ export function useRuns() {
 
         const tests = selectedTestsBySuite[suiteId];
         const run = await createRun({
-          suite_version_id: versionId,
+          model_suite_id: versionId,
           mode: runMode,
           selected_tests: tests && tests.size > 0 ? Array.from(tests) : undefined,
         });

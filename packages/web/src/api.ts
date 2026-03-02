@@ -1,12 +1,4 @@
-import type {
-  Task,
-  TaskWithRuns,
-  RunEvent,
-  RunJob,
-  Suite,
-  SuiteVersion,
-  TomlSettings,
-} from "./types";
+import type { Task, TaskWithRuns, RunEvent, RunJob, Suite, TomlSettings } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -27,15 +19,6 @@ export function getSuites(): Promise<Suite[]> {
   return request<Suite[]>("/api/suites");
 }
 
-export function listVersions(suiteId: string): Promise<SuiteVersion[]> {
-  return request<SuiteVersion[]>(`/api/suites/${suiteId}/versions`);
-}
-
-// Suite Version API functions
-export function getSuiteVersion(versionId: string): Promise<SuiteVersion> {
-  return request<SuiteVersion>(`/api/suites/versions/${versionId}`);
-}
-
 export function refreshSuiteRegistryCache(): Promise<{
   status: string;
   suite_count: number;
@@ -46,7 +29,7 @@ export function refreshSuiteRegistryCache(): Promise<{
 
 // Task API functions
 export function createTask(input: {
-  suite_version_ids: string[];
+  model_suite_ids: string[];
   mode?: "real" | "mock";
   selected_tests_by_suite?: Record<string, string[]>;
   name?: string;
@@ -92,7 +75,7 @@ export function getTaskRuns(taskId: string): Promise<RunJob[]> {
 
 // Run API functions
 export function createRun(input: {
-  suite_version_id: string;
+  model_suite_id: string;
   mode?: "real" | "mock";
   selected_tests?: string[];
 }): Promise<RunJob> {

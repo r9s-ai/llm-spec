@@ -7,25 +7,9 @@ export type RunMode = "real" | "mock";
 // Suite types
 export type Suite = {
   id: string;
+  model_name: string;
   provider: string;
-  route: string;
-  model: string;
-  endpoint: string;
-  name: string;
-  status: string;
-  latest_version: number;
-  created_at: string;
-  updated_at: string;
-};
-
-export type SuiteVersion = {
-  id: string;
-  suite_id: string;
-  version: number;
-  created_by: string;
-  created_at: string;
-  raw_json5: string;
-  parsed_json: Record<string, unknown>;
+  route_suite: Record<string, unknown>;
 };
 
 // Task types
@@ -57,7 +41,7 @@ export type RunJob = {
   model: string | null;
   endpoint: string;
   task_id: string | null;
-  suite_version_id: string | null;
+  model_suite_id: string | null;
   started_at: string | null;
   finished_at: string | null;
   progress_total: number;
@@ -113,7 +97,6 @@ export type TestRow = {
 
 // Selection types
 export type TestSelectionMap = Record<string, Set<string>>;
-export type VersionsMap = Record<string, SuiteVersion[]>;
 
 // Run result summary
 export type RunSummary = {
@@ -123,7 +106,7 @@ export type RunSummary = {
 };
 
 export type CreateRunInput = {
-  suite_version_id: string;
+  model_suite_id: string;
   mode?: RunMode;
   selected_tests?: string[];
 };

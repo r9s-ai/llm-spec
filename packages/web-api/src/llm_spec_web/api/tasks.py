@@ -1,7 +1,7 @@
 """Task orchestration APIs.
 
 In this codebase, a "task" represents a user-initiated execution that may contain
-multiple runs (one per selected suite version / model route).
+multiple runs (one per selected model suite / model route).
 
 Historically this concept was called "batch". This module is the aggressive
 rename target: the public API is now /api/tasks.
@@ -55,7 +55,7 @@ def create_task(
     """Create a new task with multiple runs."""
     task, runs = service.create_task(
         db,
-        suite_version_ids=payload.suite_version_ids,
+        model_suite_ids=payload.model_suite_ids,
         mode=payload.mode,
         selected_tests_by_suite=payload.selected_tests_by_suite,
         name=payload.name,

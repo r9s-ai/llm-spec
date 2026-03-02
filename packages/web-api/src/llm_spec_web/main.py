@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 
 from llm_spec_web.api.provider_configs import router as provider_config_router
 from llm_spec_web.api.runs import router as runs_router
@@ -19,9 +20,31 @@ from llm_spec_web.core.error_handler import llm_spec_exception_handler
 from llm_spec_web.core.exceptions import LlmSpecError
 
 
+def _migrate_run_job_model_suite_id() -> None:
+    """Ensure ``run_job.model_suite_id`` exists and is backfilled from legacy column."""
+    with engine.begin() as conn:
+        inspector = inspect(conn)
+        if "run_job" not in inspector.get_table_names():
+            return
+
+        columns = {str(col["name"]) for col in inspector.get_columns("run_job")}
+        if "model_suite_id" in columns:
+            return
+
+        conn.execute(text("ALTER TABLE run_job ADD COLUMN model_suite_id VARCHAR(128)"))
+        if "suite_version_id" in columns:
+            conn.execute(
+                text(
+                    "UPDATE run_job SET model_suite_id = suite_version_id "
+                    "WHERE model_suite_id IS NULL"
+                )
+            )
+
+
 def init_db() -> None:
     """Initialize DB tables."""
     Base.metadata.create_all(bind=engine)
+    _migrate_run_job_model_suite_id()
 
 
 @asynccontextmanager

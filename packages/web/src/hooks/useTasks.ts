@@ -213,18 +213,18 @@ export function useTasks() {
   // Start a new task run
   const startTaskRun = useCallback(
     async (
-      suiteVersionIds: string[],
+      modelSuiteIds: string[],
       mode: RunMode,
       selectedTestsBySuite: TestSelectionMap,
       onNotice: (msg: string) => void,
       maxConcurrent?: number
     ): Promise<void> => {
-      if (suiteVersionIds.length === 0) {
+      if (modelSuiteIds.length === 0) {
         onNotice("Pick at least one model/route to run.");
         return;
       }
 
-      onNotice(`Starting task with ${suiteVersionIds.length} run(s)...`);
+      onNotice(`Starting task with ${modelSuiteIds.length} run(s)...`);
 
       const selectedTestsBySuiteStr: Record<string, string[]> = {};
       for (const [suiteId, tests] of Object.entries(selectedTestsBySuite)) {
@@ -234,7 +234,7 @@ export function useTasks() {
       }
 
       const task = await createTask({
-        suite_version_ids: suiteVersionIds,
+        model_suite_ids: modelSuiteIds,
         mode,
         selected_tests_by_suite: selectedTestsBySuiteStr,
         max_concurrent: maxConcurrent,
