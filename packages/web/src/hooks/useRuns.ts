@@ -86,7 +86,7 @@ export function useRuns() {
     [finalizeRun, pushEvent, upsertRun]
   );
 
-  // batch run
+  // (legacy) multi-run start helper (kept for backward compatibility)
   const startBatchRun = useCallback(
     async (
       selectedSuiteIds: Set<string>,
@@ -118,7 +118,7 @@ export function useRuns() {
         attachRunStream(run.id);
       }
 
-      onNotice("Batch started.");
+      onNotice("Started.");
     },
     [attachRunStream, upsertRun]
   );

@@ -4,6 +4,10 @@ info:
   version: 0.1.0
   description: |
     Web backend for read-only suite browsing and test run orchestration.
+
+    Terminology:
+    - task: a user-initiated execution that contains multiple runs
+    - run: a single execution for a selected suite version / model route
 servers:
   - url: http://localhost:8000
     description: local
@@ -436,6 +440,9 @@ components:
           type: string
         endpoint:
           type: string
+        task_id:
+          type: string
+          nullable: true
         suite_version_id:
           type: string
           nullable: true
@@ -495,3 +502,215 @@ components:
           type: string
         exists:
           type: boolean
+  /api/tasks:
+    get:
+      summary: List tasks
+      operationId: listTasks
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: task list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaskResponse'
+    post:
+      summary: Create task and start runs in background
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreateRequest'
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskWithRunsResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tasks/{task_id}:
+    get:
+      summary: Get task (with runs)
+      operationId: getTask
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskWithRunsResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      summary: Update task name
+      operationId: updateTask
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskUpdateRequest'
+      responses:
+        '200':
+          description: updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Delete task (and its runs)
+      operationId: deleteTask
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: deleted
+
+  /api/tasks/{task_id}/runs:
+    get:
+      summary: List runs in a task
+      operationId: listTaskRuns
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: run list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RunJobResponse'
+    TaskCreateRequest:
+      type: object
+      required: [suite_version_ids]
+      properties:
+        suite_version_ids:
+          type: array
+          items:
+            type: string
+        mode:
+          type: string
+          enum: [real, mock]
+          nullable: true
+        selected_tests_by_suite:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        name:
+          type: string
+          nullable: true
+        max_concurrent:
+          type: integer
+          minimum: 1
+          maximum: 50
+          nullable: true
+
+    TaskUpdateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    TaskResponse:
+      type: object
+      required:
+        [
+          id,
+          name,
+          status,
+          mode,
+          total_runs,
+          completed_runs,
+          passed_runs,
+          failed_runs,
+          created_at,
+        ]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+        mode:
+          type: string
+        total_runs:
+          type: integer
+        completed_runs:
+          type: integer
+        passed_runs:
+          type: integer
+        failed_runs:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    TaskWithRunsResponse:
+      allOf:
+        - $ref: '#/components/schemas/TaskResponse'
+        - type: object
+          required: [runs]
+          properties:
+            runs:
+              type: array
+              items:
+                $ref: '#/components/schemas/RunJobResponse'

@@ -1,73 +1,66 @@
 import { useCallback, useState } from "react";
 import { flushSync } from "react-dom";
 import {
-  createBatch,
-  deleteBatch,
-  getBatch,
-  getBatches,
+  createTask,
+  deleteTask,
+  getTask,
+  getTasks,
   getRunTaskResult,
   retryRunTest,
   streamRunEvents,
-  updateBatch,
+  updateTask,
 } from "../api";
-import type {
-  RunBatch,
-  RunBatchWithRuns,
-  RunEvent,
-  RunJob,
-  RunMode,
-  TestSelectionMap,
-} from "../types";
+import type { RunEvent, RunJob, RunMode, TaskWithRuns, TestSelectionMap } from "../types";
 
-export function useBatches() {
-  const [batches, setBatches] = useState<RunBatchWithRuns[]>([]);
+export function useTasks() {
+  const [tasks, setTasks] = useState<TaskWithRuns[]>([]);
   const [runEventsById, setRunEventsById] = useState<Record<string, RunEvent[]>>({});
   const [runResultById, setRunResultById] = useState<Record<string, Record<string, unknown>>>({});
 
-  // Add or update a batch
-  const upsertBatch = useCallback((batch: RunBatchWithRuns): void => {
-    setBatches((prev) => {
-      const idx = prev.findIndex((b) => b.id === batch.id);
+  // Add or update a task
+  const upsertTask = useCallback((task: TaskWithRuns): void => {
+    setTasks((prev) => {
+      const idx = prev.findIndex((t) => t.id === task.id);
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = batch;
+        next[idx] = task;
         return next;
       }
-      return [batch, ...prev];
+      return [task, ...prev];
     });
   }, []);
 
-  // Update a single run within a batch
-  const updateRunInBatch = useCallback((batchId: string, run: RunJob): void => {
-    setBatches((prev) => {
-      const batch = prev.find((b) => b.id === batchId);
-      if (!batch) return prev;
+  // Update a single run within a task
+  const updateRunInTask = useCallback((taskId: string, run: RunJob): void => {
+    setTasks((prev) => {
+      const task = prev.find((t) => t.id === taskId);
+      if (!task) return prev;
 
-      const runIdx = batch.runs.findIndex((r) => r.id === run.id);
+      const runIdx = task.runs.findIndex((r) => r.id === run.id);
       if (runIdx < 0) return prev;
 
-      const newRuns = [...batch.runs];
+      const newRuns = [...task.runs];
       newRuns[runIdx] = run;
 
-      // Recalculate batch stats
+      // Recalculate task stats
       const completedRuns = newRuns.filter(
         (r) => r.status === "success" || r.status === "failed" || r.status === "cancelled"
       ).length;
       const passedRuns = newRuns.filter((r) => r.status === "success").length;
       const failedRuns = newRuns.filter((r) => r.status === "failed").length;
 
-      const updatedBatch: RunBatchWithRuns = {
-        ...batch,
+      const updatedTask: TaskWithRuns = {
+        ...task,
         runs: newRuns,
         completed_runs: completedRuns,
         passed_runs: passedRuns,
         failed_runs: failedRuns,
-        status: completedRuns >= batch.total_runs ? "completed" : "running",
+        status: completedRuns >= task.total_runs ? "completed" : "running",
       };
 
-      const idx = prev.findIndex((b) => b.id === batchId);
+      const idx = prev.findIndex((t) => t.id === taskId);
       const next = [...prev];
-      next[idx] = updatedBatch;
+      next[idx] = updatedTask;
       return next;
     });
   }, []);
@@ -92,7 +85,7 @@ export function useBatches() {
 
   // Attach SSE stream to a run
   const attachRunStream = useCallback(
-    (batchId: string, runId: string): void => {
+    (taskId: string, runId: string): void => {
       const source = streamRunEvents(runId, 0);
 
       const onDataEvent = async (raw: MessageEvent): Promise<void> => {
@@ -103,16 +96,16 @@ export function useBatches() {
         if (event.event_type === "run_started") {
           const progressTotal = event.payload.progress_total as number | undefined;
           if (progressTotal !== undefined) {
-            setBatches((prev) => {
-              const batch = prev.find((b) => b.id === batchId);
-              if (!batch) return prev;
-              const runIdx = batch.runs.findIndex((r) => r.id === runId);
+            setTasks((prev) => {
+              const task = prev.find((t) => t.id === taskId);
+              if (!task) return prev;
+              const runIdx = task.runs.findIndex((r) => r.id === runId);
               if (runIdx < 0) return prev;
-              const newRuns = [...batch.runs];
+              const newRuns = [...task.runs];
               newRuns[runIdx] = { ...newRuns[runIdx], progress_total: progressTotal };
-              const idx = prev.findIndex((b) => b.id === batchId);
+              const idx = prev.findIndex((t) => t.id === taskId);
               const next = [...prev];
-              next[idx] = { ...batch, runs: newRuns };
+              next[idx] = { ...task, runs: newRuns };
               return next;
             });
           }
@@ -125,12 +118,12 @@ export function useBatches() {
           const progressPassed = event.payload.progress_passed as number | undefined;
           const progressFailed = event.payload.progress_failed as number | undefined;
           if (progressDone !== undefined) {
-            setBatches((prev) => {
-              const batch = prev.find((b) => b.id === batchId);
-              if (!batch) return prev;
-              const runIdx = batch.runs.findIndex((r) => r.id === runId);
+            setTasks((prev) => {
+              const task = prev.find((t) => t.id === taskId);
+              if (!task) return prev;
+              const runIdx = task.runs.findIndex((r) => r.id === runId);
               if (runIdx < 0) return prev;
-              const newRuns = [...batch.runs];
+              const newRuns = [...task.runs];
               newRuns[runIdx] = {
                 ...newRuns[runIdx],
                 progress_done: progressDone,
@@ -138,9 +131,9 @@ export function useBatches() {
                 progress_passed: progressPassed ?? newRuns[runIdx].progress_passed,
                 progress_failed: progressFailed ?? newRuns[runIdx].progress_failed,
               };
-              const idx = prev.findIndex((b) => b.id === batchId);
+              const idx = prev.findIndex((t) => t.id === taskId);
               const next = [...prev];
-              next[idx] = { ...batch, runs: newRuns };
+              next[idx] = { ...task, runs: newRuns };
               return next;
             });
           }
@@ -161,14 +154,12 @@ export function useBatches() {
       });
 
       source.addEventListener("run_finished", async (event) => {
-        // Parse the run_finished event to get the status
         const runEvent = JSON.parse((event as MessageEvent).data);
         const status = runEvent?.payload?.status as string | undefined;
 
         source.close();
 
-        // Load run result FIRST before updating batch state
-        // Use flushSync to ensure the result is available immediately
+        // Load run result FIRST before updating task state
         try {
           const result = await getRunTaskResult(runId);
           flushSync(() => {
@@ -178,55 +169,49 @@ export function useBatches() {
           // Ignore errors
         }
 
-        // Now update the run status and batch state
+        // Now update the run status and task state
         if (status) {
-          setBatches((prev) => {
-            const batch = prev.find((b) => b.id === batchId);
-            if (!batch) return prev;
-            const runIdx = batch.runs.findIndex((r) => r.id === runId);
+          setTasks((prev) => {
+            const task = prev.find((t) => t.id === taskId);
+            if (!task) return prev;
+            const runIdx = task.runs.findIndex((r) => r.id === runId);
             if (runIdx < 0) return prev;
-            const newRuns = [...batch.runs];
+            const newRuns = [...task.runs];
             newRuns[runIdx] = {
               ...newRuns[runIdx],
               status: status === "success" ? "success" : "failed",
               finished_at: new Date().toISOString(),
             };
 
-            // Check if all runs are complete
             const completedRuns = newRuns.filter(
               (r) => r.status === "success" || r.status === "failed" || r.status === "cancelled"
             ).length;
             const allComplete = completedRuns >= newRuns.length;
 
-            const idx = prev.findIndex((b) => b.id === batchId);
+            const idx = prev.findIndex((t) => t.id === taskId);
             const next = [...prev];
             next[idx] = {
-              ...batch,
+              ...task,
               runs: newRuns,
               completed_runs: completedRuns,
               passed_runs: newRuns.filter((r) => r.status === "success").length,
               failed_runs: newRuns.filter((r) => r.status === "failed").length,
               status: allComplete ? "completed" : "running",
-              finished_at: allComplete ? new Date().toISOString() : batch.finished_at,
+              finished_at: allComplete ? new Date().toISOString() : task.finished_at,
             };
             return next;
           });
         }
       });
 
-      source.addEventListener("done", () => {
-        source.close();
-      });
-
-      source.onerror = () => {
-        source.close();
-      };
+      source.addEventListener("done", () => source.close());
+      source.onerror = () => source.close();
     },
     [pushEvent]
   );
 
-  // Start a new batch run
-  const startBatchRun = useCallback(
+  // Start a new task run
+  const startTaskRun = useCallback(
     async (
       suiteVersionIds: string[],
       mode: RunMode,
@@ -239,9 +224,8 @@ export function useBatches() {
         return;
       }
 
-      onNotice(`Starting batch with ${suiteVersionIds.length} run(s)...`);
+      onNotice(`Starting task with ${suiteVersionIds.length} run(s)...`);
 
-      // Convert Set<string> to string[] for API
       const selectedTestsBySuiteStr: Record<string, string[]> = {};
       for (const [suiteId, tests] of Object.entries(selectedTestsBySuite)) {
         if (tests.size > 0) {
@@ -249,45 +233,41 @@ export function useBatches() {
         }
       }
 
-      const batch = await createBatch({
+      const task = await createTask({
         suite_version_ids: suiteVersionIds,
         mode,
         selected_tests_by_suite: selectedTestsBySuiteStr,
         max_concurrent: maxConcurrent,
       });
 
-      upsertBatch(batch);
+      upsertTask(task);
 
-      // Initialize event storage for each run
       setRunEventsById((prev) => {
         const next = { ...prev };
-        for (const run of batch.runs) {
+        for (const run of task.runs) {
           next[run.id] = [];
         }
         return next;
       });
 
-      // Attach SSE streams to all runs
-      for (const run of batch.runs) {
-        attachRunStream(batch.id, run.id);
+      for (const run of task.runs) {
+        attachRunStream(task.id, run.id);
       }
 
-      onNotice("Batch started.");
+      onNotice("Task started.");
     },
-    [upsertBatch, attachRunStream]
+    [upsertTask, attachRunStream]
   );
 
-  // Load history batches
+  // Load history tasks
   const loadHistory = useCallback(
     async (limit = 20): Promise<void> => {
-      const batchList = await getBatches({ limit });
-      // Load full batch details with runs
-      const batchesWithRuns = await Promise.all(batchList.map((batch) => getBatch(batch.id)));
-      setBatches(batchesWithRuns);
+      const taskList = await getTasks({ limit });
+      const tasksWithRuns = await Promise.all(taskList.map((t) => getTask(t.id)));
+      setTasks(tasksWithRuns);
 
-      // Load results for completed runs
-      for (const batch of batchesWithRuns) {
-        for (const run of batch.runs) {
+      for (const task of tasksWithRuns) {
+        for (const run of task.runs) {
           if (run.status === "success" || run.status === "failed") {
             await loadRunResult(run.id);
           }
@@ -297,26 +277,25 @@ export function useBatches() {
     [loadRunResult]
   );
 
-  // Remove a batch from local state (not from server)
-  const removeBatch = useCallback((batchId: string): void => {
-    setBatches((prev) => prev.filter((b) => b.id !== batchId));
+  // Remove a task from local state (not from server)
+  const removeTask = useCallback((taskId: string): void => {
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
   }, []);
 
-  // Delete a batch from server
-  const deleteBatchFromServer = useCallback(
-    async (batchId: string): Promise<void> => {
-      await deleteBatch(batchId);
-      removeBatch(batchId);
+  // Delete a task from server
+  const deleteTaskFromServer = useCallback(
+    async (taskId: string): Promise<void> => {
+      await deleteTask(taskId);
+      removeTask(taskId);
     },
-    [removeBatch]
+    [removeTask]
   );
 
-  // Update batch name
-  const updateBatchName = useCallback(async (batchId: string, name: string): Promise<RunBatch> => {
-    const updated = await updateBatch(batchId, name);
-    // Update local state
-    setBatches((prev) => {
-      const idx = prev.findIndex((b) => b.id === batchId);
+  // Update task name
+  const updateTaskName = useCallback(async (taskId: string, name: string): Promise<TaskWithRuns> => {
+    const updated = await updateTask(taskId, name);
+    setTasks((prev) => {
+      const idx = prev.findIndex((t) => t.id === taskId);
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = { ...next[idx], name: updated.name };
@@ -324,7 +303,8 @@ export function useBatches() {
       }
       return prev;
     });
-    return updated;
+    // Return a Task shape; caller usually just needs name.
+    return getTask(taskId);
   }, []);
 
   const retryFailedTestInPlace = useCallback(
@@ -335,38 +315,38 @@ export function useBatches() {
 
       setRunResultById((prev) => ({ ...prev, [run.id]: updatedResult }));
 
-      if (updatedRun.batch_id) {
-        updateRunInBatch(updatedRun.batch_id, updatedRun);
+      if (updatedRun.task_id) {
+        updateRunInTask(updatedRun.task_id, updatedRun);
       } else {
-        setBatches((prev) =>
-          prev.map((batch) => ({
-            ...batch,
-            runs: batch.runs.map((r) => (r.id === updatedRun.id ? updatedRun : r)),
+        setTasks((prev) =>
+          prev.map((task) => ({
+            ...task,
+            runs: task.runs.map((r) => (r.id === updatedRun.id ? updatedRun : r)),
           }))
         );
       }
 
       onNotice(`Retried ${testName}. Backend result updated.`);
     },
-    [updateRunInBatch]
+    [updateRunInTask]
   );
 
   return {
     // State
-    batches,
+    tasks,
     runEventsById,
     runResultById,
 
     // Methods
-    upsertBatch,
-    updateRunInBatch,
+    upsertTask,
+    updateRunInTask,
     pushEvent,
     attachRunStream,
-    startBatchRun,
+    startTaskRun,
     loadHistory,
-    removeBatch,
-    deleteBatchFromServer,
-    updateBatchName,
+    removeTask,
+    deleteTaskFromServer,
+    updateTaskName,
     retryFailedTestInPlace,
   };
 }

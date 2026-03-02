@@ -10,17 +10,17 @@ from sqlalchemy.orm import Mapped, mapped_column
 from llm_spec_web.models.base import Base, new_id, now_utc
 
 
-class RunBatch(Base):
-    """Run batch model.
+class Task(Base):
+    """Task model.
 
-    Represents a test task containing multiple runs.
+    Represents a user-initiated execution containing multiple runs.
 
     Attributes:
         id: Unique identifier (UUID).
-        name: User-defined name for the batch.
-        status: Batch status ("running", "completed", "cancelled").
+        name: User-defined name for the task.
+        status: Task status ("running", "completed", "cancelled").
         mode: Execution mode ("real" or "mock").
-        total_runs: Total number of runs in this batch.
+        total_runs: Total number of runs in this task.
         completed_runs: Number of completed runs.
         passed_runs: Number of runs that passed all tests.
         failed_runs: Number of runs that had failures.
@@ -29,7 +29,7 @@ class RunBatch(Base):
         created_at: Creation timestamp.
     """
 
-    __tablename__ = "run_batch"
+    __tablename__ = "task"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(255), nullable=False, default="Task")
@@ -44,7 +44,7 @@ class RunBatch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     def __repr__(self) -> str:
-        return f"<RunBatch {self.id}:{self.status}>"
+        return f"<Task {self.id}:{self.status}>"
 
 
 class RunJob(Base):
@@ -80,9 +80,9 @@ class RunJob(Base):
     route: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     model: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     endpoint: Mapped[str] = mapped_column(String(255), nullable=False)
-    batch_id: Mapped[str | None] = mapped_column(
+    task_id: Mapped[str | None] = mapped_column(
         String(36),
-        ForeignKey("run_batch.id", ondelete="CASCADE"),
+        ForeignKey("task.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
     )

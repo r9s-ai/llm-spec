@@ -150,7 +150,7 @@ Default DB URL:
 
 The backend manages tables via SQLAlchemy metadata (run tables only):
 
-- `run_batch`
+- `task`
 - `run_job`
 - `run_event`
 - `task_result`

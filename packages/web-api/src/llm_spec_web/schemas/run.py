@@ -22,14 +22,14 @@ class RunCreateRequest(BaseModel):
     selected_tests: list[str] | None = Field(default=None, description="List of test names to run")
 
 
-class BatchCreateRequest(BaseModel):
-    """Request body for creating a new batch.
+class TaskCreateRequest(BaseModel):
+    """Request body for creating a new task.
 
     Attributes:
         suite_version_ids: List of suite version IDs to run.
         mode: Execution mode ("real" or "mock").
         selected_tests_by_suite: Map of suite_id to list of test names.
-        name: User-defined name for the batch.
+        name: User-defined name for the task.
         max_concurrent: Maximum number of tests to run concurrently per run job.
     """
 
@@ -39,21 +39,21 @@ class BatchCreateRequest(BaseModel):
         default=None, description="Map of suite_id to list of test names"
     )
     name: str | None = Field(
-        default=None, max_length=255, description="User-defined name for the batch"
+        default=None, max_length=255, description="User-defined name for the task"
     )
     max_concurrent: int | None = Field(
         default=None, ge=1, le=50, description="Maximum concurrent tests per run (1-50)"
     )
 
 
-class BatchUpdateRequest(BaseModel):
-    """Request body for updating a batch.
+class TaskUpdateRequest(BaseModel):
+    """Request body for updating a task.
 
     Attributes:
-        name: New name for the batch.
+        name: New name for the task.
     """
 
-    name: str = Field(..., min_length=1, max_length=255, description="New name for the batch")
+    name: str = Field(..., min_length=1, max_length=255, description="New name for the task")
 
 
 class RunTestRetryRequest(BaseModel):
@@ -73,7 +73,7 @@ class RunJobResponse(BaseModel):
         route: Registry route key.
         model: Model ID.
         endpoint: API endpoint path.
-        batch_id: Batch ID this run belongs to.
+        task_id: Task ID this run belongs to.
         suite_version_id: Suite version ID.
         started_at: Execution start timestamp.
         finished_at: Execution finish timestamp.
@@ -91,7 +91,7 @@ class RunJobResponse(BaseModel):
     route: str | None = None
     model: str | None = None
     endpoint: str
-    batch_id: str | None = None
+    task_id: str | None = None
     suite_version_id: str | None
     started_at: datetime | None
     finished_at: datetime | None
@@ -104,13 +104,13 @@ class RunJobResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class RunBatchResponse(BaseModel):
-    """Response model for run batch.
+class TaskResponse(BaseModel):
+    """Response model for task.
 
     Attributes:
-        id: Batch ID.
-        name: User-defined name for the batch.
-        status: Batch status.
+        id: Task ID.
+        name: User-defined name for the task.
+        status: Task status.
         mode: Execution mode.
         total_runs: Total number of runs.
         completed_runs: Number of completed runs.
@@ -136,14 +136,17 @@ class RunBatchResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class RunBatchWithRunsResponse(RunBatchResponse):
-    """Response model for run batch with runs.
+class TaskWithRunsResponse(TaskResponse):
+    """Response model for task with runs.
 
     Attributes:
-        runs: List of runs in this batch.
+        runs: List of runs in this task.
     """
 
     runs: list[RunJobResponse] = []
+
+
+# Backwards-compat export names were intentionally removed as part of the aggressive rename.
 
 
 class RunEventResponse(BaseModel):

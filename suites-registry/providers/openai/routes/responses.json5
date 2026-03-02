@@ -36,9 +36,10 @@
       description: "Baseline test: only required parameters",
       params: {
         input: [{ role: "user", content: "hi" }],
-
+        stream:true
       },
       baseline: true,
+      check_stream:true
     },
     {
       name: "input",
@@ -74,7 +75,9 @@
       description: "Test instructions parameter",
       params: {
         instructions: "You are a helpful assistant.",
+          stream:true
       },
+      check_stream:true,
       focus_param: {
         name: "instructions",
         value: "You are a helpful assistant.",

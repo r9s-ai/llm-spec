@@ -1,6 +1,6 @@
 import type {
-  RunBatch,
-  RunBatchWithRuns,
+  Task,
+  TaskWithRuns,
   RunEvent,
   RunJob,
   Suite,
@@ -39,50 +39,50 @@ export function refreshSuiteRegistryCache(): Promise<{
   return request("/api/suites/cache/refresh", { method: "POST" });
 }
 
-// Batch API functions
-export function createBatch(input: {
+// Task API functions
+export function createTask(input: {
   suite_version_ids: string[];
   mode?: "real" | "mock";
   selected_tests_by_suite?: Record<string, string[]>;
   name?: string;
   max_concurrent?: number;
-}): Promise<RunBatchWithRuns> {
-  return request<RunBatchWithRuns>("/api/batches", {
+}): Promise<TaskWithRuns> {
+  return request<TaskWithRuns>("/api/tasks", {
     method: "POST",
     body: JSON.stringify(input),
   });
 }
 
-export function getBatches(options?: {
+export function getTasks(options?: {
   status?: string;
   limit?: number;
   offset?: number;
-}): Promise<RunBatch[]> {
+}): Promise<Task[]> {
   const params = new URLSearchParams();
   if (options?.status) params.set("status", options.status);
   if (options?.limit) params.set("limit", String(options.limit));
   if (options?.offset) params.set("offset", String(options.offset));
   const query = params.toString() ? `?${params.toString()}` : "";
-  return request<RunBatch[]>(`/api/batches${query}`);
+  return request<Task[]>(`/api/tasks${query}`);
 }
 
-export function getBatch(batchId: string): Promise<RunBatchWithRuns> {
-  return request<RunBatchWithRuns>(`/api/batches/${batchId}`);
+export function getTask(taskId: string): Promise<TaskWithRuns> {
+  return request<TaskWithRuns>(`/api/tasks/${taskId}`);
 }
 
-export function updateBatch(batchId: string, name: string): Promise<RunBatch> {
-  return request<RunBatch>(`/api/batches/${batchId}`, {
+export function updateTask(taskId: string, name: string): Promise<Task> {
+  return request<Task>(`/api/tasks/${taskId}`, {
     method: "PATCH",
     body: JSON.stringify({ name }),
   });
 }
 
-export function deleteBatch(batchId: string): Promise<void> {
-  return request<void>(`/api/batches/${batchId}`, { method: "DELETE" });
+export function deleteTask(taskId: string): Promise<void> {
+  return request<void>(`/api/tasks/${taskId}`, { method: "DELETE" });
 }
 
-export function getBatchRuns(batchId: string): Promise<RunJob[]> {
-  return request<RunJob[]>(`/api/batches/${batchId}/runs`);
+export function getTaskRuns(taskId: string): Promise<RunJob[]> {
+  return request<RunJob[]>(`/api/tasks/${taskId}/runs`);
 }
 
 // Run API functions

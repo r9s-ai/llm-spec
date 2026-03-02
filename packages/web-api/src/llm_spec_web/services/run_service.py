@@ -23,7 +23,7 @@ from llm_spec.suites import SpecTestSuite, load_test_suite_from_dict
 from llm_spec_web.config import settings
 from llm_spec_web.core.event_bus import event_bus
 from llm_spec_web.core.exceptions import ConfigurationError, NotFoundError, ValidationError
-from llm_spec_web.models.run import RunBatch, RunEvent, RunJob, RunTestResult, TaskResultRecord
+from llm_spec_web.models.run import RunEvent, RunJob, RunTestResult, Task, TaskResultRecord
 from llm_spec_web.repositories.run_repo import RunRepository
 from llm_spec_web.services.suite_service import SuiteService
 
@@ -303,8 +303,8 @@ class RunService:
                 provider_cfg=provider_cfg,
             )
         )
-        if run_job.batch_id:
-            self.update_batch_status(db, run_job.batch_id)
+        if run_job.task_id:
+            self.update_task_status(db, run_job.task_id)
         db.refresh(run_job)
         return run_job
 
@@ -796,27 +796,27 @@ class RunService:
             # Cleanup event bus resources after a delay (allow client to receive terminal event)
             event_bus.cleanup(run_id)
 
-    # ==================== Batch Operations ====================
+    # ==================== Task Operations ====================
 
-    def create_batch(
+    def create_task(
         self,
         db: Session,
         suite_version_ids: list[str],
         mode: str | None = None,
         selected_tests_by_suite: dict[str, list[str]] | None = None,
         name: str | None = None,
-    ) -> tuple[RunBatch, list[RunJob]]:
-        """Create a new batch with multiple runs.
+    ) -> tuple[Task, list[RunJob]]:
+        """Create a new task with multiple runs.
 
         Args:
             db: Database session.
             suite_version_ids: List of suite version IDs to run.
             mode: Execution mode ("real" or "mock").
             selected_tests_by_suite: Map of suite_id to list of test names.
-            name: User-defined name for the batch.
+            name: User-defined name for the task.
 
         Returns:
-            Tuple of (RunBatch instance, list of RunJob instances).
+            Tuple of (Task instance, list of RunJob instances).
 
         Raises:
             NotFoundError: If any suite version not found.
@@ -827,15 +827,15 @@ class RunService:
         # Resolve mode
         resolved_mode = mode or ("mock" if settings.mock_mode else "real")
 
-        # Create batch
-        batch = RunBatch(
+        # Create task
+        task = Task(
             name=name or "Task",
             status="running",
             mode=resolved_mode,
             total_runs=len(suite_version_ids),
             started_at=datetime.now(UTC),
         )
-        run_repo.create_batch(batch)
+        run_repo.create_task(task)
         db.flush()
 
         # Create runs for each suite version
@@ -861,7 +861,7 @@ class RunService:
                 route=suite.route,
                 model=suite.model,
                 endpoint=endpoint,
-                batch_id=batch.id,
+                task_id=task.id,
                 suite_version_id=suite_version.id,
                 config_snapshot={"selected_tests": selected_tests or []},
             )
@@ -869,58 +869,58 @@ class RunService:
             runs.append(run)
 
         db.commit()
-        db.refresh(batch)
+        db.refresh(task)
         for run in runs:
             db.refresh(run)
-        return batch, runs
+        return task, runs
 
-    def get_batch(self, db: Session, batch_id: str) -> RunBatch:
-        """Get a batch by ID.
-
-        Args:
-            db: Database session.
-            batch_id: Batch ID.
-
-        Returns:
-            RunBatch instance.
-
-        Raises:
-            NotFoundError: If batch not found.
-        """
-        run_repo = RunRepository(db)
-        batch = run_repo.get_batch_by_id(batch_id)
-        if batch is None:
-            raise NotFoundError("RunBatch", batch_id)
-        return batch
-
-    def get_batch_with_runs(self, db: Session, batch_id: str) -> tuple[RunBatch, Sequence[RunJob]]:
-        """Get a batch with its runs.
+    def get_task(self, db: Session, task_id: str) -> Task:
+        """Get a task by ID.
 
         Args:
             db: Database session.
-            batch_id: Batch ID.
+            task_id: Task ID.
 
         Returns:
-            Tuple of (RunBatch instance, list of RunJob instances).
+            Task instance.
 
         Raises:
-            NotFoundError: If batch not found.
+            NotFoundError: If task not found.
         """
         run_repo = RunRepository(db)
-        batch = run_repo.get_batch_by_id(batch_id)
-        if batch is None:
-            raise NotFoundError("RunBatch", batch_id)
-        runs = run_repo.list_runs_by_batch(batch_id)
-        return batch, runs
+        task = run_repo.get_task_by_id(task_id)
+        if task is None:
+            raise NotFoundError("Task", task_id)
+        return task
 
-    def list_batches(
+    def get_task_with_runs(self, db: Session, task_id: str) -> tuple[Task, Sequence[RunJob]]:
+        """Get a task with its runs.
+
+        Args:
+            db: Database session.
+            task_id: Task ID.
+
+        Returns:
+            Tuple of (Task instance, list of RunJob instances).
+
+        Raises:
+            NotFoundError: If task not found.
+        """
+        run_repo = RunRepository(db)
+        task = run_repo.get_task_by_id(task_id)
+        if task is None:
+            raise NotFoundError("Task", task_id)
+        runs = run_repo.list_runs_by_task(task_id)
+        return task, runs
+
+    def list_tasks(
         self,
         db: Session,
         status_filter: str | None = None,
         limit: int = 20,
         offset: int = 0,
-    ) -> tuple[Sequence[RunBatch], int]:
-        """List batches with pagination.
+    ) -> tuple[Sequence[Task], int]:
+        """List tasks with pagination.
 
         Args:
             db: Database session.
@@ -929,67 +929,67 @@ class RunService:
             offset: Offset for pagination.
 
         Returns:
-            Tuple of (list of RunBatch instances, total count).
+            Tuple of (list of Task instances, total count).
         """
         run_repo = RunRepository(db)
-        return run_repo.list_batches(status_filter=status_filter, limit=limit, offset=offset)
+        return run_repo.list_tasks(status_filter=status_filter, limit=limit, offset=offset)
 
-    def update_batch(self, db: Session, batch_id: str, name: str) -> RunBatch:
-        """Update a batch's name.
+    def update_task(self, db: Session, task_id: str, name: str) -> Task:
+        """Update a task's name.
 
         Args:
             db: Database session.
-            batch_id: Batch ID.
-            name: New name for the batch.
+            task_id: Task ID.
+            name: New name for the task.
 
         Returns:
-            Updated RunBatch instance.
+            Updated Task instance.
 
         Raises:
-            NotFoundError: If batch not found.
+            NotFoundError: If task not found.
         """
         run_repo = RunRepository(db)
-        batch = run_repo.get_batch_by_id(batch_id)
-        if batch is None:
-            raise NotFoundError("RunBatch", batch_id)
-        batch.name = name
-        run_repo.update_batch(batch)
+        task = run_repo.get_task_by_id(task_id)
+        if task is None:
+            raise NotFoundError("Task", task_id)
+        task.name = name
+        run_repo.update_task(task)
         db.commit()
-        db.refresh(batch)
-        return batch
+        db.refresh(task)
+        return task
 
-    def delete_batch(self, db: Session, batch_id: str) -> bool:
-        """Delete a batch and all its runs.
+    def delete_task(self, db: Session, task_id: str) -> bool:
+        """Delete a task and all its runs.
 
         Args:
             db: Database session.
-            batch_id: Batch ID.
+            task_id: Task ID.
 
         Returns:
             True if deleted, False if not found.
         """
         run_repo = RunRepository(db)
-        result = run_repo.delete_batch(batch_id)
+        result = run_repo.delete_task(task_id)
         if result:
             db.commit()
         return result
 
-    def update_batch_status(self, db: Session, batch_id: str) -> RunBatch:
-        """Update batch status based on its runs.
+    def update_task_status(self, db: Session, task_id: str) -> Task:
+        """Update task status based on its runs.
 
         Args:
             db: Database session.
-            batch_id: Batch ID.
+            task_id: Task ID.
 
         Returns:
-            Updated RunBatch instance.
+            Updated Task instance.
         """
         run_repo = RunRepository(db)
-        batch = run_repo.get_batch_by_id(batch_id)
-        if batch is None:
-            raise NotFoundError("RunBatch", batch_id)
+        task = run_repo.get_task_by_id(task_id)
+        if task is None:
+            raise NotFoundError("Task", task_id)
 
-        runs = run_repo.list_runs_by_batch(batch_id)
+        runs = run_repo.list_runs_by_task(task_id)
 
         # Count completed runs
         completed = 0
@@ -1003,16 +1003,16 @@ class RunService:
                 elif run.status == "failed":
                     failed += 1
 
-        batch.completed_runs = completed
-        batch.passed_runs = passed
-        batch.failed_runs = failed
+        task.completed_runs = completed
+        task.passed_runs = passed
+        task.failed_runs = failed
 
         # Check if all runs are done
-        if completed >= batch.total_runs:
-            batch.status = "completed"
-            batch.finished_at = datetime.now(UTC)
+        if completed >= task.total_runs:
+            task.status = "completed"
+            task.finished_at = datetime.now(UTC)
 
-        run_repo.update_batch(batch)
+        run_repo.update_task(task)
         db.commit()
-        db.refresh(batch)
-        return batch
+        db.refresh(task)
+        return task

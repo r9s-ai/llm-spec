@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from llm_spec_web.models.run import RunBatch, RunEvent, RunJob, RunTestResult, TaskResultRecord
+from llm_spec_web.models.run import RunEvent, RunJob, RunTestResult, Task, TaskResultRecord
 
 
 class RunRepository:
@@ -23,68 +23,68 @@ class RunRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    # ==================== RunBatch Operations ====================
+    # ==================== Task Operations ====================
 
-    def get_batch_by_id(self, batch_id: str) -> RunBatch | None:
-        """Get a run batch by ID.
-
-        Args:
-            batch_id: Run batch ID.
-
-        Returns:
-            RunBatch instance or None if not found.
-        """
-        return self.db.get(RunBatch, batch_id)
-
-    def create_batch(self, batch: RunBatch) -> RunBatch:
-        """Create a new run batch.
+    def get_task_by_id(self, task_id: str) -> Task | None:
+        """Get a task by ID.
 
         Args:
-            batch: RunBatch instance to create.
+            task_id: Task ID.
 
         Returns:
-            Created RunBatch instance.
+            Task instance or None if not found.
         """
-        self.db.add(batch)
+        return self.db.get(Task, task_id)
+
+    def create_task(self, task: Task) -> Task:
+        """Create a new task.
+
+        Args:
+            task: Task instance to create.
+
+        Returns:
+            Created Task instance.
+        """
+        self.db.add(task)
         self.db.flush()
-        return batch
+        return task
 
-    def update_batch(self, batch: RunBatch) -> RunBatch:
-        """Update an existing run batch.
+    def update_task(self, task: Task) -> Task:
+        """Update an existing task.
 
         Args:
-            batch: RunBatch instance to update.
+            task: Task instance to update.
 
         Returns:
-            Updated RunBatch instance.
+            Updated Task instance.
         """
-        self.db.add(batch)
+        self.db.add(task)
         self.db.flush()
-        return batch
+        return task
 
-    def delete_batch(self, batch_id: str) -> bool:
-        """Delete a run batch and all associated runs.
+    def delete_task(self, task_id: str) -> bool:
+        """Delete a task and all associated runs.
 
         Args:
-            batch_id: Run batch ID.
+            task_id: Task ID.
 
         Returns:
             True if deleted, False if not found.
         """
-        batch = self.get_batch_by_id(batch_id)
-        if batch is None:
+        task = self.get_task_by_id(task_id)
+        if task is None:
             return False
-        self.db.delete(batch)
+        self.db.delete(task)
         self.db.flush()
         return True
 
-    def list_batches(
+    def list_tasks(
         self,
         status_filter: str | None = None,
         limit: int = 20,
         offset: int = 0,
-    ) -> tuple[Sequence[RunBatch], int]:
-        """List run batches with pagination.
+    ) -> tuple[Sequence[Task], int]:
+        """List tasks with pagination.
 
         Args:
             status_filter: Filter by status.
@@ -92,11 +92,11 @@ class RunRepository:
             offset: Offset for pagination.
 
         Returns:
-            Tuple of (list of RunBatch instances, total count).
+            Tuple of (list of Task instances, total count).
         """
-        stmt = select(RunBatch).order_by(RunBatch.created_at.desc())
+        stmt = select(Task).order_by(Task.created_at.desc())
         if status_filter:
-            stmt = stmt.where(RunBatch.status == status_filter)
+            stmt = stmt.where(Task.status == status_filter)
 
         # Get total count
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -104,21 +104,21 @@ class RunRepository:
 
         # Get paginated results
         stmt = stmt.limit(limit).offset(offset)
-        batches = self.db.execute(stmt).scalars().all()
-        return batches, total
+        tasks = self.db.execute(stmt).scalars().all()
+        return tasks, total
 
-    def list_runs_by_batch(self, batch_id: str) -> Sequence[RunJob]:
-        """List all runs in a batch.
+    def list_runs_by_task(self, task_id: str) -> Sequence[RunJob]:
+        """List all runs in a task.
 
         Args:
-            batch_id: Run batch ID.
+            task_id: Task ID.
 
         Returns:
             List of RunJob instances.
         """
         stmt = (
             select(RunJob)
-            .where(RunJob.batch_id == batch_id)
+            .where(RunJob.task_id == task_id)
             .order_by(RunJob.started_at.desc().nulls_last())
         )
         return self.db.execute(stmt).scalars().all()
