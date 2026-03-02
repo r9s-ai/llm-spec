@@ -12,7 +12,6 @@ from llm_spec_web.api.provider_configs import router as provider_config_router
 from llm_spec_web.api.runs import router as runs_router
 from llm_spec_web.api.settings import router as settings_router
 from llm_spec_web.api.suites import router as suites_router
-from llm_spec_web.api.suites import version_router as suite_versions_router
 from llm_spec_web.api.tasks import router as tasks_router
 from llm_spec_web.config import settings
 from llm_spec_web.core.db import Base, engine
@@ -70,7 +69,6 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(suites_router)
-    app.include_router(suite_versions_router)
     app.include_router(provider_config_router)
     app.include_router(runs_router)
     app.include_router(tasks_router)

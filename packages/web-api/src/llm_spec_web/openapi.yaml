@@ -84,7 +84,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/suite-versions/{version_id}:
+  /api/suites/versions/{version_id}:
     get:
       summary: Get suite version
       operationId: getSuiteVersion

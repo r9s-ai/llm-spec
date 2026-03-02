@@ -9,7 +9,6 @@ from llm_spec_web.schemas.suite import SuiteResponse, SuiteVersionResponse
 from llm_spec_web.services.suite_service import SuiteService
 
 router = APIRouter(prefix="/api/suites", tags=["suites"])
-version_router = APIRouter(prefix="/api/suite-versions", tags=["suite-versions"])
 
 
 @router.post("/cache/refresh")
@@ -54,7 +53,7 @@ def list_versions(
     return [SuiteVersionResponse.model_validate(v) for v in versions]
 
 
-@version_router.get("/{version_id}", response_model=SuiteVersionResponse)
+@router.get("/versions/{version_id}", response_model=SuiteVersionResponse)
 def get_version(
     version_id: str,
     service: SuiteService = Depends(get_suite_service),

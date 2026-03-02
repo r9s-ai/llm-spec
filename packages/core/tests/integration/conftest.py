@@ -8,10 +8,7 @@ import pytest
 import respx
 from mock_loader import MockDataLoader
 
-from llm_spec.adapters.anthropic import AnthropicAdapter
-from llm_spec.adapters.gemini import GeminiAdapter
-from llm_spec.adapters.openai import OpenAIAdapter
-from llm_spec.adapters.xai import XAIAdapter
+from llm_spec.adapters.api_family import APIFamilyAdapter, create_api_family_adapter
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import AppConfig, load_config
 
@@ -74,7 +71,7 @@ def config() -> AppConfig:
 @pytest.fixture(scope="session")
 def openai_client(
     config: AppConfig, mock_mode: bool, mock_data_loader: MockDataLoader
-) -> Generator[OpenAIAdapter, None, None]:
+) -> Generator[APIFamilyAdapter, None, None]:
     """Create an OpenAI client adapter.
 
     Supports both real API calls and mock mode.
@@ -85,7 +82,7 @@ def openai_client(
     # HTTP client (transport only)
     http_client = HTTPClient(default_timeout=provider_config.timeout)
 
-    adapter = OpenAIAdapter(provider_config, http_client)
+    adapter = create_api_family_adapter("openai", provider_config, http_client)
 
     # Attach mock loader in mock mode (for test setup)
     if mock_mode:
@@ -101,14 +98,14 @@ def openai_client(
 @pytest.fixture(scope="session")
 def anthropic_client(
     config: AppConfig, mock_mode: bool, mock_data_loader: MockDataLoader
-) -> Generator[AnthropicAdapter, None, None]:
+) -> Generator[APIFamilyAdapter, None, None]:
     """Create an Anthropic client adapter.
 
     Supports both real API calls and mock mode.
     """
     provider_config = config.get_provider_config("anthropic")
     http_client = HTTPClient(default_timeout=provider_config.timeout)
-    adapter = AnthropicAdapter(provider_config, http_client)
+    adapter = create_api_family_adapter("anthropic", provider_config, http_client)
 
     # Attach mock loader in mock mode
     if mock_mode:
@@ -124,14 +121,14 @@ def anthropic_client(
 @pytest.fixture(scope="session")
 def gemini_client(
     config: AppConfig, mock_mode: bool, mock_data_loader: MockDataLoader
-) -> Generator[GeminiAdapter, None, None]:
+) -> Generator[APIFamilyAdapter, None, None]:
     """Create a Gemini client adapter.
 
     Supports both real API calls and mock mode.
     """
     provider_config = config.get_provider_config("gemini")
     http_client = HTTPClient(default_timeout=provider_config.timeout)
-    adapter = GeminiAdapter(provider_config, http_client)
+    adapter = create_api_family_adapter("gemini", provider_config, http_client)
 
     # Attach mock loader in mock mode
     if mock_mode:
@@ -147,14 +144,14 @@ def gemini_client(
 @pytest.fixture(scope="session")
 def xai_client(
     config: AppConfig, mock_mode: bool, mock_data_loader: MockDataLoader
-) -> Generator[XAIAdapter, None, None]:
+) -> Generator[APIFamilyAdapter, None, None]:
     """Create an xAI client adapter.
 
     Supports both real API calls and mock mode.
     """
     provider_config = config.get_provider_config("xai")
     http_client = HTTPClient(default_timeout=provider_config.timeout)
-    adapter = XAIAdapter(provider_config, http_client)
+    adapter = create_api_family_adapter("xai", provider_config, http_client)
 
     # Attach mock loader in mock mode
     if mock_mode:
