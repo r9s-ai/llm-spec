@@ -28,8 +28,8 @@ export type SuiteVersion = {
   parsed_json: Record<string, unknown>;
 };
 
-// Run batch types
-export type RunBatch = {
+// Task types
+export type Task = {
   id: string;
   name: string;
   status: string;
@@ -43,7 +43,7 @@ export type RunBatch = {
   created_at: string;
 };
 
-export type RunBatchWithRuns = RunBatch & {
+export type TaskWithRuns = Task & {
   runs: RunJob[];
 };
 
@@ -56,7 +56,7 @@ export type RunJob = {
   route: string | null;
   model: string | null;
   endpoint: string;
-  batch_id: string | null;
+  task_id: string | null;
   suite_version_id: string | null;
   started_at: string | null;
   finished_at: string | null;

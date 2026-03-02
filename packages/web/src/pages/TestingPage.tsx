@@ -4,7 +4,7 @@ import { useAppContext } from "../context";
 import type { RunJob } from "../types";
 
 export function TestingPage() {
-  const { runMode, setRunMode, setNotice, suites, batches } = useAppContext();
+  const { runMode, setRunMode, setNotice, suites, tasks } = useAppContext();
   const [maxConcurrent, setMaxConcurrent] = useState(5);
   const {
     providers,
@@ -27,42 +27,42 @@ export function TestingPage() {
   } = suites;
 
   const {
-    batches: batchList,
+    tasks: taskList,
     runEventsById,
     runResultById,
-    startBatchRun,
+    startTaskRun,
     loadHistory,
-    deleteBatchFromServer,
-    upsertBatch,
-  } = batches;
+    deleteTaskFromServer,
+    upsertTask,
+  } = tasks;
 
   // Load history on mount
   useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
 
-  // Check if any batch is currently running
+  // Check if any task is currently running
   const isRunning = useMemo(
-    () => batchList.some((batch) => batch.status === "running"),
-    [batchList]
+    () => taskList.some((task) => task.status === "running"),
+    [taskList]
   );
 
-  // Separate active and completed batches
-  const { activeBatches, completedBatches } = useMemo(() => {
-    const active: typeof batchList = [];
-    const completed: typeof batchList = [];
-    batchList.forEach((batch) => {
-      if (batch.status === "running") {
-        active.push(batch);
+  // Separate active and completed tasks
+  const { activeTasks, completedTasks } = useMemo(() => {
+    const active: typeof taskList = [];
+    const completed: typeof taskList = [];
+    taskList.forEach((task) => {
+      if (task.status === "running") {
+        active.push(task);
       } else {
-        completed.push(batch);
+        completed.push(task);
       }
     });
-    return { activeBatches: active, completedBatches: completed };
-  }, [batchList]);
+    return { activeTasks: active, completedTasks: completed };
+  }, [taskList]);
 
-  // Handle batch run
-  const handleStartBatchRun = useCallback(async () => {
+  // Handle task run
+  const handleStartTaskRun = useCallback(async () => {
     // Collect selected suite version IDs
     const selectedSuiteVersionIds: string[] = [];
     suiteList.forEach((suite) => {
@@ -75,7 +75,7 @@ export function TestingPage() {
       }
     });
 
-    await startBatchRun(
+    await startTaskRun(
       selectedSuiteVersionIds,
       runMode,
       selectedTestsBySuite,
@@ -87,7 +87,7 @@ export function TestingPage() {
     selectedTestsBySuite,
     selectedVersionBySuite,
     runMode,
-    startBatchRun,
+    startTaskRun,
     setNotice,
     maxConcurrent,
   ]);
@@ -127,12 +127,12 @@ export function TestingPage() {
     suites.setSelectedTestsBySuite({});
   }, [clearAllProviders, suites]);
 
-  // Handle delete batch
-  const handleDeleteBatch = useCallback(
-    async (batchId: string) => {
-      await deleteBatchFromServer(batchId);
+  // Handle delete task
+  const handleDeleteTask = useCallback(
+    async (taskId: string) => {
+      await deleteTaskFromServer(taskId);
     },
-    [deleteBatchFromServer]
+    [deleteTaskFromServer]
   );
 
   const handleRefreshMemory = useCallback(async () => {
@@ -142,9 +142,9 @@ export function TestingPage() {
 
   const handleRetryFailedTest = useCallback(
     async (run: RunJob, testName: string): Promise<void> => {
-      await batches.retryFailedTestInPlace(run, testName, setNotice);
+      await tasks.retryFailedTestInPlace(run, testName, setNotice);
     },
-    [batches, setNotice]
+    [tasks, setNotice]
   );
 
   return (
@@ -176,7 +176,7 @@ export function TestingPage() {
             onRunModeChange={setRunMode}
             onMaxConcurrentChange={setMaxConcurrent}
             onRefreshCache={() => void handleRefreshMemory()}
-            onRun={() => void handleStartBatchRun()}
+            onRun={() => void handleStartTaskRun()}
           />
         </div>
       </div>
@@ -185,7 +185,7 @@ export function TestingPage() {
       <div className="flex-1 overflow-auto bg-slate-50">
         <div className="p-1.5 space-y-4">
           {/* Empty State */}
-          {batchList.length === 0 && (
+          {taskList.length === 0 && (
             <div className="border border-slate-200 rounded-lg bg-white p-8 text-center">
               <p className="text-sm text-slate-500">
                 No tasks yet. Select routes and click Run to start.
@@ -193,28 +193,28 @@ export function TestingPage() {
             </div>
           )}
 
-          {/* Active Batches */}
-          {activeBatches.map((batch) => (
+          {/* Active Tasks */}
+          {activeTasks.map((task) => (
             <TaskCard
-              key={batch.id}
-              batch={batch}
+              key={task.id}
+              task={task}
               eventsByRunId={runEventsById}
               resultsByRunId={runResultById}
-              onDelete={handleDeleteBatch}
-              onUpdate={upsertBatch}
+              onDelete={handleDeleteTask}
+              onUpdate={upsertTask}
               onRetryFailedTest={handleRetryFailedTest}
             />
           ))}
 
-          {/* Completed Batches */}
-          {completedBatches.map((batch) => (
+          {/* Completed Tasks */}
+          {completedTasks.map((task) => (
             <TaskCard
-              key={batch.id}
-              batch={batch}
+              key={task.id}
+              task={task}
               eventsByRunId={runEventsById}
               resultsByRunId={runResultById}
-              onDelete={handleDeleteBatch}
-              onUpdate={upsertBatch}
+              onDelete={handleDeleteTask}
+              onUpdate={upsertTask}
               onRetryFailedTest={handleRetryFailedTest}
             />
           ))}

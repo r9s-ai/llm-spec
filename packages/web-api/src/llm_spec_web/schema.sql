@@ -4,7 +4,7 @@
 
 PRAGMA foreign_keys = ON;
 
-create table if not exists run_batch (
+create table if not exists task (
     id text primary key,
     name text not null default 'Task',
     status text not null default 'running',
@@ -18,8 +18,8 @@ create table if not exists run_batch (
     created_at text not null default (datetime('now'))
 );
 
-create index if not exists ix_run_batch_status on run_batch(status);
-create index if not exists ix_run_batch_created_at on run_batch(created_at desc);
+create index if not exists ix_task_status on task(status);
+create index if not exists ix_task_created_at on task(created_at desc);
 
 create table if not exists run_job (
     id text primary key,
@@ -29,7 +29,7 @@ create table if not exists run_job (
     route text null,
     model text null,
     endpoint text not null,
-    batch_id text references run_batch(id) on delete cascade,
+    task_id text references task(id) on delete cascade,
     suite_version_id text null,
     config_snapshot text not null default '{}',
     started_at text null,
@@ -41,7 +41,7 @@ create table if not exists run_job (
     error_message text null
 );
 
-create index if not exists ix_run_job_batch_id on run_job(batch_id);
+create index if not exists ix_run_job_task_id on run_job(task_id);
 create index if not exists ix_run_job_provider_status on run_job(provider, status);
 create index if not exists ix_run_job_provider_model_route on run_job(provider, model, route);
 

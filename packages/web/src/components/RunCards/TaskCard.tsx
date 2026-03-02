@@ -3,15 +3,15 @@ import { Badge } from "../UI";
 import { ActiveRunCard } from "./ActiveRunCard";
 import { CompletedRunCard } from "./CompletedRunCard";
 import { ProgressBar } from "./ProgressBar";
-import type { RunBatchWithRuns, RunEvent, RunJob, RunSummary } from "../../types";
+import type { RunEvent, RunJob, RunSummary, TaskWithRuns } from "../../types";
 import * as api from "../../api";
 
 interface TaskCardProps {
-  batch: RunBatchWithRuns;
+  task: TaskWithRuns;
   eventsByRunId: Record<string, RunEvent[]>;
   resultsByRunId: Record<string, Record<string, unknown>>;
-  onDelete: (batchId: string) => void;
-  onUpdate?: (batch: RunBatchWithRuns) => void;
+  onDelete: (taskId: string) => void;
+  onUpdate?: (task: TaskWithRuns) => void;
   onRetryFailedTest?: (run: RunJob, testName: string) => Promise<void> | void;
 }
 
@@ -49,7 +49,7 @@ function formatDate(dateStr: string | null): string {
 }
 
 export function TaskCard({
-  batch,
+  task,
   eventsByRunId,
   resultsByRunId,
   onDelete,
@@ -59,35 +59,35 @@ export function TaskCard({
   const [isExpanded, setIsExpanded] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
-  const [editedName, setEditedName] = useState(batch.name);
+  const [editedName, setEditedName] = useState(task.name);
   const [isSavingName, setIsSavingName] = useState(false);
 
-  const isRunning = batch.status === "running";
-  const isCompleted = batch.status === "completed";
-  const isFailed = batch.status === "cancelled" || batch.failed_runs > 0;
+  const isRunning = task.status === "running";
+  const isCompleted = task.status === "completed";
+  const isFailed = task.status === "cancelled" || task.failed_runs > 0;
 
   // Calculate overall progress
-  const totalTests = batch.runs.reduce((sum, run) => sum + run.progress_total, 0);
-  const doneTests = batch.runs.reduce((sum, run) => sum + run.progress_done, 0);
-  const passedTests = batch.runs.reduce((sum, run) => sum + run.progress_passed, 0);
-  const failedTests = batch.runs.reduce((sum, run) => sum + run.progress_failed, 0);
+  const totalTests = task.runs.reduce((sum, run) => sum + run.progress_total, 0);
+  const doneTests = task.runs.reduce((sum, run) => sum + run.progress_done, 0);
+  const passedTests = task.runs.reduce((sum, run) => sum + run.progress_passed, 0);
+  const failedTests = task.runs.reduce((sum, run) => sum + run.progress_failed, 0);
   const progress = totalTests > 0 ? Math.round((doneTests / totalTests) * 100) : 0;
   const modelCount = useMemo(
-    () => new Set(batch.runs.map((run) => `${run.provider}:${run.model ?? "unknown"}`)).size,
-    [batch.runs]
+    () => new Set(task.runs.map((run) => `${run.provider}:${run.model ?? "unknown"}`)).size,
+    [task.runs]
   );
   const routeCount = useMemo(
-    () => new Set(batch.runs.map((run) => `${run.provider}:${run.route ?? run.endpoint}`)).size,
-    [batch.runs]
+    () => new Set(task.runs.map((run) => `${run.provider}:${run.route ?? run.endpoint}`)).size,
+    [task.runs]
   );
 
   const groupedRuns = useMemo(() => {
-    const grouped = new Map<string, Map<string, typeof batch.runs>>();
-    for (const run of batch.runs) {
+    const grouped = new Map<string, Map<string, typeof task.runs>>();
+    for (const run of task.runs) {
       const providerKey = run.provider;
       const modelKey = run.model ?? "unknown";
       if (!grouped.has(providerKey)) {
-        grouped.set(providerKey, new Map<string, typeof batch.runs>());
+        grouped.set(providerKey, new Map<string, typeof task.runs>());
       }
       const providerMap = grouped.get(providerKey)!;
       if (!providerMap.has(modelKey)) {
@@ -123,13 +123,13 @@ export function TaskCard({
             };
           }),
       }));
-  }, [batch]);
+  }, [task]);
 
   const handleDelete = async () => {
     if (isDeleting) return;
     setIsDeleting(true);
     try {
-      await onDelete(batch.id);
+      await onDelete(task.id);
     } finally {
       setIsDeleting(false);
     }
@@ -137,7 +137,7 @@ export function TaskCard({
 
   const handleStartEditName = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setEditedName(batch.name);
+    setEditedName(task.name);
     setIsEditingName(true);
   };
 
@@ -145,21 +145,21 @@ export function TaskCard({
     if (isSavingName || !editedName.trim()) return;
     setIsSavingName(true);
     try {
-      const updatedBatch = await api.updateBatch(batch.id, editedName.trim());
+      const updatedTask = await api.updateTask(task.id, editedName.trim());
       if (onUpdate) {
-        onUpdate({ ...batch, name: updatedBatch.name });
+        onUpdate({ ...task, name: updatedTask.name });
       }
       setIsEditingName(false);
     } catch (error) {
-      console.error("Failed to update batch name:", error);
-      setEditedName(batch.name);
+      console.error("Failed to update task name:", error);
+      setEditedName(task.name);
     } finally {
       setIsSavingName(false);
     }
   };
 
   const handleCancelEditName = () => {
-    setEditedName(batch.name);
+    setEditedName(task.name);
     setIsEditingName(false);
   };
 
@@ -254,7 +254,7 @@ export function TaskCard({
                   onClick={handleStartEditName}
                   title="Click to edit name"
                 >
-                  {batch.name}
+                  {task.name}
                   <svg
                     className="inline-block w-4 h-4 ml-1 opacity-0 group-hover:opacity-50"
                     fill="none"
@@ -276,20 +276,20 @@ export function TaskCard({
                 {isRunning ? "Running" : isCompleted && !isFailed ? "Completed" : "Failed"}
               </Badge>
               <span className="text-xs text-slate-400 bg-slate-200 px-2 py-0.5 rounded">
-                {batch.mode}
+                {task.mode}
               </span>
             </div>
             <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
               <span>
-                {batch.runs.length} run{batch.runs.length !== 1 ? "s" : ""} · {modelCount} model
+                {task.runs.length} run{task.runs.length !== 1 ? "s" : ""} · {modelCount} model
                 {modelCount !== 1 ? "s" : ""} · {routeCount} route{routeCount !== 1 ? "s" : ""}
               </span>
               <span>·</span>
               <span>
-                {formatDate(batch.created_at)} {formatTime(batch.started_at)}
+                {formatDate(task.created_at)} {formatTime(task.started_at)}
               </span>
               <span>·</span>
-              <span className="text-slate-400">{formatRelativeTime(batch.created_at)}</span>
+              <span className="text-slate-400">{formatRelativeTime(task.created_at)}</span>
             </div>
           </div>
         </div>
@@ -309,7 +309,7 @@ export function TaskCard({
             </div>
           </div>
 
-          {/* Progress indicator for running batches */}
+          {/* Progress indicator for running tasks */}
           {isRunning && (
             <div className="w-24">
               <div className="flex items-center justify-between text-xs mb-1">
@@ -434,7 +434,7 @@ export function TaskCard({
 
           {/* Footer with task ID */}
           <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
-            <span className="text-xs text-slate-400">Task ID: {batch.id.slice(0, 8)}...</span>
+            <span className="text-xs text-slate-400">Task ID: {task.id.slice(0, 8)}...</span>
           </div>
         </div>
       )}
