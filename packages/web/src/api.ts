@@ -31,6 +31,11 @@ export function listVersions(suiteId: string): Promise<SuiteVersion[]> {
   return request<SuiteVersion[]>(`/api/suites/${suiteId}/versions`);
 }
 
+// Suite Version API functions
+export function getSuiteVersion(versionId: string): Promise<SuiteVersion> {
+  return request<SuiteVersion>(`/api/suites/versions/${versionId}`);
+}
+
 export function refreshSuiteRegistryCache(): Promise<{
   status: string;
   suite_count: number;

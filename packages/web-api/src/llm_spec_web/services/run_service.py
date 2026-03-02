@@ -10,10 +10,7 @@ from typing import Any, cast
 
 from sqlalchemy.orm import Session
 
-from llm_spec.adapters.anthropic import AnthropicAdapter
-from llm_spec.adapters.gemini import GeminiAdapter
-from llm_spec.adapters.openai import OpenAIAdapter
-from llm_spec.adapters.xai import XAIAdapter
+from llm_spec.adapters.api_family import create_api_family_adapter
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import ProviderConfig, load_config
 from llm_spec.results.result_types import CaseResult, TaskResult
@@ -26,14 +23,6 @@ from llm_spec_web.core.exceptions import ConfigurationError, NotFoundError, Vali
 from llm_spec_web.models.run import RunEvent, RunJob, RunTestResult, Task, TaskResultRecord
 from llm_spec_web.repositories.run_repo import RunRepository
 from llm_spec_web.services.suite_service import SuiteService
-
-# API-family adapter registry
-API_FAMILY_ADAPTERS: dict[str, type] = {
-    "openai": OpenAIAdapter,
-    "anthropic": AnthropicAdapter,
-    "gemini": GeminiAdapter,
-    "xai": XAIAdapter,
-}
 
 
 def create_provider_client(
@@ -66,11 +55,7 @@ def create_provider_client(
             provider_name=provider,
         )
 
-    adapter_class = API_FAMILY_ADAPTERS.get(config.api_family or provider)
-    if adapter_class is None:
-        raise ValueError(f"Unsupported provider/api_family: {provider}/{config.api_family}")
-
-    return adapter_class(config, http_client)
+    return create_api_family_adapter(provider=provider, config=config, http_client=http_client)
 
 
 def load_suite_from_version(parsed_json: dict[str, Any]) -> SpecTestSuite:

@@ -49,7 +49,7 @@ class ConfigDrivenTestRunner:
 
         Args:
             suite: test suite
-            client: provider adapter (OpenAIAdapter, GeminiAdapter, ...)
+            client: provider adapter instance
         """
         self.suite = suite
         self.client = client
