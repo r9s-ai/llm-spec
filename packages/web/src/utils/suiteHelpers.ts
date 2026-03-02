@@ -1,11 +1,11 @@
-import type { SuiteVersion, TestRow, VersionsMap } from "../types";
+import type { Suite, TestRow } from "../types";
 
 /**
- * 从 SuiteVersion 中提取测试行信息
+ * 从 Suite.route_suite 中提取测试行信息
  */
-export function getTestRows(version: SuiteVersion | undefined): TestRow[] {
-  if (!version) return [];
-  const tests = version.parsed_json.tests;
+export function getTestRows(suite: Suite | undefined): TestRow[] {
+  if (!suite) return [];
+  const tests = suite.route_suite.tests;
   if (!Array.isArray(tests)) return [];
 
   return tests
@@ -22,20 +22,6 @@ export function getTestRows(version: SuiteVersion | undefined): TestRow[] {
       return { name, paramName, valueText, tags };
     })
     .filter((it): it is TestRow => Boolean(it));
-}
-
-/**
- * 根据 versionId 获取对应的 SuiteVersion
- */
-export function getVersionById(
-  versionsBySuite: VersionsMap,
-  suiteId: string,
-  versionId?: string
-): SuiteVersion | undefined {
-  const versions = versionsBySuite[suiteId] ?? [];
-  if (versions.length === 0) return undefined;
-  if (!versionId) return versions[0];
-  return versions.find((v) => v.id === versionId) ?? versions[0];
 }
 
 /**

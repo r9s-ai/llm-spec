@@ -1,14 +1,12 @@
 import { useMemo } from "react";
 import { Checkbox } from "../UI";
 import { SuiteNode } from "./SuiteNode";
-import type { Suite, TestSelectionMap, VersionsMap } from "../../types";
-import { getTestRows, getVersionById } from "../../utils";
+import type { Suite, TestSelectionMap } from "../../types";
+import { getTestRows } from "../../utils";
 
 interface ModelNodeProps {
   model: string;
   suites: Suite[];
-  versionsBySuite: VersionsMap;
-  selectedVersionBySuite: Record<string, string>;
   selectedTestsBySuite: TestSelectionMap;
   expandedSuites: Set<string>;
   isExpanded: boolean;
@@ -22,8 +20,6 @@ interface ModelNodeProps {
 export function ModelNode({
   model,
   suites,
-  versionsBySuite,
-  selectedVersionBySuite,
   selectedTestsBySuite,
   expandedSuites,
   isExpanded,
@@ -38,10 +34,7 @@ export function ModelNode({
     let selected = 0;
 
     suites.forEach((suite) => {
-      const versions = versionsBySuite[suite.id] ?? [];
-      const versionId = selectedVersionBySuite[suite.id] ?? versions[0]?.id;
-      const version = getVersionById(versionsBySuite, suite.id, versionId);
-      const tests = getTestRows(version);
+      const tests = getTestRows(suite);
       total += tests.length;
       const suiteSelected = selectedTestsBySuite[suite.id] ?? new Set<string>();
       selected += tests.filter((t) => suiteSelected.has(t.name)).length;
@@ -53,16 +46,16 @@ export function ModelNode({
       isAllSelected: total > 0 && selected === total,
       isIndeterminate: selected > 0 && selected < total,
     };
-  }, [suites, versionsBySuite, selectedVersionBySuite, selectedTestsBySuite]);
+  }, [suites, selectedTestsBySuite]);
 
-  const uniqueRouteCount = useMemo(() => new Set(suites.map((suite) => suite.route)).size, [suites]);
+  const uniqueRouteCount = useMemo(
+    () => new Set(suites.map((suite) => String(suite.route_suite.route ?? ""))).size,
+    [suites]
+  );
 
   const handleCheckboxChange = (checked: boolean) => {
     suites.forEach((suite) => {
-      const versions = versionsBySuite[suite.id] ?? [];
-      const versionId = selectedVersionBySuite[suite.id] ?? versions[0]?.id;
-      const version = getVersionById(versionsBySuite, suite.id, versionId);
-      const tests = getTestRows(version);
+      const tests = getTestRows(suite);
       onToggleTests(
         suite.id,
         tests.map((t) => t.name),
@@ -112,12 +105,13 @@ export function ModelNode({
       {isExpanded && (
         <div className="space-y-0.5 p-1">
           {suites
-            .sort((a, b) => a.route.localeCompare(b.route) || a.endpoint.localeCompare(b.endpoint))
+            .sort(
+              (a, b) =>
+                String(a.route_suite.route ?? "").localeCompare(String(b.route_suite.route ?? "")) ||
+                String(a.route_suite.endpoint ?? "").localeCompare(String(b.route_suite.endpoint ?? ""))
+            )
             .map((suite) => {
-              const versions = versionsBySuite[suite.id] ?? [];
-              const versionId = selectedVersionBySuite[suite.id] ?? versions[0]?.id;
-              const version = getVersionById(versionsBySuite, suite.id, versionId);
-              const tests = getTestRows(version);
+              const tests = getTestRows(suite);
               const selectedTestsForSuite = selectedTestsBySuite[suite.id] ?? new Set<string>();
               const isSuiteExpanded = expandedSuites.has(suite.id);
 
@@ -125,7 +119,6 @@ export function ModelNode({
                 <SuiteNode
                   key={suite.id}
                   suite={suite}
-                  version={version}
                   tests={tests}
                   selectedTests={selectedTestsForSuite}
                   isExpanded={isSuiteExpanded}

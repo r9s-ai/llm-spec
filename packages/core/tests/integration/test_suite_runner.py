@@ -25,13 +25,12 @@ import respx
 from mock_loader import MockDataLoader
 
 from llm_spec.adapters.base import ProviderAdapter
-from llm_spec.registry import ExpandedSuite, load_registry_suites
 from llm_spec.runners import (
     ConfigDrivenTestRunner,
     SpecTestCase,
     SpecTestSuite,
-    load_test_suite_from_dict,
 )
+from llm_spec.suites.registry import ModelSuite, hydrate_executable_suite, load_registry_suites
 
 if TYPE_CHECKING:
     pass
@@ -44,10 +43,10 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 SUITES_DIR = REPO_ROOT / "suites-registry" / "providers"
 
 # Cache loaded suites
-_SUITE_CACHE: dict[str, tuple[ExpandedSuite, SpecTestSuite]] = {}
+_SUITE_CACHE: dict[str, tuple[ModelSuite, SpecTestSuite]] = {}
 
 
-def _get_suite(suite_key: str) -> tuple[ExpandedSuite, SpecTestSuite]:
+def _get_suite(suite_key: str) -> tuple[ModelSuite, SpecTestSuite]:
     """Get or load a TestSuite (cached)."""
     return _SUITE_CACHE[suite_key]
 
@@ -64,8 +63,9 @@ def discover_test_configs() -> list[tuple[str, str, str]]:
         return configs
 
     for item in load_registry_suites(SUITES_DIR):
-        suite = load_test_suite_from_dict(item.suite_dict, item.source_route_path)
-        suite_key = f"{item.provider}/{item.route}/{item.model}"
+        suite = hydrate_executable_suite(item.route_suite)
+        route = str(item.route_suite.get("route", ""))
+        suite_key = f"{item.provider}/{route}/{item.model_name}"
         _SUITE_CACHE[suite_key] = (item, suite)
 
         for test in suite.tests:

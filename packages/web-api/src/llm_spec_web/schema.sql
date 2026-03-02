@@ -30,7 +30,7 @@ create table if not exists run_job (
     model text null,
     endpoint text not null,
     task_id text references task(id) on delete cascade,
-    suite_version_id text null,
+    model_suite_id text null,
     config_snapshot text not null default '{}',
     started_at text null,
     finished_at text null,

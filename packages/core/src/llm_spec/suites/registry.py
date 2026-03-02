@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import copy
 import tomllib
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import json5
+
+from .loader import load_test_suite_from_dict
+from .types import SpecTestCase, SpecTestSuite
 
 
 @dataclass(frozen=True)
@@ -22,16 +26,80 @@ class ProviderMeta:
 
 
 @dataclass(frozen=True)
-class ExpandedSuite:
-    """A fully expanded suite from route × model."""
+class ModelSuite:
+    """Model-centered executable suite built from route × model."""
 
+    id: str
+    model_name: str
     provider: str
-    api_family: str
-    route: str
-    model: str
-    source_route_path: Path
-    suite_dict: dict[str, Any]
-    provider_headers: dict[str, str] = field(default_factory=dict)
+    route_suite: dict[str, Any]
+
+
+_MODEL_SUITE_NAMESPACE = uuid.UUID("31fb0a3f-845d-4ec8-bf08-1f6a3fd0fc09")
+
+
+def _model_suite_id(provider: str, route: str, model_name: str) -> str:
+    return str(uuid.uuid5(_MODEL_SUITE_NAMESPACE, f"model_suite:{provider}:{model_name}:{route}"))
+
+
+def hydrate_executable_suite(
+    suite_dict: dict[str, Any], config_path: Path | None = None
+) -> SpecTestSuite:
+    """Hydrate a SpecTestSuite from an already-expanded executable suite dict."""
+    tests_raw = suite_dict.get("tests", [])
+    if not isinstance(tests_raw, list):
+        raise ValueError("suite_dict.tests must be a list")
+
+    tests: list[SpecTestCase] = []
+    baseline_params: dict[str, Any] = {}
+    for row in tests_raw:
+        if not isinstance(row, dict):
+            raise ValueError("suite_dict.tests entries must be objects")
+        params = row.get("params")
+        if not isinstance(params, dict):
+            params = {}
+        baseline = bool(row.get("baseline", False))
+        if baseline:
+            baseline_params = copy.deepcopy(params)
+        tests.append(
+            SpecTestCase(
+                name=str(row.get("name", "")),
+                description=str(row.get("description", "")),
+                params=params,
+                focus_param=row.get("focus_param"),
+                baseline=baseline,
+                check_stream=bool(row.get("check_stream", False)),
+                stream_expectations=row.get("stream_expectations"),
+                endpoint_override=(
+                    str(row["endpoint_override"]) if row.get("endpoint_override") else None
+                ),
+                files=row.get("files"),
+                schemas=row.get("schemas"),
+                required_fields=row.get("required_fields"),
+                method=str(row["method"]) if row.get("method") else None,
+                tags=list(row.get("tags", []) or []),
+            )
+        )
+
+    required_fields = suite_dict.get("required_fields", [])
+    if not isinstance(required_fields, list):
+        required_fields = []
+    schemas = suite_dict.get("schemas", {})
+    if not isinstance(schemas, dict):
+        schemas = {}
+
+    return SpecTestSuite(
+        provider=str(suite_dict.get("provider", "")),
+        endpoint=str(suite_dict.get("endpoint", "")),
+        schemas=schemas,
+        baseline_params=baseline_params,
+        tests=tests,
+        required_fields=[str(field) for field in required_fields],
+        stream_expectations=suite_dict.get("stream_expectations"),
+        config_path=config_path,
+        method=str(suite_dict.get("method", "POST")),
+        suite_name=str(suite_dict["suite_name"]) if suite_dict.get("suite_name") else None,
+    )
 
 
 def _read_json5(path: Path) -> dict[str, Any]:
@@ -145,8 +213,8 @@ def _resolve_routes_for_provider(
 
 def load_registry_suites(
     registry_dir: Path | str = "suites-registry/providers",
-) -> list[ExpandedSuite]:
-    """Load and expand route×model suites from registry layout."""
+) -> list[ModelSuite]:
+    """Load and expand registry suites into model-centered executable suites."""
     registry_dir = Path(registry_dir)
     if not registry_dir.exists():
         return []
@@ -159,7 +227,7 @@ def load_registry_suites(
     metas = {name: _load_provider_meta(path) for name, path in provider_dirs.items()}
 
     route_cache: dict[str, dict[str, tuple[Path, dict[str, Any]]]] = {}
-    expanded: list[ExpandedSuite] = []
+    expanded: list[ModelSuite] = []
 
     for provider, provider_dir in provider_dirs.items():
         meta = metas[provider]
@@ -271,15 +339,38 @@ def load_registry_suites(
                 baseline["params"] = baseline_params
 
                 suite["tests"] = filtered_tests
+
+                # Normalize to executable test rows (including variants expansion).
+                loaded_suite = load_test_suite_from_dict(suite, route_path)
+                suite["tests"] = [
+                    {
+                        "name": test.name,
+                        "description": test.description,
+                        "params": test.params,
+                        "focus_param": test.focus_param,
+                        "baseline": test.baseline,
+                        "check_stream": test.check_stream,
+                        "stream_expectations": test.stream_expectations,
+                        "endpoint_override": test.endpoint_override,
+                        "files": test.files,
+                        "schemas": test.schemas,
+                        "required_fields": test.required_fields,
+                        "method": test.method,
+                        "tags": test.tags,
+                    }
+                    for test in loaded_suite.tests
+                ]
+                suite["route"] = route_name
+                suite["api_family"] = meta.api_family
+                suite["provider_headers"] = copy.deepcopy(meta.headers)
                 expanded.append(
-                    ExpandedSuite(
+                    ModelSuite(
+                        id=_model_suite_id(
+                            provider=provider, route=route_name, model_name=model_id
+                        ),
+                        model_name=model_id,
                         provider=provider,
-                        api_family=meta.api_family,
-                        route=route_name,
-                        model=model_id,
-                        source_route_path=route_path,
-                        suite_dict=suite,
-                        provider_headers=meta.headers,
+                        route_suite=suite,
                     )
                 )
 

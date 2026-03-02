@@ -40,8 +40,10 @@ export function SuiteTree({
     Object.entries(suitesByProvider).forEach(([provider, providerSuites]) => {
       const matchingSuites = providerSuites.filter(
         (suite) =>
-          suite.name.toLowerCase().includes(query) ||
-          suite.endpoint.toLowerCase().includes(query) ||
+          String(suite.route_suite.suite_name ?? "").toLowerCase().includes(query) ||
+          String(suite.route_suite.endpoint ?? "").toLowerCase().includes(query) ||
+          String(suite.route_suite.route ?? "").toLowerCase().includes(query) ||
+          suite.model_name.toLowerCase().includes(query) ||
           provider.toLowerCase().includes(query)
       );
       if (matchingSuites.length > 0) {
@@ -147,7 +149,7 @@ export function SuiteTree({
                 </svg>
                 <span className="text-sm font-bold text-slate-900">{provider}</span>
                 <span className="ml-auto text-xs text-slate-500">
-                  {providerSuites.length} suites
+                  {providerSuites.length} model suites
                 </span>
               </div>
 
@@ -167,16 +169,19 @@ export function SuiteTree({
                       <div className="min-w-0 flex-1">
                         <div
                           className="truncate text-sm font-medium text-slate-900"
-                          title={suite.name}
+                          title={String(suite.route_suite.suite_name ?? suite.model_name)}
                         >
-                          {suite.name}
+                          {String(suite.route_suite.suite_name ?? suite.model_name)}
                         </div>
-                        <div className="truncate text-xs text-slate-500" title={suite.endpoint}>
-                          {suite.endpoint}
+                        <div
+                          className="truncate text-xs text-slate-500"
+                          title={String(suite.route_suite.endpoint ?? "")}
+                        >
+                          {String(suite.route_suite.endpoint ?? "")}
                         </div>
                       </div>
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                        v{suite.latest_version}
+                        {suite.model_name}
                       </span>
                     </div>
                   ))}

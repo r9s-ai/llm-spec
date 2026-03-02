@@ -60,7 +60,7 @@ class RunJob(Base):
         route: Route name (registry route key).
         model: Model ID.
         endpoint: API endpoint path.
-        suite_version_id: Synthetic suite version ID from registry.
+        model_suite_id: Model suite ID from registry build output.
         config_snapshot: Configuration snapshot at run time.
         started_at: Execution start timestamp.
         finished_at: Execution finish timestamp.
@@ -86,7 +86,7 @@ class RunJob(Base):
         nullable=True,
         index=True,
     )
-    suite_version_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    model_suite_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     config_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

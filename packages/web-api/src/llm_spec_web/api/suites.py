@@ -1,11 +1,11 @@
-"""Read-only suite APIs from suites-registry."""
+"""Read-only model-suite APIs from suites-registry."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
 from llm_spec_web.api.deps import get_suite_service
-from llm_spec_web.schemas.suite import SuiteResponse, SuiteVersionResponse
+from llm_spec_web.schemas.suite import ModelSuiteResponse
 from llm_spec_web.services.suite_service import SuiteService
 
 router = APIRouter(prefix="/api/suites", tags=["suites"])
@@ -23,40 +23,27 @@ def refresh_suite_registry_cache(
     }
 
 
-@router.get("", response_model=list[SuiteResponse])
+@router.get("", response_model=list[ModelSuiteResponse])
 def list_suites(
     provider: str | None = None,
     route: str | None = None,
     model: str | None = None,
     endpoint: str | None = None,
     service: SuiteService = Depends(get_suite_service),
-) -> list[SuiteResponse]:
-    suites = service.list_suites(provider=provider, route=route, model=model, endpoint=endpoint)
-    return [SuiteResponse.model_validate(s) for s in suites]
+) -> list[ModelSuiteResponse]:
+    suites = service.list_suites(
+        provider=provider,
+        route=route,
+        model_name=model,
+        endpoint=endpoint,
+    )
+    return [ModelSuiteResponse.model_validate(s) for s in suites]
 
 
-@router.get("/{suite_id}", response_model=SuiteResponse)
+@router.get("/{suite_id}", response_model=ModelSuiteResponse)
 def get_suite(
     suite_id: str,
     service: SuiteService = Depends(get_suite_service),
-) -> SuiteResponse:
+) -> ModelSuiteResponse:
     suite = service.get_suite(suite_id)
-    return SuiteResponse.model_validate(suite)
-
-
-@router.get("/{suite_id}/versions", response_model=list[SuiteVersionResponse])
-def list_versions(
-    suite_id: str,
-    service: SuiteService = Depends(get_suite_service),
-) -> list[SuiteVersionResponse]:
-    versions = service.list_versions(suite_id)
-    return [SuiteVersionResponse.model_validate(v) for v in versions]
-
-
-@router.get("/versions/{version_id}", response_model=SuiteVersionResponse)
-def get_version(
-    version_id: str,
-    service: SuiteService = Depends(get_suite_service),
-) -> SuiteVersionResponse:
-    version = service.get_version(version_id)
-    return SuiteVersionResponse.model_validate(version)
+    return ModelSuiteResponse.model_validate(suite)
