@@ -104,9 +104,3 @@ export type RunSummary = {
   passed?: number;
   failed?: number;
 };
-
-export type CreateRunInput = {
-  model_suite_id: string;
-  mode?: RunMode;
-  selected_tests?: string[];
-};

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from llm_spec_web.models.run import RunEvent, RunJob, RunTestResult, Task, TaskResultRecord
+from llm_spec_web.models.run import RunCase, RunEvent, RunJob, RunTestResult, Task, TaskResultRecord
 
 
 class RunRepository:
@@ -48,6 +49,22 @@ class RunRepository:
         self.db.add(task)
         self.db.flush()
         return task
+
+    def create_task_with_runs(
+        self, task: Task, run_jobs: list[RunJob]
+    ) -> tuple[Task, list[RunJob]]:
+        """Create one task and its child runs in a single repository operation."""
+        self.db.add(task)
+        self.db.flush()
+        for run_job in run_jobs:
+            run_job.task_id = task.id
+            self.db.add(run_job)
+        self.db.flush()
+        self.db.commit()
+        self.db.refresh(task)
+        for run_job in run_jobs:
+            self.db.refresh(run_job)
+        return task, run_jobs
 
     def update_task(self, task: Task) -> Task:
         """Update an existing task.
@@ -153,31 +170,61 @@ class RunRepository:
             stmt = stmt.where(RunJob.status == status_filter)
         return self.db.execute(stmt).scalars().all()
 
-    def create(self, run: RunJob) -> RunJob:
+    def create(self, run_job: RunJob) -> RunJob:
         """Create a new run job.
 
         Args:
-            run: RunJob instance to create.
+            run_job: RunJob instance to create.
 
         Returns:
             Created RunJob instance.
         """
-        self.db.add(run)
+        self.db.add(run_job)
         self.db.flush()
-        return run
+        return run_job
 
-    def update(self, run: RunJob) -> RunJob:
+    def update(self, run_job: RunJob) -> RunJob:
         """Update an existing run job.
 
         Args:
-            run: RunJob instance to update.
+            run_job: RunJob instance to update.
 
         Returns:
             Updated RunJob instance.
         """
-        self.db.add(run)
+        self.db.add(run_job)
         self.db.flush()
-        return run
+        return run_job
+
+    def refresh(self, entity: object) -> None:
+        """Refresh one ORM entity from database."""
+        self.db.refresh(entity)
+
+    def mark_run_running(self, run_job: RunJob, progress_total: int) -> RunJob:
+        """Mark run as running and persist initial progress in one transaction."""
+        run_job.status = "running"
+        run_job.started_at = datetime.now(UTC)
+        run_job.finished_at = None
+        run_job.error_message = None
+        run_job.progress_total = progress_total
+        run_job.progress_done = 0
+        run_job.progress_passed = 0
+        run_job.progress_failed = 0
+        self.update(run_job)
+        self.db.commit()
+        self.db.refresh(run_job)
+        return run_job
+
+    def fail_run_with_event(self, run_job: RunJob, error: str) -> RunJob:
+        """Mark run as failed, append failure event, and commit."""
+        run_job.status = "failed"
+        run_job.error_message = error
+        run_job.finished_at = datetime.now(UTC)
+        self.update(run_job)
+        self.append_event(run_job.id, "run_failed", {"error": error})
+        self.db.commit()
+        self.db.refresh(run_job)
+        return run_job
 
     # ==================== RunEvent Operations ====================
 
@@ -219,6 +266,17 @@ class RunRepository:
         )
         self.db.add(event)
         self.db.flush()
+        return event
+
+    def append_event_and_commit(
+        self,
+        run_id: str,
+        event_type: str,
+        payload: dict,
+    ) -> RunEvent:
+        """Append one event and commit immediately."""
+        event = self.append_event(run_id, event_type, payload)
+        self.db.commit()
         return event
 
     def list_events(
@@ -283,20 +341,30 @@ class RunRepository:
         self.db.flush()
         return test_result
 
-    def get_test_result_by_name(self, run_id: str, test_name: str) -> RunTestResult | None:
-        """Get one test result by run ID and test name."""
-        stmt = select(RunTestResult).where(
-            RunTestResult.run_id == run_id,
-            RunTestResult.test_name == test_name,
-        )
-        return self.db.execute(stmt).scalars().first()
+    def get_run_case(self, run_case_id: str) -> RunCase | None:
+        """Get one run-case snapshot by ID."""
+        return self.db.get(RunCase, run_case_id)
 
-    def upsert_test_result_by_name(
+    def list_run_cases(self, run_id: str) -> Sequence[RunCase]:
+        """List all run-case snapshots under one run."""
+        stmt = select(RunCase).where(RunCase.run_id == run_id).order_by(RunCase.test_name.asc())
+        return self.db.execute(stmt).scalars().all()
+
+    def replace_run_cases(self, run_id: str, cases: list[RunCase]) -> list[RunCase]:
+        """Replace run-case snapshots for one run in current transaction."""
+        self.db.execute(delete(RunCase).where(RunCase.run_id == run_id))
+        for case in cases:
+            self.db.add(case)
+        self.db.flush()
+        return cases
+
+    def upsert_test_result_by_run_case_id(
         self,
         *,
         run_id: str,
-        test_name: str,
+        run_case_id: str,
         test_id: str,
+        test_name: str,
         parameter_value: dict | list | str | int | float | bool | None,
         status: str,
         fail_stage: str | None,
@@ -304,11 +372,13 @@ class RunRepository:
         latency_ms: int | None,
         raw_record: dict,
     ) -> RunTestResult:
-        """Insert or update a test result identified by ``run_id + test_name``."""
-        row = self.get_test_result_by_name(run_id, test_name)
+        """Insert or update a test result identified by ``run_case_id``."""
+        stmt = select(RunTestResult).where(RunTestResult.run_case_id == run_case_id)
+        row = self.db.execute(stmt).scalars().first()
         if row is None:
             row = RunTestResult(
                 run_id=run_id,
+                run_case_id=run_case_id,
                 test_id=test_id,
                 test_name=test_name,
                 parameter_value=parameter_value,
@@ -320,7 +390,10 @@ class RunRepository:
             )
             self.db.add(row)
         else:
+            row.run_id = run_id
+            row.run_case_id = run_case_id
             row.test_id = test_id
+            row.test_name = test_name
             row.parameter_value = parameter_value
             row.status = status
             row.fail_stage = fail_stage
@@ -346,3 +419,43 @@ class RunRepository:
             .order_by(RunTestResult.test_name.asc())
         )
         return self.db.execute(stmt).scalars().all()
+
+    def complete_run_with_results(
+        self,
+        *,
+        run_job: RunJob,
+        progress_done: int,
+        progress_passed: int,
+        progress_failed: int,
+        test_results: list[RunTestResult],
+        task_result_json: dict,
+    ) -> RunJob:
+        """Persist run test rows + task result, mark final run status, and commit."""
+        for row in test_results:
+            self.add_test_result(row)
+
+        self.save_task_result(
+            TaskResultRecord(
+                run_id=run_job.id,
+                task_result_json=task_result_json,
+            )
+        )
+
+        run_job.progress_done = progress_done
+        run_job.progress_passed = progress_passed
+        run_job.progress_failed = progress_failed
+        run_job.finished_at = datetime.now(UTC)
+        run_job.status = "success" if progress_failed == 0 else "failed"
+        self.update(run_job)
+        self.append_event(
+            run_job.id,
+            "run_finished",
+            {
+                "status": run_job.status,
+                "passed": run_job.progress_passed,
+                "failed": run_job.progress_failed,
+            },
+        )
+        self.db.commit()
+        self.db.refresh(run_job)
+        return run_job

@@ -126,14 +126,22 @@ export function TestingPage() {
     [deleteTaskFromServer]
   );
 
+  const handleCancelTask = useCallback(
+    async (taskId: string) => {
+      await tasks.cancelTaskInPlace(taskId);
+      setNotice("Task cancel requested.");
+    },
+    [tasks, setNotice]
+  );
+
   const handleRefreshMemory = useCallback(async () => {
     const result = await refreshRegistryCache();
     setNotice(`Registry refreshed: ${result.suite_count} suites / ${result.version_count} versions.`);
   }, [refreshRegistryCache, setNotice]);
 
   const handleRetryFailedTest = useCallback(
-    async (run: RunJob, testName: string): Promise<void> => {
-      await tasks.retryFailedTestInPlace(run, testName, setNotice);
+    async (run: RunJob, runCaseId: string, testName: string): Promise<void> => {
+      await tasks.retryFailedTestInPlace(run, runCaseId, testName, setNotice);
     },
     [tasks, setNotice]
   );
@@ -190,6 +198,7 @@ export function TestingPage() {
               eventsByRunId={runEventsById}
               resultsByRunId={runResultById}
               onDelete={handleDeleteTask}
+              onCancel={handleCancelTask}
               onUpdate={upsertTask}
               onRetryFailedTest={handleRetryFailedTest}
             />
@@ -203,6 +212,7 @@ export function TestingPage() {
               eventsByRunId={runEventsById}
               resultsByRunId={runResultById}
               onDelete={handleDeleteTask}
+              onCancel={handleCancelTask}
               onUpdate={upsertTask}
               onRetryFailedTest={handleRetryFailedTest}
             />

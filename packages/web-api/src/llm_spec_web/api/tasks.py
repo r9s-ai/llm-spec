@@ -26,21 +26,17 @@ from llm_spec_web.services.run_service import RunService
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 
-def _execute_run_in_background(run_id: str, max_concurrent: int = 5) -> None:
-    """Execute a run in background.
+def _execute_task_in_background(task_id: str, max_concurrent: int = 5) -> None:
+    """Execute a full task in background.
 
     Args:
-        run_id: Run job ID.
+        task_id: Task ID.
         max_concurrent: Maximum number of concurrent tests.
     """
     db = SessionLocal()
     try:
         service = RunService()
-        service.execute_run(db, run_id, max_concurrent=max_concurrent)
-        # Update task status after run completes
-        run = service.get_run(db, run_id)
-        if run.task_id:
-            service.update_task_status(db, run.task_id)
+        service.execute_task(db, task_id, max_concurrent=max_concurrent)
     finally:
         db.close()
 
@@ -62,8 +58,7 @@ def create_task(
     )
 
     max_concurrent = payload.max_concurrent or 5
-    for run in runs:
-        background_tasks.add_task(_execute_run_in_background, run.id, max_concurrent)
+    background_tasks.add_task(_execute_task_in_background, task.id, max_concurrent)
 
     return TaskWithRunsResponse(
         id=task.id,
@@ -149,3 +144,14 @@ def get_task_runs(
     """Get all runs in a task."""
     _, runs = service.get_task_with_runs(db, task_id)
     return [RunJobResponse.model_validate(r) for r in runs]
+
+
+@router.post("/{task_id}/cancel", response_model=TaskResponse)
+def cancel_task(
+    task_id: str,
+    db: Session = Depends(get_db),
+    service: RunService = Depends(get_run_service),
+) -> TaskResponse:
+    """Cancel a running task (in-memory cancel + persisted cancelled state)."""
+    task = service.cancel_task_execution(db, task_id)
+    return TaskResponse.model_validate(task)

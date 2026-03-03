@@ -61,7 +61,7 @@ class RunJob(Base):
         model: Model ID.
         endpoint: API endpoint path.
         model_suite_id: Model suite ID from registry build output.
-        config_snapshot: Configuration snapshot at run time.
+        selected_tests: Selected test names for this run (empty means all tests).
         started_at: Execution start timestamp.
         finished_at: Execution finish timestamp.
         progress_total: Total number of tests.
@@ -87,7 +87,7 @@ class RunJob(Base):
         index=True,
     )
     model_suite_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    config_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    selected_tests: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     progress_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -159,6 +159,53 @@ class TaskResultRecord(Base):
         return f"<TaskResultRecord {self.run_id}>"
 
 
+class RunCase(Base):
+    """Prepared executable-case snapshot for one run.
+
+    This table stores the exact executable input so retries can run directly
+    from persisted context without rebuilding from registry/config pipeline.
+    """
+
+    __tablename__ = "run_case"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("run_job.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    case_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    test_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    route: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    request_method: Mapped[str] = mapped_column(String(16), nullable=False)
+    request_endpoint: Mapped[str] = mapped_column(String(255), nullable=False)
+    request_params: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    request_files: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    check_stream: Mapped[bool] = mapped_column(nullable=False, default=False)
+    response_schema: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    stream_chunk_schema: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    required_fields: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    stream_expectations: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    parameter_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    parameter_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+    parameter_value_type: Mapped[str] = mapped_column(String(32), nullable=False, default="none")
+    is_baseline: Mapped[bool] = mapped_column(nullable=False, default=False)
+    tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    __table_args__ = (Index("uq_run_case_run_case_id", "run_id", "case_id", unique=True),)
+
+    def __repr__(self) -> str:
+        return f"<RunCase {self.run_id}:{self.test_name}>"
+
+
 class RunTestResult(Base):
     """Individual test result model.
 
@@ -186,6 +233,12 @@ class RunTestResult(Base):
         nullable=False,
         index=True,
     )
+    run_case_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("run_case.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     test_id: Mapped[str] = mapped_column(String(512), nullable=False)
     test_name: Mapped[str] = mapped_column(String(255), nullable=False)
     parameter_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
@@ -206,3 +259,4 @@ class RunTestResult(Base):
 Index("ix_run_job_provider_status", RunJob.provider, RunJob.status)
 Index("ix_run_job_provider_model_route", RunJob.provider, RunJob.model, RunJob.route)
 Index("ix_run_test_result_run_status", RunTestResult.run_id, RunTestResult.status)
+Index("ix_run_case_run_test_name", RunCase.run_id, RunCase.test_name)

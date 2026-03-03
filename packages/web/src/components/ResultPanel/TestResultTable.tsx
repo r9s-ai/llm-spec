@@ -1,6 +1,7 @@
 import { useState, Fragment } from "react";
 
 interface TestResultRow {
+  run_case_id?: string;
   test_name: string;
   parameter?: {
     name: string;
@@ -26,7 +27,7 @@ interface TestResultRow {
 
 interface TestResultTableProps {
   tests: TestResultRow[];
-  onRetryFailedTest?: (testName: string) => Promise<void> | void;
+  onRetryFailedTest?: (runCaseId: string, testName: string) => Promise<void> | void;
 }
 
 export function TestResultTable({ tests, onRetryFailedTest }: TestResultTableProps) {
@@ -61,11 +62,11 @@ export function TestResultTable({ tests, onRetryFailedTest }: TestResultTablePro
     return test.result?.status === "fail";
   };
 
-  const handleRetry = async (testName: string): Promise<void> => {
+  const handleRetry = async (runCaseId: string, testName: string): Promise<void> => {
     if (!onRetryFailedTest) return;
     setRetryingRows((prev) => new Set(prev).add(testName));
     try {
-      await onRetryFailedTest(testName);
+      await onRetryFailedTest(runCaseId, testName);
     } finally {
       setRetryingRows((prev) => {
         const next = new Set(prev);
@@ -180,8 +181,11 @@ export function TestResultTable({ tests, onRetryFailedTest }: TestResultTablePro
                         </button>
                         {onRetryFailedTest && (
                           <button
-                            onClick={() => void handleRetry(test.test_name)}
-                            disabled={retryingRows.has(test.test_name)}
+                            onClick={() => {
+                              if (!test.run_case_id) return;
+                              void handleRetry(test.run_case_id, test.test_name);
+                            }}
+                            disabled={!test.run_case_id || retryingRows.has(test.test_name)}
                             className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-300 text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
                             title="Retry this failed test"
                             aria-label="Retry this failed test"

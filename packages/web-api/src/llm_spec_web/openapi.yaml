@@ -1,716 +1,1554 @@
-openapi: 3.1.0
-info:
-  title: llm-spec web api
-  version: 0.1.0
-  description: |
-    Web backend for read-only suite browsing and test run orchestration.
-
-    Terminology:
-    - task: a user-initiated execution that contains multiple runs
-    - run: a single execution for a selected suite version / model route
-servers:
-  - url: http://localhost:8000
-    description: local
-paths:
-  /healthz:
-    get:
-      summary: Health check
-      operationId: healthz
-      responses:
-        '200':
-          description: ok
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-
-  /api/suites:
-    get:
-      summary: List suites
-      operationId: listSuites
-      parameters:
-        - in: query
-          name: provider
-          schema:
-            type: string
-        - in: query
-          name: endpoint
-          schema:
-            type: string
-      responses:
-        '200':
-          description: suite list
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/SuiteResponse'
-
-  /api/suites/{suite_id}:
-    get:
-      summary: Get suite
-      operationId: getSuite
-      parameters:
-        - $ref: '#/components/parameters/SuiteId'
-      responses:
-        '200':
-          description: suite
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuiteResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/suites/{suite_id}/versions:
-    get:
-      summary: List suite versions
-      operationId: listSuiteVersions
-      parameters:
-        - $ref: '#/components/parameters/SuiteId'
-      responses:
-        '200':
-          description: versions
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/SuiteVersionResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/suites/versions/{version_id}:
-    get:
-      summary: Get suite version
-      operationId: getSuiteVersion
-      parameters:
-        - in: path
-          name: version_id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: suite version
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuiteVersionResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/provider-configs:
-    get:
-      summary: List provider configs
-      operationId: listProviderConfigs
-      responses:
-        '200':
-          description: provider configs
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ProviderConfigResponse'
-
-  /api/provider-configs/{provider}:
-    get:
-      summary: Get provider config
-      operationId: getProviderConfig
-      parameters:
-        - $ref: '#/components/parameters/ProviderName'
-      responses:
-        '200':
-          description: provider config
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProviderConfigResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/runs:
-    get:
-      summary: List runs
-      operationId: listRuns
-      parameters:
-        - in: query
-          name: status
-          schema:
-            type: string
-      responses:
-        '200':
-          description: runs
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/RunJobResponse'
-    post:
-      summary: Create run and start in background
-      operationId: createRun
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RunCreateRequest'
-      responses:
-        '201':
-          description: created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RunJobResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/runs/{run_id}:
-    get:
-      summary: Get run job
-      operationId: getRun
-      parameters:
-        - $ref: '#/components/parameters/RunId'
-      responses:
-        '200':
-          description: run
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RunJobResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/runs/{run_id}/cancel:
-    post:
-      summary: Cancel run
-      operationId: cancelRun
-      parameters:
-        - $ref: '#/components/parameters/RunId'
-      responses:
-        '200':
-          description: run
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RunJobResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/runs/{run_id}/events:
-    get:
-      summary: Poll run events
-      operationId: listRunEvents
-      parameters:
-        - $ref: '#/components/parameters/RunId'
-        - in: query
-          name: after_seq
-          schema:
-            type: integer
-            default: 0
-      responses:
-        '200':
-          description: event list
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/RunEventResponse'
-
-  /api/runs/{run_id}/events/stream:
-    get:
-      summary: Stream run events via SSE
-      operationId: streamRunEvents
-      parameters:
-        - $ref: '#/components/parameters/RunId'
-        - in: query
-          name: after_seq
-          schema:
-            type: integer
-            default: 0
-      responses:
-        '200':
-          description: text/event-stream
-          content:
-            text/event-stream:
-              schema:
-                type: string
-
-  /api/runs/{run_id}/task-result:
-    get:
-      summary: Get task_result.v1
-      operationId: getTaskResult
-      parameters:
-        - $ref: '#/components/parameters/RunId'
-      responses:
-        '200':
-          description: task result
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/runs/{run_id}/tests:
-    get:
-      summary: List run test records
-      operationId: listRunTests
-      parameters:
-        - $ref: '#/components/parameters/RunId'
-      responses:
-        '200':
-          description: tests
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  additionalProperties: true
-
-  /api/settings/toml:
-    get:
-      summary: Get llm-spec.toml content
-      operationId: getTomlSettings
-      responses:
-        '200':
-          description: toml content
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TomlSettingsResponse'
-    put:
-      summary: Update llm-spec.toml content
-      operationId: updateTomlSettings
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TomlSettingsRequest'
-      responses:
-        '200':
-          description: updated toml content
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TomlSettingsResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-components:
-  parameters:
-    SuiteId:
-      in: path
-      name: suite_id
-      required: true
-      schema:
-        type: string
-    ProviderName:
-      in: path
-      name: provider
-      required: true
-      schema:
-        type: string
-    RunId:
-      in: path
-      name: run_id
-      required: true
-      schema:
-        type: string
-
-  responses:
-    NotFound:
-      description: resource not found
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              detail:
-                type: string
-    BadRequest:
-      description: bad request
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              detail:
-                type: string
-
-  schemas:
-    SuiteResponse:
-      type: object
-      required: [id, provider, endpoint, name, status, latest_version, created_at, updated_at]
-      properties:
-        id:
-          type: string
-        provider:
-          type: string
-        endpoint:
-          type: string
-        name:
-          type: string
-        status:
-          type: string
-        latest_version:
-          type: integer
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-
-    SuiteVersionResponse:
-      type: object
-      required: [id, suite_id, version, created_by, created_at, raw_json5, parsed_json]
-      properties:
-        id:
-          type: string
-        suite_id:
-          type: string
-        version:
-          type: integer
-        created_by:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        raw_json5:
-          type: string
-        parsed_json:
-          type: object
-          additionalProperties: true
-
-    ProviderConfigResponse:
-      type: object
-      required: [provider, base_url, timeout, extra_config, updated_at]
-      properties:
-        provider:
-          type: string
-        base_url:
-          type: string
-        timeout:
-          type: number
-        extra_config:
-          type: object
-          additionalProperties: true
-        updated_at:
-          type: string
-          format: date-time
-
-    RunCreateRequest:
-      type: object
-      required: [suite_version_id]
-      properties:
-        suite_version_id:
-          type: string
-        mode:
-          type: string
-          enum: [real, mock]
-          nullable: true
-        selected_tests:
-          type: array
-          items:
-            type: string
-
-    RunJobResponse:
-      type: object
-      required:
-        [id, status, mode, provider, endpoint, progress_total, progress_done, progress_passed, progress_failed]
-      properties:
-        id:
-          type: string
-        status:
-          type: string
-        mode:
-          type: string
-        provider:
-          type: string
-        endpoint:
-          type: string
-        task_id:
-          type: string
-          nullable: true
-        suite_version_id:
-          type: string
-          nullable: true
-        started_at:
-          type: string
-          format: date-time
-          nullable: true
-        finished_at:
-          type: string
-          format: date-time
-          nullable: true
-        progress_total:
-          type: integer
-        progress_done:
-          type: integer
-        progress_passed:
-          type: integer
-        progress_failed:
-          type: integer
-        error_message:
-          type: string
-          nullable: true
-
-    RunEventResponse:
-      type: object
-      required: [id, run_id, seq, event_type, payload, created_at]
-      properties:
-        id:
-          type: integer
-        run_id:
-          type: string
-        seq:
-          type: integer
-        event_type:
-          type: string
-        payload:
-          type: object
-          additionalProperties: true
-        created_at:
-          type: string
-          format: date-time
-
-    TomlSettingsRequest:
-      type: object
-      required: [content]
-      properties:
-        content:
-          type: string
-
-    TomlSettingsResponse:
-      type: object
-      required: [path, content, exists]
-      properties:
-        path:
-          type: string
-        content:
-          type: string
-        exists:
-          type: boolean
-  /api/tasks:
-    get:
-      summary: List tasks
-      operationId: listTasks
-      parameters:
-        - in: query
-          name: status
-          schema:
-            type: string
-        - in: query
-          name: limit
-          schema:
-            type: integer
-            default: 20
-            minimum: 1
-            maximum: 100
-        - in: query
-          name: offset
-          schema:
-            type: integer
-            default: 0
-            minimum: 0
-      responses:
-        '200':
-          description: task list
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/TaskResponse'
-    post:
-      summary: Create task and start runs in background
-      operationId: createTask
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TaskCreateRequest'
-      responses:
-        '201':
-          description: created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskWithRunsResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/tasks/{task_id}:
-    get:
-      summary: Get task (with runs)
-      operationId: getTask
-      parameters:
-        - in: path
-          name: task_id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: task
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskWithRunsResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    patch:
-      summary: Update task name
-      operationId: updateTask
-      parameters:
-        - in: path
-          name: task_id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TaskUpdateRequest'
-      responses:
-        '200':
-          description: updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    delete:
-      summary: Delete task (and its runs)
-      operationId: deleteTask
-      parameters:
-        - in: path
-          name: task_id
-          required: true
-          schema:
-            type: string
-      responses:
-        '204':
-          description: deleted
-
-  /api/tasks/{task_id}/runs:
-    get:
-      summary: List runs in a task
-      operationId: listTaskRuns
-      parameters:
-        - in: path
-          name: task_id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: run list
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/RunJobResponse'
-    TaskCreateRequest:
-      type: object
-      required: [suite_version_ids]
-      properties:
-        suite_version_ids:
-          type: array
-          items:
-            type: string
-        mode:
-          type: string
-          enum: [real, mock]
-          nullable: true
-        selected_tests_by_suite:
-          type: object
-          additionalProperties:
-            type: array
-            items:
-              type: string
-        name:
-          type: string
-          nullable: true
-        max_concurrent:
-          type: integer
-          minimum: 1
-          maximum: 50
-          nullable: true
-
-    TaskUpdateRequest:
-      type: object
-      required: [name]
-      properties:
-        name:
-          type: string
-
-    TaskResponse:
-      type: object
-      required:
-        [
-          id,
-          name,
-          status,
-          mode,
-          total_runs,
-          completed_runs,
-          passed_runs,
-          failed_runs,
-          created_at,
-        ]
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        status:
-          type: string
-        mode:
-          type: string
-        total_runs:
-          type: integer
-        completed_runs:
-          type: integer
-        passed_runs:
-          type: integer
-        failed_runs:
-          type: integer
-        started_at:
-          type: string
-          format: date-time
-          nullable: true
-        finished_at:
-          type: string
-          format: date-time
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-
-    TaskWithRunsResponse:
-      allOf:
-        - $ref: '#/components/schemas/TaskResponse'
-        - type: object
-          required: [runs]
-          properties:
-            runs:
-              type: array
-              items:
-                $ref: '#/components/schemas/RunJobResponse'
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "llm-spec web api",
+    "description": "Web API for llm-spec test suite management and execution",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "Healthz",
+        "description": "Health check endpoint.\n\nReturns:\n    Health status.",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Healthz Healthz Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/suites/cache/refresh": {
+      "post": {
+        "tags": [
+          "suites"
+        ],
+        "summary": "Refresh Suite Registry Cache",
+        "operationId": "refresh_suite_registry_cache_api_suites_cache_refresh_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "title": "Response Refresh Suite Registry Cache Api Suites Cache Refresh Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/suites": {
+      "get": {
+        "tags": [
+          "suites"
+        ],
+        "summary": "List Suites",
+        "operationId": "list_suites_api_suites_get",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          },
+          {
+            "name": "route",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Route"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Model"
+            }
+          },
+          {
+            "name": "endpoint",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Endpoint"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ModelSuiteResponse"
+                  },
+                  "title": "Response List Suites Api Suites Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/suites/{suite_id}": {
+      "get": {
+        "tags": [
+          "suites"
+        ],
+        "summary": "Get Suite",
+        "operationId": "get_suite_api_suites__suite_id__get",
+        "parameters": [
+          {
+            "name": "suite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suite Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSuiteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/provider-configs": {
+      "get": {
+        "tags": [
+          "provider-configs"
+        ],
+        "summary": "List Provider Configs",
+        "description": "List all provider configurations.\n\nArgs:\n    service: Provider service.\n\nReturns:\n    List of provider configurations.",
+        "operationId": "list_provider_configs_api_provider_configs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderConfigResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Provider Configs Api Provider Configs Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/provider-configs/{provider}": {
+      "get": {
+        "tags": [
+          "provider-configs"
+        ],
+        "summary": "Get Provider Config",
+        "description": "Get a provider configuration.\n\nArgs:\n    provider: Provider name.\n    service: Provider service.\n\nReturns:\n    Provider configuration.",
+        "operationId": "get_provider_config_api_provider_configs__provider__get",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runs/{run_id}/tests/retry": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Retry Run Test",
+        "description": "Retry one test within an existing run and persist updated run result.",
+        "operationId": "retry_run_test_api_runs__run_id__tests_retry_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunTestRetryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunJobResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runs/{run_id}/events": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Run Events",
+        "description": "List events for a run.\n\nArgs:\n    run_id: Run job ID.\n    after_seq: Only return events with seq > after_seq.\n    db: Database session.\n    service: Run service.\n\nReturns:\n    List of run events.",
+        "operationId": "list_run_events_api_runs__run_id__events_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "after_seq",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "After Seq"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunEventResponse"
+                  },
+                  "title": "Response List Run Events Api Runs  Run Id  Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runs/{run_id}/events/stream": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Stream Run Events",
+        "description": "Stream events for a run using Server-Sent Events.\n\nUses in-memory event bus for real-time updates without database polling.\n\nArgs:\n    run_id: Run job ID.\n    after_seq: Only return events with seq > after_seq (for reconnection).\n\nReturns:\n    SSE stream of run events.",
+        "operationId": "stream_run_events_api_runs__run_id__events_stream_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "after_seq",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "After Seq"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runs/{run_id}/task-result": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Task Result",
+        "description": "Get the task result for a run.\n\nArgs:\n    run_id: Run job ID.\n    db: Database session.\n    service: Run service.\n\nReturns:\n    Task result JSON.",
+        "operationId": "get_task_result_api_runs__run_id__task_result_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Task Result Api Runs  Run Id  Task Result Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/runs/{run_id}/tests": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Run Tests",
+        "description": "List test results for a run.\n\nArgs:\n    run_id: Run job ID.\n    db: Database session.\n    service: Run service.\n\nReturns:\n    List of test result records.",
+        "operationId": "list_run_tests_api_runs__run_id__tests_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response List Run Tests Api Runs  Run Id  Tests Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Create Task",
+        "description": "Create a new task with multiple runs.",
+        "operationId": "create_task_api_tasks_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskWithRunsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "List Tasks",
+        "description": "List all tasks.",
+        "operationId": "list_tasks_api_tasks_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskResponse"
+                  },
+                  "title": "Response List Tasks Api Tasks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/{task_id}": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Get Task",
+        "description": "Get a task by ID with its runs.",
+        "operationId": "get_task_api_tasks__task_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskWithRunsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Delete Task",
+        "description": "Delete a task and all its runs.",
+        "operationId": "delete_task_api_tasks__task_id__delete",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Update Task",
+        "description": "Update a task's name.",
+        "operationId": "update_task_api_tasks__task_id__patch",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/{task_id}/runs": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Get Task Runs",
+        "description": "Get all runs in a task.",
+        "operationId": "get_task_runs_api_tasks__task_id__runs_get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunJobResponse"
+                  },
+                  "title": "Response Get Task Runs Api Tasks  Task Id  Runs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/{task_id}/cancel": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Cancel Task",
+        "description": "Cancel a running task (in-memory cancel + persisted cancelled state).",
+        "operationId": "cancel_task_api_tasks__task_id__cancel_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/toml": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Toml Settings",
+        "description": "Get TOML settings file content.\n\nReturns:\n    TOML settings response.",
+        "operationId": "get_toml_settings_api_settings_toml_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TomlSettingsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Toml Settings",
+        "description": "Update TOML settings file content.\n\nArgs:\n    payload: TOML settings request.\n\nReturns:\n    TOML settings response.\n\nRaises:\n    HTTPException: If TOML content is invalid.",
+        "operationId": "update_toml_settings_api_settings_toml_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TomlSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TomlSettingsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ModelSuiteResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "route_suite": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Route Suite"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "model_name",
+          "provider",
+          "route_suite"
+        ],
+        "title": "ModelSuiteResponse",
+        "description": "Response model for one model-centered executable suite."
+      },
+      "ProviderConfigResponse": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "api_type": {
+            "type": "string",
+            "title": "Api Type"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url"
+          },
+          "timeout": {
+            "type": "number",
+            "title": "Timeout"
+          },
+          "extra_config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extra Config"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "api_type",
+          "base_url",
+          "timeout",
+          "extra_config",
+          "updated_at"
+        ],
+        "title": "ProviderConfigResponse",
+        "description": "Response model for provider configuration.\n\nNote: API key is intentionally excluded from response for security.\n\nAttributes:\n    provider: Provider name.\n    api_type: API type (openai, anthropic, gemini, xai).\n    base_url: API base URL.\n    timeout: Request timeout in seconds.\n    extra_config: Additional configuration.\n    updated_at: Last update timestamp."
+      },
+      "RunEventResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "seq",
+          "event_type",
+          "payload",
+          "created_at"
+        ],
+        "title": "RunEventResponse",
+        "description": "Response model for run event.\n\nAttributes:\n    id: Event ID.\n    run_id: Run job ID.\n    seq: Sequence number.\n    event_type: Event type.\n    payload: Event data.\n    created_at: Event timestamp."
+      },
+      "RunJobResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "model_suite_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Suite Id"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "progress_total": {
+            "type": "integer",
+            "title": "Progress Total"
+          },
+          "progress_done": {
+            "type": "integer",
+            "title": "Progress Done"
+          },
+          "progress_passed": {
+            "type": "integer",
+            "title": "Progress Passed"
+          },
+          "progress_failed": {
+            "type": "integer",
+            "title": "Progress Failed"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "mode",
+          "provider",
+          "endpoint",
+          "model_suite_id",
+          "started_at",
+          "finished_at",
+          "progress_total",
+          "progress_done",
+          "progress_passed",
+          "progress_failed",
+          "error_message"
+        ],
+        "title": "RunJobResponse",
+        "description": "Response model for run job.\n\nAttributes:\n    id: Run job ID.\n    status: Job status.\n    mode: Execution mode.\n    provider: Provider name.\n    route: Registry route key.\n    model: Model ID.\n    endpoint: API endpoint path.\n    task_id: Task ID this run belongs to.\n    model_suite_id: Model suite ID.\n    started_at: Execution start timestamp.\n    finished_at: Execution finish timestamp.\n    progress_total: Total number of tests.\n    progress_done: Number of completed tests.\n    progress_passed: Number of passed tests.\n    progress_failed: Number of failed tests.\n    error_message: Error message if failed."
+      },
+      "RunTestRetryRequest": {
+        "properties": {
+          "run_case_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Run Case Id",
+            "description": "Run-case snapshot ID to retry"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_case_id"
+        ],
+        "title": "RunTestRetryRequest",
+        "description": "Request body for retrying one test inside an existing run."
+      },
+      "TaskCreateRequest": {
+        "properties": {
+          "model_suite_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Model Suite Ids"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "real",
+                  "mock"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "selected_tests_by_suite": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Tests By Suite",
+            "description": "Map of suite_id to list of test names"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "User-defined name for the task"
+          },
+          "max_concurrent": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 50.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Concurrent",
+            "description": "Maximum concurrent tests per run (1-50)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_suite_ids"
+        ],
+        "title": "TaskCreateRequest",
+        "description": "Request body for creating a new task.\n\nAttributes:\n    model_suite_ids: List of model suite IDs to run.\n    mode: Execution mode (\"real\" or \"mock\").\n    selected_tests_by_suite: Map of suite_id to list of test names.\n    name: User-defined name for the task.\n    max_concurrent: Maximum number of tests to run concurrently per run job."
+      },
+      "TaskResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "total_runs": {
+            "type": "integer",
+            "title": "Total Runs"
+          },
+          "completed_runs": {
+            "type": "integer",
+            "title": "Completed Runs"
+          },
+          "passed_runs": {
+            "type": "integer",
+            "title": "Passed Runs"
+          },
+          "failed_runs": {
+            "type": "integer",
+            "title": "Failed Runs"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "mode",
+          "total_runs",
+          "completed_runs",
+          "passed_runs",
+          "failed_runs",
+          "started_at",
+          "finished_at",
+          "created_at"
+        ],
+        "title": "TaskResponse",
+        "description": "Response model for task.\n\nAttributes:\n    id: Task ID.\n    name: User-defined name for the task.\n    status: Task status.\n    mode: Execution mode.\n    total_runs: Total number of runs.\n    completed_runs: Number of completed runs.\n    passed_runs: Number of passed runs.\n    failed_runs: Number of failed runs.\n    started_at: Execution start timestamp.\n    finished_at: Execution finish timestamp.\n    created_at: Creation timestamp."
+      },
+      "TaskUpdateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "description": "New name for the task"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "TaskUpdateRequest",
+        "description": "Request body for updating a task.\n\nAttributes:\n    name: New name for the task."
+      },
+      "TaskWithRunsResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "total_runs": {
+            "type": "integer",
+            "title": "Total Runs"
+          },
+          "completed_runs": {
+            "type": "integer",
+            "title": "Completed Runs"
+          },
+          "passed_runs": {
+            "type": "integer",
+            "title": "Passed Runs"
+          },
+          "failed_runs": {
+            "type": "integer",
+            "title": "Failed Runs"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/RunJobResponse"
+            },
+            "type": "array",
+            "title": "Runs",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "mode",
+          "total_runs",
+          "completed_runs",
+          "passed_runs",
+          "failed_runs",
+          "started_at",
+          "finished_at",
+          "created_at"
+        ],
+        "title": "TaskWithRunsResponse",
+        "description": "Response model for task with runs.\n\nAttributes:\n    runs: List of runs in this task."
+      },
+      "TomlSettingsRequest": {
+        "properties": {
+          "content": {
+            "type": "string",
+            "title": "Content",
+            "description": "TOML file content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "TomlSettingsRequest",
+        "description": "Request body for updating TOML settings.\n\nAttributes:\n    content: TOML file content."
+      },
+      "TomlSettingsResponse": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "exists": {
+            "type": "boolean",
+            "title": "Exists"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "content",
+          "exists"
+        ],
+        "title": "TomlSettingsResponse",
+        "description": "Response model for TOML settings.\n\nAttributes:\n    path: Path to the TOML file.\n    content: TOML file content.\n    exists: Whether the file exists."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

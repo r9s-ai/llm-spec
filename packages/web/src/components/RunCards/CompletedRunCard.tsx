@@ -4,6 +4,7 @@ import { TestResultTable } from "../ResultPanel/TestResultTable";
 import type { RunJob, RunSummary } from "../../types";
 
 interface TestResultRow {
+  run_case_id?: string;
   test_name: string;
   parameter?: {
     name: string;
@@ -37,7 +38,7 @@ interface CompletedRunCardProps {
   run: RunJob;
   summary?: RunSummary;
   result?: RunResultData;
-  onRetryFailedTest?: (run: RunJob, testName: string) => Promise<void> | void;
+  onRetryFailedTest?: (run: RunJob, runCaseId: string, testName: string) => Promise<void> | void;
 }
 
 function formatRelativeTime(dateStr: string | null): string {
@@ -146,7 +147,7 @@ export function CompletedRunCard({ run, summary, result, onRetryFailedTest }: Co
             tests={tests}
             onRetryFailedTest={
               onRetryFailedTest
-                ? (testName) => onRetryFailedTest(run, testName)
+                ? (runCaseId, testName) => onRetryFailedTest(run, runCaseId, testName)
                 : undefined
             }
           />

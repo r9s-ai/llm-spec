@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
-import { useRuns, useSettings, useSuites, useTasks } from "../hooks";
+import { useSettings, useSuites, useTasks } from "../hooks";
 import type { PageKey, RunMode } from "../types";
 
 interface AppContextValue {
@@ -13,9 +13,6 @@ interface AppContextValue {
 
   // Suites
   suites: ReturnType<typeof useSuites>;
-
-  // Runs (legacy, kept for backward compatibility)
-  runs: ReturnType<typeof useRuns>;
 
   // Tasks
   tasks: ReturnType<typeof useTasks>;
@@ -32,7 +29,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [runMode, setRunMode] = useState<RunMode>("real");
 
   const suites = useSuites();
-  const runs = useRuns();
   const tasks = useTasks();
   const settings = useSettings();
 
@@ -44,7 +40,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     runMode,
     setRunMode,
     suites,
-    runs,
     tasks,
     settings,
   };
