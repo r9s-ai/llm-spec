@@ -8,5 +8,8 @@ If you are looking for:
 - API endpoints and behavior: see `README.md`
 - DB schema reference (SQLite flavor): see `packages/web-api/src/llm_spec_web/schema.sql`
 - Task result response shape: `/api/runs/{run_id}/task-result` returns `task_result.v1` with `cases[]`
+- Retry API uses `run_case_id`: `POST /api/runs/{run_id}/tests/retry`
+- Task-level cancellation API: `POST /api/tasks/{task_id}/cancel`
+- Background execution is task-scoped (one task root orchestrates all child runs)
 
 Note: tables are auto-created on FastAPI startup when `LLM_SPEC_WEB_AUTO_INIT_DB=true` (default).

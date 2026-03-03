@@ -41,6 +41,7 @@ class CaseResultState(TypedDict, total=False):
 
 class CaseResult(TypedDict, total=False):
     version: str
+    run_case_id: str | None
     test_id: str
     test_name: Required[str]
     is_baseline: bool

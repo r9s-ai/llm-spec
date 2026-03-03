@@ -8,20 +8,6 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-class RunCreateRequest(BaseModel):
-    """Request body for creating a new run.
-
-    Attributes:
-        model_suite_id: ID of the model suite to run.
-        mode: Execution mode ("real" or "mock").
-        selected_tests: List of test names to run (empty means all tests).
-    """
-
-    model_suite_id: str = Field(..., min_length=1)
-    mode: Literal["real", "mock"] | None = None
-    selected_tests: list[str] | None = Field(default=None, description="List of test names to run")
-
-
 class TaskCreateRequest(BaseModel):
     """Request body for creating a new task.
 
@@ -59,7 +45,7 @@ class TaskUpdateRequest(BaseModel):
 class RunTestRetryRequest(BaseModel):
     """Request body for retrying one test inside an existing run."""
 
-    test_name: str = Field(..., min_length=1, description="Test name to retry")
+    run_case_id: str = Field(..., min_length=1, description="Run-case snapshot ID to retry")
 
 
 class RunJobResponse(BaseModel):

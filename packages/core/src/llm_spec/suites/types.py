@@ -84,3 +84,34 @@ class SpecTestSuite:
 
     suite_name: str | None = None
     """Optional human-friendly suite name."""
+
+
+@dataclass
+class ExecutableCase:
+    """Fully-prepared executable test case.
+
+    Unlike ``SpecTestCase`` (config semantics), this object is execution-ready:
+    request params are already complete and include baseline/model/test overrides.
+    """
+
+    case_id: str
+    test_name: str
+    description: str
+    provider: str
+    route: str | None
+    model: str | None
+    request_method: str
+    request_endpoint: str
+    request_params: dict[str, Any] = field(default_factory=dict)
+    request_files: dict[str, str] | None = None
+    check_stream: bool = False
+    response_schema: str | None = None
+    stream_chunk_schema: str | None = None
+    required_fields: list[str] = field(default_factory=list)
+    stream_expectations: dict[str, Any] | None = None
+    parameter_name: str | None = None
+    parameter_value: Any = None
+    parameter_value_type: str = "none"
+    is_baseline: bool = False
+    tags: list[str] = field(default_factory=list)
+    run_case_id: str | None = None

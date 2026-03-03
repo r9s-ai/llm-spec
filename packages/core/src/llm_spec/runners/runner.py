@@ -7,9 +7,10 @@ import copy
 import mimetypes
 import re
 import time
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 
@@ -22,6 +23,7 @@ from llm_spec.results.result_types import CaseResult
 from llm_spec.runners.parsers import ResponseParser, StreamResponseParser
 from llm_spec.runners.stream_rules import extract_observations, validate_stream
 from llm_spec.suites import (
+    ExecutableCase,
     SpecTestCase,
     SpecTestSuite,
 )
@@ -58,6 +60,94 @@ class ConfigDrivenTestRunner:
         # Resolve schema classes
         self.response_schema: type[BaseModel] | None = get_schema(suite.schemas.get("response"))
         self.chunk_schema: type[BaseModel] | None = get_schema(suite.schemas.get("stream_chunk"))
+
+    @dataclass
+    class _ExecutableTestCase:
+        """Runner-internal test object for executable-case path."""
+
+        name: str
+        description: str = ""
+        params: dict[str, Any] = field(default_factory=dict)
+        focus_param: dict[str, Any] | None = None
+        baseline: bool = False
+        check_stream: Any = False
+        stream_expectations: dict[str, Any] | None = None
+        endpoint_override: str | None = None
+        files: dict[str, str] | None = None
+        schemas: dict[str, str] | None = None
+        required_fields: list[str] | None = None
+        method: str | None = None
+        tags: list[str] = field(default_factory=list)
+
+    @classmethod
+    def _build_executable_runner(
+        cls, executable_case: ExecutableCase, client: ProviderAdapter
+    ) -> tuple[ConfigDrivenTestRunner, _ExecutableTestCase]:
+        schemas: dict[str, str] = {}
+        if executable_case.response_schema:
+            schemas["response"] = executable_case.response_schema
+        if executable_case.stream_chunk_schema:
+            schemas["stream_chunk"] = executable_case.stream_chunk_schema
+
+        suite = SpecTestSuite(
+            provider=executable_case.provider,
+            endpoint=executable_case.request_endpoint,
+            schemas=schemas,
+            baseline_params={},
+            tests=[],
+            required_fields=[],
+            stream_expectations=None,
+            method=executable_case.request_method,
+            suite_name=None,
+        )
+        runner = cls(suite=suite, client=client)
+        test_case = cls._ExecutableTestCase(
+            name=executable_case.test_name,
+            description=executable_case.description,
+            params=copy.deepcopy(executable_case.request_params),
+            focus_param=(
+                {"name": executable_case.parameter_name, "value": executable_case.parameter_value}
+                if executable_case.parameter_name
+                else None
+            ),
+            baseline=executable_case.is_baseline,
+            check_stream=executable_case.check_stream,
+            stream_expectations=executable_case.stream_expectations,
+            endpoint_override=executable_case.request_endpoint,
+            files=executable_case.request_files,
+            required_fields=copy.deepcopy(executable_case.required_fields),
+            method=executable_case.request_method,
+            tags=copy.deepcopy(executable_case.tags),
+        )
+        return runner, test_case
+
+    @classmethod
+    async def run_executable_case_async(
+        cls, executable_case: ExecutableCase, client: ProviderAdapter
+    ) -> CaseResult:
+        """Execute one fully prepared executable case."""
+        runner, test_case = cls._build_executable_runner(executable_case, client)
+        result = await runner.run_test_async(cast(SpecTestCase, test_case))
+        result["run_case_id"] = executable_case.run_case_id
+        result["test_id"] = executable_case.case_id
+        result["provider"] = executable_case.provider
+        result["model"] = executable_case.model
+        result["route"] = executable_case.route
+        return result
+
+    @classmethod
+    def run_executable_case(
+        cls, executable_case: ExecutableCase, client: ProviderAdapter
+    ) -> CaseResult:
+        """Execute one fully prepared executable case (sync)."""
+        runner, test_case = cls._build_executable_runner(executable_case, client)
+        result = runner.run_test(cast(SpecTestCase, test_case))
+        result["run_case_id"] = executable_case.run_case_id
+        result["test_id"] = executable_case.case_id
+        result["provider"] = executable_case.provider
+        result["model"] = executable_case.model
+        result["route"] = executable_case.route
+        return result
 
     def build_params(self, test: SpecTestCase) -> dict[str, Any]:
         """Build the final request params for a test.

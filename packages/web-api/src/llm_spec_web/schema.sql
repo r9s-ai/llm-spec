@@ -31,7 +31,7 @@ create table if not exists run_job (
     endpoint text not null,
     task_id text references task(id) on delete cascade,
     model_suite_id text null,
-    config_snapshot text not null default '{}',
+    selected_tests text not null default '[]',
     started_at text null,
     finished_at text null,
     progress_total integer not null default 0,
@@ -61,9 +61,40 @@ create table if not exists task_result (
     created_at text not null default (datetime('now'))
 );
 
+create table if not exists run_case (
+    id text primary key,
+    run_id text not null references run_job(id) on delete cascade,
+    case_id text not null,
+    test_name text not null,
+    provider text not null,
+    route text null,
+    model text null,
+    request_method text not null,
+    request_endpoint text not null,
+    request_params text not null default '{}',
+    request_files text null,
+    check_stream integer not null default 0,
+    response_schema text null,
+    stream_chunk_schema text null,
+    required_fields text not null default '[]',
+    stream_expectations text null,
+    parameter_name text null,
+    parameter_value text null,
+    parameter_value_type text not null default 'none',
+    is_baseline integer not null default 0,
+    tags text not null default '[]',
+    description text not null default '',
+    created_at text not null default (datetime('now')),
+    constraint uq_run_case_run_case_id unique (run_id, case_id)
+);
+
+create index if not exists ix_run_case_run_id on run_case(run_id);
+create index if not exists ix_run_case_run_test_name on run_case(run_id, test_name);
+
 create table if not exists run_test_result (
     id text primary key,
     run_id text not null references run_job(id) on delete cascade,
+    run_case_id text null references run_case(id) on delete cascade,
     test_id text not null,
     test_name text not null,
     parameter_value text null,
@@ -75,3 +106,4 @@ create table if not exists run_test_result (
 );
 
 create index if not exists ix_run_test_result_run_status on run_test_result(run_id, status);
+create index if not exists ix_run_test_result_run_case_id on run_test_result(run_case_id);

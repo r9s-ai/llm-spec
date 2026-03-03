@@ -11,8 +11,9 @@ interface TaskCardProps {
   eventsByRunId: Record<string, RunEvent[]>;
   resultsByRunId: Record<string, Record<string, unknown>>;
   onDelete: (taskId: string) => void;
+  onCancel?: (taskId: string) => Promise<void> | void;
   onUpdate?: (task: TaskWithRuns) => void;
-  onRetryFailedTest?: (run: RunJob, testName: string) => Promise<void> | void;
+  onRetryFailedTest?: (run: RunJob, runCaseId: string, testName: string) => Promise<void> | void;
 }
 
 function formatRelativeTime(dateStr: string | null): string {
@@ -53,11 +54,13 @@ export function TaskCard({
   eventsByRunId,
   resultsByRunId,
   onDelete,
+  onCancel,
   onUpdate,
   onRetryFailedTest,
 }: TaskCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(task.name);
   const [isSavingName, setIsSavingName] = useState(false);
@@ -132,6 +135,16 @@ export function TaskCard({
       await onDelete(task.id);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!onCancel || isCancelling) return;
+    setIsCancelling(true);
+    try {
+      await onCancel(task.id);
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -320,6 +333,19 @@ export function TaskCard({
           )}
 
           {/* Delete button (icon only) */}
+          {isRunning && onCancel && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleCancel();
+              }}
+              disabled={isCancelling}
+              className="h-8 rounded-full border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Cancel task"
+            >
+              {isCancelling ? "Cancelling..." : "Cancel"}
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();

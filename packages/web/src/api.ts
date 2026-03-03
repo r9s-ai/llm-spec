@@ -1,4 +1,4 @@
-import type { Task, TaskWithRuns, RunEvent, RunJob, Suite, TomlSettings } from "./types";
+import type { Task, TaskWithRuns, RunJob, Suite, TomlSettings } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -69,39 +69,23 @@ export function deleteTask(taskId: string): Promise<void> {
   return request<void>(`/api/tasks/${taskId}`, { method: "DELETE" });
 }
 
+export function cancelTaskExecution(taskId: string): Promise<Task> {
+  return request<Task>(`/api/tasks/${taskId}/cancel`, { method: "POST" });
+}
+
 export function getTaskRuns(taskId: string): Promise<RunJob[]> {
   return request<RunJob[]>(`/api/tasks/${taskId}/runs`);
 }
 
-// Run API functions
-export function createRun(input: {
-  model_suite_id: string;
-  mode?: "real" | "mock";
-  selected_tests?: string[];
-}): Promise<RunJob> {
-  return request<RunJob>("/api/runs", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
-
-export function getRun(runId: string): Promise<RunJob> {
-  return request<RunJob>(`/api/runs/${runId}`);
-}
-
-export function retryRunTest(runId: string, testName: string): Promise<RunJob> {
+export function retryRunTest(runId: string, runCaseId: string): Promise<RunJob> {
   return request<RunJob>(`/api/runs/${runId}/tests/retry`, {
     method: "POST",
-    body: JSON.stringify({ test_name: testName }),
+    body: JSON.stringify({ run_case_id: runCaseId }),
   });
 }
 
 export function getRunTaskResult(runId: string): Promise<Record<string, unknown>> {
   return request<Record<string, unknown>>(`/api/runs/${runId}/task-result`);
-}
-
-export function getRunEvents(runId: string, afterSeq = 0): Promise<RunEvent[]> {
-  return request<RunEvent[]>(`/api/runs/${runId}/events?after_seq=${afterSeq}`);
 }
 
 export function streamRunEvents(runId: string, afterSeq = 0): EventSource {

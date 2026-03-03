@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { flushSync } from "react-dom";
 import {
+  cancelTaskExecution,
   createTask,
   deleteTask,
   getTask,
@@ -307,10 +308,38 @@ export function useTasks() {
     return getTask(taskId);
   }, []);
 
+  const cancelTaskInPlace = useCallback(
+    async (taskId: string): Promise<void> => {
+      const updated = await cancelTaskExecution(taskId);
+      setTasks((prev) => {
+        const idx = prev.findIndex((t) => t.id === taskId);
+        if (idx < 0) return prev;
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          status: updated.status,
+          finished_at: updated.finished_at,
+          runs: next[idx].runs.map((r) =>
+            r.status === "running" || r.status === "queued"
+              ? { ...r, status: "cancelled", finished_at: updated.finished_at }
+              : r
+          ),
+        };
+        return next;
+      });
+    },
+    []
+  );
+
   const retryFailedTestInPlace = useCallback(
-    async (run: RunJob, testName: string, onNotice: (msg: string) => void): Promise<void> => {
+    async (
+      run: RunJob,
+      runCaseId: string,
+      testName: string,
+      onNotice: (msg: string) => void
+    ): Promise<void> => {
       onNotice(`Retrying ${testName}...`);
-      const updatedRun = await retryRunTest(run.id, testName);
+      const updatedRun = await retryRunTest(run.id, runCaseId);
       const updatedResult = await getRunTaskResult(run.id);
 
       setRunResultById((prev) => ({ ...prev, [run.id]: updatedResult }));
@@ -346,6 +375,7 @@ export function useTasks() {
     loadHistory,
     removeTask,
     deleteTaskFromServer,
+    cancelTaskInPlace,
     updateTaskName,
     retryFailedTestInPlace,
   };
