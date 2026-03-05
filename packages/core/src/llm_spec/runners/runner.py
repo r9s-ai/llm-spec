@@ -592,24 +592,23 @@ class TestRunner:
             # Stage 4: validate stream rules
             stream_rules = case.checks.stream_rules
             missing_events: list[str] = []
-            if stream_rules:
-                observations = extract_observations(
-                    provider=case.provider,
-                    endpoint=case.request.endpoint,
-                    parsed_chunks=parsed_chunks,
-                    raw_chunks=all_raw_chunks,
-                    stream_rules=stream_rules,
+            observations = extract_observations(
+                provider=case.provider,
+                endpoint=case.request.endpoint,
+                parsed_chunks=parsed_chunks,
+                raw_chunks=all_raw_chunks,
+                stream_rules=stream_rules,
+            )
+            missing_events = validate_stream(
+                provider=case.provider,
+                endpoint=case.request.endpoint,
+                observations=observations,
+                stream_rules=stream_rules,
+            )
+            if missing_events:
+                validation_errors.append(
+                    f"Missing required stream events: {', '.join(missing_events)}"
                 )
-                missing_events = validate_stream(
-                    provider=case.provider,
-                    endpoint=case.request.endpoint,
-                    observations=observations,
-                    stream_rules=stream_rules,
-                )
-                if missing_events:
-                    validation_errors.append(
-                        f"Missing required stream events: {', '.join(missing_events)}"
-                    )
 
             if validation_errors:
                 ft, lat = _finish()
@@ -784,24 +783,23 @@ class TestRunner:
             # Stage 4: validate stream rules
             stream_rules = case.checks.stream_rules
             missing_events: list[str] = []
-            if stream_rules:
-                observations = extract_observations(
-                    provider=case.provider,
-                    endpoint=case.request.endpoint,
-                    parsed_chunks=parsed_chunks,
-                    raw_chunks=all_raw_chunks,
-                    stream_rules=stream_rules,
+            observations = extract_observations(
+                provider=case.provider,
+                endpoint=case.request.endpoint,
+                parsed_chunks=parsed_chunks,
+                raw_chunks=all_raw_chunks,
+                stream_rules=stream_rules,
+            )
+            missing_events = validate_stream(
+                provider=case.provider,
+                endpoint=case.request.endpoint,
+                observations=observations,
+                stream_rules=stream_rules,
+            )
+            if missing_events:
+                validation_errors.append(
+                    f"Missing required stream events: {', '.join(missing_events)}"
                 )
-                missing_events = validate_stream(
-                    provider=case.provider,
-                    endpoint=case.request.endpoint,
-                    observations=observations,
-                    stream_rules=stream_rules,
-                )
-                if missing_events:
-                    validation_errors.append(
-                        f"Missing required stream events: {', '.join(missing_events)}"
-                    )
 
             if validation_errors:
                 ft, lat = _finish()

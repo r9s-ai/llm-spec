@@ -159,6 +159,10 @@ class MockDataLoader:
                     # Terminal marker
                     yield b"data: [DONE]\n\n"
                 else:
-                    # Data chunk
+                    # Data chunk — emit SSE event: line when present
+                    sse_event = event.get("event")
                     data_str = json.dumps(data, ensure_ascii=False)
-                    yield f"data: {data_str}\n\n".encode()
+                    if sse_event:
+                        yield f"event: {sse_event}\ndata: {data_str}\n\n".encode()
+                    else:
+                        yield f"data: {data_str}\n\n".encode()

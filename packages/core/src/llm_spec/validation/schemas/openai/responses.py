@@ -134,7 +134,11 @@ class ResponsesStreamEvent(BaseModel):
     This schema keeps required fields minimal (type) while still modeling common fields we validate/log.
     """
 
-    type: str
+    # SSE event name injected by parser (metadata, not from upstream)
+    event: str | None = None
+
+    # Relaxed to optional so missing type is caught by stream rules, not schema.
+    type: str | None = None
     sequence_number: int | None = None
     event_id: str | None = None
     response_id: str | None = None

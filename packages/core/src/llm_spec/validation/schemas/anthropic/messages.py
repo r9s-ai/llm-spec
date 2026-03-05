@@ -342,17 +342,13 @@ class AnthropicStreamChunk(BaseModel):
     - usage is MessageDeltaUsage (output_tokens only) in message_delta
     """
 
+    # SSE event name injected by parser (metadata, not from upstream)
+    event: str | None = None
+
     # Fields shared by all events
-    type: Literal[
-        "message_start",
-        "content_block_start",
-        "content_block_delta",
-        "content_block_stop",
-        "message_delta",
-        "message_stop",
-        "ping",
-        "error",
-    ]
+    # Relaxed from Literal to str | None so that missing/unknown types are caught
+    # by stream rules (event_type_match) rather than failing schema validation.
+    type: str | None = None
 
     # message_start fields
     message: MessagesResponse | None = None
