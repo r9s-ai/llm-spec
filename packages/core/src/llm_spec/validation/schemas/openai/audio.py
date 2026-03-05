@@ -109,16 +109,19 @@ class AudioSpeechResponse(BaseModel):
 
 
 class SpeechAudioDeltaEvent(BaseModel):
+    event: str | None = None
     type: Literal["speech.audio.delta"]
     audio: str
 
 
 class SpeechAudioDoneEvent(BaseModel):
+    event: str | None = None
     type: Literal["speech.audio.done"]
     usage: dict[str, Any] | AudioUsageTokens | None = None
 
 
 class TranscriptTextDeltaEvent(BaseModel):
+    event: str | None = None
     type: Literal["transcript.text.delta"]
     delta: str
     logprobs: list[AudioLogprob] | None = None
@@ -126,6 +129,7 @@ class TranscriptTextDeltaEvent(BaseModel):
 
 
 class TranscriptTextSegmentEvent(BaseModel):
+    event: str | None = None
     type: Literal["transcript.text.segment"]
     id: str
     start: float
@@ -135,6 +139,7 @@ class TranscriptTextSegmentEvent(BaseModel):
 
 
 class TranscriptTextDoneEvent(BaseModel):
+    event: str | None = None
     type: Literal["transcript.text.done"]
     text: str
     logprobs: list[AudioLogprob] | None = None

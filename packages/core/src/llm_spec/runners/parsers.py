@@ -80,9 +80,10 @@ class StreamResponseParser:
                         continue
 
             if data:
-                # Inject event type into data if missing
-                if event_type and "type" not in data:
-                    data["type"] = event_type
+                # Preserve the original SSE event value as metadata;
+                # never inject/overwrite upstream fields.
+                if event_type:
+                    data["event"] = event_type
 
                 results.append(data)
                 self._chunks.append(data)

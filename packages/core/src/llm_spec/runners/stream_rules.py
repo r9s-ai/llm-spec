@@ -76,9 +76,10 @@ def validate_stream(
 
     observation_names = [o.get("name") for o in observations if isinstance(o, dict)]
     observed_event_names = [n for n in observation_names if isinstance(n, str)]
-    observed_data = [
-        o.get("data") for o in observations if isinstance(o, dict) and o.get("kind") == "event"
+    event_observations = [
+        o for o in observations if isinstance(o, dict) and o.get("kind") == "event"
     ]
+    observed_data = [o.get("data") for o in event_observations]
 
     min_observations = effective_rules.get("min_observations")
     if isinstance(min_observations, int) and len(observed_event_names) < min_observations:
@@ -87,7 +88,22 @@ def validate_stream(
 
     checks = effective_rules.get("checks")
     if isinstance(checks, list):
-        missing.extend(_evaluate_stream_checks(checks, observed_event_names, observed_data))
+        # Auto-enable event_type_match when stream data carries event/type fields,
+        # even if callers did not explicitly configure it.
+        has_event_or_type = any(
+            isinstance(o.get("data"), dict) and (("event" in o["data"]) or ("type" in o["data"]))
+            for o in event_observations
+        )
+        has_event_type_match = any(
+            isinstance(c, dict) and str(c.get("type", "")).lower() == "event_type_match"
+            for c in checks
+        )
+        if has_event_or_type and not has_event_type_match:
+            checks = list(checks) + [{"type": "event_type_match"}]
+
+        missing.extend(
+            _evaluate_stream_checks(checks, observed_event_names, observed_data, event_observations)
+        )
         return missing
 
     # No explicit checks and no min_observations: treat as stream validation disabled.
@@ -98,6 +114,7 @@ def _evaluate_stream_checks(
     checks: list[Any],
     observed_event_names: list[str],
     observed_data: list[dict[str, Any] | None],
+    event_observations: list[Observation] | None = None,
 ) -> list[str]:
     missing: list[str] = []
     for check in checks:
@@ -151,6 +168,28 @@ def _evaluate_stream_checks(
             if not found:
                 missing.append(f"field:{field_path}")
 
+        elif ct == "event_type_match":
+            # Validate that every non-terminal chunk has an SSE event field
+            # and that its value matches data["type"].
+            if event_observations:
+                for idx, obs in enumerate(event_observations):
+                    data = obs.get("data")
+                    if not isinstance(data, dict):
+                        continue
+                    # Skip [DONE] / terminal markers
+                    if data.get("done") is True:
+                        continue
+                    sse_event = data.get("event")
+                    data_type = data.get("type")
+                    if sse_event is None:
+                        missing.append(f"event_missing:chunk#{idx}")
+                    elif data_type is None:
+                        missing.append(f"type_missing:chunk#{idx}")
+                    elif sse_event != data_type:
+                        missing.append(
+                            f"event_type_mismatch:chunk#{idx}(event={sse_event},type={data_type})"
+                        )
+
     return missing
 
 
@@ -194,6 +233,7 @@ def _default_stream_rules_for_endpoint(*, provider: str, endpoint: str) -> dict[
                     ],
                 },
                 {"type": "required_terminal", "value": "message_stop"},
+                {"type": "event_type_match"},
             ],
         }
 
@@ -219,6 +259,7 @@ def _default_stream_rules_for_endpoint(*, provider: str, endpoint: str) -> dict[
                     ],
                 },
                 {"type": "required_terminal", "value": "[DONE]"},
+                {"type": "event_type_match"},
             ],
         }
 
@@ -241,13 +282,12 @@ def _extract_event_observations(
     observations: list[Observation] = []
     for chunk in parsed_chunks:
         event_name = _infer_event_name(provider=provider, chunk=chunk)
-        observations.append(
-            {
-                "kind": "event",
-                "name": event_name,
-                "data": chunk,
-            }
-        )
+        obs: Observation = {
+            "kind": "event",
+            "name": event_name,
+            "data": chunk,
+        }
+        observations.append(obs)
     return observations
 
 
@@ -273,6 +313,11 @@ def _infer_event_name(*, provider: str, chunk: dict[str, Any]) -> str:
     chunk_type = chunk.get("type")
     if isinstance(chunk_type, str) and chunk_type:
         return chunk_type
+
+    # Fallback: use SSE event name when data has no type field.
+    sse_event = chunk.get("event")
+    if isinstance(sse_event, str) and sse_event:
+        return sse_event
 
     # OpenAI/xAI chat.completions streaming chunk
     if provider in {"openai", "xai"} and chunk.get("object") == "chat.completion.chunk":

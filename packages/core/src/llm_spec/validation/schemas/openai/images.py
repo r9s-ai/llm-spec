@@ -5,7 +5,7 @@ Reference:
 - Images Streaming events: `image_generation.*` / `image_edit.*`
 """
 
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, model_validator
 
@@ -50,12 +50,11 @@ class ImageStreamEvent(BaseModel):
     - image_edit.completed
     """
 
-    type: Literal[
-        "image_generation.partial_image",
-        "image_generation.completed",
-        "image_edit.partial_image",
-        "image_edit.completed",
-    ]
+    # SSE event name injected by parser (metadata, not from upstream)
+    event: str | None = None
+
+    # Relaxed to optional so missing type is caught by stream rules, not schema.
+    type: str | None = None
 
     # Common fields
     b64_json: str | None = None
@@ -73,6 +72,9 @@ class ImageStreamEvent(BaseModel):
 
     @model_validator(mode="after")
     def _validate_required_fields_by_type(self) -> "ImageStreamEvent":
+        if not self.type:
+            return self
+
         required_common = [
             ("b64_json", self.b64_json),
             ("created_at", self.created_at),
