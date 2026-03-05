@@ -79,15 +79,15 @@ export function SuiteNode({
           <div className="min-w-0 flex-1">
           <div
             className="truncate text-xs font-medium leading-tight text-slate-700"
-            title={String(suite.route_suite.route ?? "")}
+            title={suite.route_id}
           >
-            {String(suite.route_suite.route ?? "")}
+            {suite.route_id}
           </div>
           <div
             className="truncate text-[10px] leading-tight text-slate-400"
-            title={String(suite.route_suite.endpoint ?? "")}
+            title={suite.endpoint}
           >
-            {String(suite.route_suite.endpoint ?? "")}
+            {suite.endpoint}
           </div>
         </div>
 

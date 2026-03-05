@@ -57,10 +57,10 @@ export function TestSelector({
   const suitesByProvider = useMemo(() => {
     const grouped: Record<string, Suite[]> = {};
     suites.forEach((suite) => {
-      if (!grouped[suite.provider]) {
-        grouped[suite.provider] = [];
+      if (!grouped[suite.provider_id]) {
+        grouped[suite.provider_id] = [];
       }
-      grouped[suite.provider].push(suite);
+      grouped[suite.provider_id].push(suite);
     });
     return grouped;
   }, [suites]);
@@ -69,8 +69,8 @@ export function TestSelector({
     const routeSet = new Set<string>();
     const modelSet = new Set<string>();
     suites.forEach((suite) => {
-      routeSet.add(`${suite.provider}:${String(suite.route_suite.route ?? "")}`);
-      modelSet.add(`${suite.provider}:${suite.model_name}`);
+      routeSet.add(`${suite.provider_id}:${suite.route_id}`);
+      modelSet.add(`${suite.provider_id}:${suite.model_id}`);
     });
     return { routeCount: routeSet.size, modelCount: modelSet.size };
   }, [suites]);

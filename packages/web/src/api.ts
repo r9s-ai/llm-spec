@@ -29,7 +29,7 @@ export function refreshSuiteRegistryCache(): Promise<{
 
 // Task API functions
 export function createTask(input: {
-  model_suite_ids: string[];
+  suite_ids: string[];
   mode?: "real" | "mock";
   selected_tests_by_suite?: Record<string, string[]>;
   name?: string;

@@ -14,14 +14,13 @@ def test_registry_expands_openai_chat_model() -> None:
     match = next(
         s
         for s in suites
-        if s.provider == "openai"
-        and s.route_suite.get("route") == "chat_completions"
-        and s.model_name == "gpt-4o-mini"
+        if s.provider_id == "openai"
+        and s.route_id == "chat_completions"
+        and s.model_id == "gpt-4o-mini"
     )
-    assert match.route_suite["provider"] == "openai"
-    assert match.route_suite["endpoint"] == "/v1/chat/completions"
-    baseline = next(t for t in match.route_suite["tests"] if t.get("baseline") is True)
-    assert baseline["params"]["model"] == "gpt-4o-mini"
+    assert match.endpoint == "/v1/chat/completions"
+    baseline = next(t for t in match.tests if t.baseline is True)
+    assert baseline.params["model"] == "gpt-4o-mini"
 
 
 def test_registry_expands_gemini_endpoint_placeholder() -> None:
@@ -31,14 +30,14 @@ def test_registry_expands_gemini_endpoint_placeholder() -> None:
     match = next(
         s
         for s in suites
-        if s.provider == "gemini"
-        and s.route_suite.get("route") == "generate_content"
-        and s.model_name == "gemini-3-flash-preview"
+        if s.provider_id == "gemini"
+        and s.route_id == "generate_content"
+        and s.model_id == "gemini-3-flash-preview"
     )
-    assert "{model}" not in match.route_suite["endpoint"]
-    assert "gemini-3-flash-preview" in match.route_suite["endpoint"]
-    baseline = next(t for t in match.route_suite["tests"] if t.get("baseline") is True)
-    assert "model" not in baseline.get("params", {})
+    assert "{model}" not in match.endpoint
+    assert "gemini-3-flash-preview" in match.endpoint
+    baseline = next(t for t in match.tests if t.baseline is True)
+    assert "model" not in baseline.params
 
 
 def test_registry_resolves_routes_from_inheritance() -> None:
@@ -48,12 +47,10 @@ def test_registry_resolves_routes_from_inheritance() -> None:
     match = next(
         s
         for s in suites
-        if s.provider == "xai"
-        and s.route_suite.get("route") == "chat_completions"
-        and s.model_name == "grok-beta"
+        if s.provider_id == "xai" and s.route_id == "chat_completions" and s.model_id == "grok-beta"
     )
-    assert match.route_suite["api_family"] == "openai"
-    assert match.route_suite["endpoint"] == "/v1/chat/completions"
+    assert match.api_family == "openai"
+    assert match.endpoint == "/v1/chat/completions"
 
 
 def test_registry_filters_tests_with_include_and_exclude(tmp_path: Path) -> None:
@@ -102,8 +99,7 @@ def test_registry_filters_tests_with_include_and_exclude(tmp_path: Path) -> None
 
     suites = load_registry_suites(providers_dir)
     assert len(suites) == 1
-    tests = suites[0].route_suite["tests"]
-    test_names = [str(t.get("name", "")) for t in tests]
+    test_names = [t.name for t in suites[0].tests]
     assert test_names == ["baseline", "extra_kept"]
 
 

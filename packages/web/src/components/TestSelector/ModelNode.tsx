@@ -36,7 +36,7 @@ export function ModelNode({
     suites.forEach((suite) => {
       const tests = getTestRows(suite);
       total += tests.length;
-      const suiteSelected = selectedTestsBySuite[suite.id] ?? new Set<string>();
+      const suiteSelected = selectedTestsBySuite[suite.suite_id] ?? new Set<string>();
       selected += tests.filter((t) => suiteSelected.has(t.name)).length;
     });
 
@@ -49,7 +49,7 @@ export function ModelNode({
   }, [suites, selectedTestsBySuite]);
 
   const uniqueRouteCount = useMemo(
-    () => new Set(suites.map((suite) => String(suite.route_suite.route ?? ""))).size,
+    () => new Set(suites.map((suite) => suite.route_id)).size,
     [suites]
   );
 
@@ -57,7 +57,7 @@ export function ModelNode({
     suites.forEach((suite) => {
       const tests = getTestRows(suite);
       onToggleTests(
-        suite.id,
+        suite.suite_id,
         tests.map((t) => t.name),
         checked
       );
@@ -107,27 +107,27 @@ export function ModelNode({
           {suites
             .sort(
               (a, b) =>
-                String(a.route_suite.route ?? "").localeCompare(String(b.route_suite.route ?? "")) ||
-                String(a.route_suite.endpoint ?? "").localeCompare(String(b.route_suite.endpoint ?? ""))
+                a.route_id.localeCompare(b.route_id) ||
+                a.endpoint.localeCompare(b.endpoint)
             )
             .map((suite) => {
               const tests = getTestRows(suite);
-              const selectedTestsForSuite = selectedTestsBySuite[suite.id] ?? new Set<string>();
-              const isSuiteExpanded = expandedSuites.has(suite.id);
+              const selectedTestsForSuite = selectedTestsBySuite[suite.suite_id] ?? new Set<string>();
+              const isSuiteExpanded = expandedSuites.has(suite.suite_id);
 
               return (
                 <SuiteNode
-                  key={suite.id}
+                  key={suite.suite_id}
                   suite={suite}
                   tests={tests}
                   selectedTests={selectedTestsForSuite}
                   isExpanded={isSuiteExpanded}
                   searchQuery={searchQuery}
-                  onToggleExpanded={() => onToggleSuiteExpanded(suite.id)}
+                  onToggleExpanded={() => onToggleSuiteExpanded(suite.suite_id)}
                   onToggleTests={(testNames, checked) =>
-                    onToggleTests(suite.id, testNames, checked)
+                    onToggleTests(suite.suite_id, testNames, checked)
                   }
-                  onToggleTest={(testName, checked) => onToggleTest(suite.id, testName, checked)}
+                  onToggleTest={(testName, checked) => onToggleTest(suite.suite_id, testName, checked)}
                 />
               );
             })}

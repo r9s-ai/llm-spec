@@ -5,11 +5,26 @@ export type PageKey = "testing" | "suites" | "settings";
 export type RunMode = "real" | "mock";
 
 // Suite types
+export type SuiteTestDef = {
+  name: string;
+  description: string;
+  baseline: boolean;
+  check_stream: boolean;
+  focus_name: string | null;
+  focus_value: unknown;
+  tags: string[];
+};
+
 export type Suite = {
-  id: string;
-  model_name: string;
-  provider: string;
-  route_suite: Record<string, unknown>;
+  suite_id: string;
+  suite_name: string;
+  provider_id: string;
+  model_id: string;
+  route_id: string;
+  api_family: string;
+  endpoint: string;
+  method: string;
+  tests: SuiteTestDef[];
 };
 
 // Task types
@@ -41,7 +56,8 @@ export type RunJob = {
   model: string | null;
   endpoint: string;
   task_id: string | null;
-  model_suite_id: string | null;
+  suite_id: string | null;
+  suite_name: string | null;
   started_at: string | null;
   finished_at: string | null;
   progress_total: number;

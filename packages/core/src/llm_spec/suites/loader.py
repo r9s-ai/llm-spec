@@ -1,4 +1,4 @@
-"""Suite loader and parameterization expansion."""
+"""Suite loader — reads route JSON5 files and expands variants into TestDef lists."""
 
 from __future__ import annotations
 
@@ -11,7 +11,9 @@ import json5
 from pydantic import BaseModel as PydanticBaseModel
 from pydantic import ConfigDict, Field, model_validator
 
-from .types import SpecTestCase, SpecTestSuite
+from .types import FocusParam, RouteSpec, SchemaRef, TestDef
+
+# ── Pydantic raw validators (JSON5 file shape) ───────────
 
 
 class _RawTestCase(PydanticBaseModel):
@@ -23,6 +25,8 @@ class _RawTestCase(PydanticBaseModel):
     focus_param: dict[str, Any] | None = None
     baseline: bool = False
     check_stream: Any = False
+    stream_rules: dict[str, Any] | None = None
+    # Legacy alias
     stream_expectations: dict[str, Any] | None = None
     endpoint_override: str | None = None
     files: dict[str, str] | None = None
@@ -50,6 +54,10 @@ class _RawTestCase(PydanticBaseModel):
             )
         return self
 
+    @property
+    def effective_stream_rules(self) -> dict[str, Any] | None:
+        return self.stream_rules or self.stream_expectations
+
 
 class _RawSuite(PydanticBaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -59,6 +67,8 @@ class _RawSuite(PydanticBaseModel):
     schemas: dict[str, str] = Field(default_factory=dict)
     tests: list[_RawTestCase] = Field(default_factory=list)
     required_fields: list[str] = Field(default_factory=list)
+    stream_rules: dict[str, Any] | None = None
+    # Legacy alias
     stream_expectations: dict[str, Any] | None = None
     method: str = "POST"
     suite_name: str | None = None
@@ -72,14 +82,54 @@ class _RawSuite(PydanticBaseModel):
             )
         return self
 
+    @property
+    def effective_stream_rules(self) -> dict[str, Any] | None:
+        return self.stream_rules or self.stream_expectations
 
-def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTestCase]:
-    """Expand a variants-based test into multiple SpecTestCase instances."""
+
+# ── Conversion helpers ────────────────────────────────────
+
+
+def _raw_focus_to_focus_param(raw: dict[str, Any] | None) -> FocusParam | None:
+    if not raw or "name" not in raw:
+        return None
+    return FocusParam(name=raw["name"], value=raw.get("value"))
+
+
+def _raw_schemas_to_schema_ref(raw: dict[str, str] | None) -> SchemaRef | None:
+    if not raw:
+        return None
+    return SchemaRef(response=raw.get("response"), stream_chunk=raw.get("stream_chunk"))
+
+
+def _raw_to_test_def(t: _RawTestCase) -> TestDef:
+    """Convert a validated _RawTestCase (no variants) to a TestDef."""
+    return TestDef(
+        name=t.name,
+        description=t.description,
+        params=t.params,
+        focus_param=_raw_focus_to_focus_param(t.focus_param),
+        baseline=t.baseline,
+        check_stream=t.check_stream if isinstance(t.check_stream, bool) else False,
+        stream_rules=t.effective_stream_rules,
+        endpoint_override=t.endpoint_override,
+        files=t.files,
+        schemas=_raw_schemas_to_schema_ref(t.schemas),
+        required_fields=t.required_fields,
+        method=t.method,
+        tags=t.tags,
+    )
+
+
+# ── Variant expansion ────────────────────────────────────
+
+
+def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[TestDef]:
+    """Expand a variants-based test into multiple TestDef instances."""
     variants = test_config.get("variants", {})
     if not variants:
         return
 
-    # Currently only supports a single parameterized variable.
     param_name, param_values = next(iter(variants.items()))
 
     for value in param_values:
@@ -99,9 +149,9 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
         params = copy.deepcopy(test_config.get("params", {}))
         replace_parameter_references(params, param_name, value)
 
-        focus_param = copy.deepcopy(test_config.get("focus_param"))
-        if focus_param:
-            replace_parameter_references(focus_param, param_name, value)
+        raw_focus = copy.deepcopy(test_config.get("focus_param"))
+        if raw_focus:
+            replace_parameter_references(raw_focus, param_name, value)
 
         variant_name = f"{test_config['name']}[{suffix}]"
 
@@ -109,17 +159,19 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[SpecTest
         if isinstance(value, dict) and "check_stream" in value:
             check_stream = value["check_stream"]
 
-        yield SpecTestCase(
+        raw_stream_rules = test_config.get("stream_rules") or test_config.get("stream_expectations")
+
+        yield TestDef(
             name=variant_name,
             description=test_config.get("description", ""),
             params=params,
-            focus_param=focus_param,
+            focus_param=_raw_focus_to_focus_param(raw_focus),
             baseline=test_config.get("baseline", False),
-            check_stream=check_stream,
-            stream_expectations=test_config.get("stream_expectations"),
+            check_stream=check_stream if isinstance(check_stream, bool) else False,
+            stream_rules=raw_stream_rules,
             endpoint_override=test_config.get("endpoint_override"),
             files=test_config.get("files"),
-            schemas=test_config.get("schemas"),
+            schemas=_raw_schemas_to_schema_ref(test_config.get("schemas")),
             required_fields=test_config.get("required_fields"),
             method=test_config.get("method"),
             tags=list(test_config.get("tags", []) or []),
@@ -156,57 +208,57 @@ def replace_parameter_references(obj: Any, ref_name: str, ref_value: Any) -> Non
                 replace_parameter_references(obj[i], ref_name, ref_value)
 
 
-def load_test_suite_from_dict(
-    data: dict[str, Any], config_path: Path | None = None
-) -> SpecTestSuite:
-    """Load a suite configuration from a dictionary."""
+# ── Public loading API ────────────────────────────────────
+
+
+def load_route_from_dict(
+    data: dict[str, Any],
+    *,
+    route_id: str = "",
+    source_path: Path | None = None,
+) -> RouteSpec:
+    """Load a route configuration from a dictionary (JSON5 content)."""
     raw_suite = _RawSuite.model_validate(data)
 
-    tests: list[SpecTestCase] = []
-    baseline_params: dict[str, Any] = {}
+    tests: list[TestDef] = []
 
     for t in raw_suite.tests:
         t_dict = t.model_dump()
-        if t.baseline:
-            baseline_params = copy.deepcopy(t.params)
         if t.variants:
             tests.extend(expand_parameterized_tests(t_dict))
         else:
-            tests.append(
-                SpecTestCase(
-                    name=t.name,
-                    description=t.description,
-                    params=t.params,
-                    focus_param=t.focus_param,
-                    baseline=t.baseline,
-                    check_stream=t.check_stream if isinstance(t.check_stream, bool) else False,
-                    stream_expectations=t.stream_expectations,
-                    endpoint_override=t.endpoint_override,
-                    files=t.files,
-                    schemas=t.schemas,
-                    required_fields=t.required_fields,
-                    method=t.method,
-                    tags=t.tags,
-                )
-            )
+            tests.append(_raw_to_test_def(t))
 
-    return SpecTestSuite(
-        provider=raw_suite.provider,
+    suite_schemas = SchemaRef(
+        response=raw_suite.schemas.get("response"),
+        stream_chunk=raw_suite.schemas.get("stream_chunk"),
+    )
+
+    return RouteSpec(
+        route_id=route_id,
         endpoint=raw_suite.endpoint,
-        schemas=raw_suite.schemas,
-        baseline_params=baseline_params,
-        tests=tests,
-        required_fields=raw_suite.required_fields,
-        stream_expectations=raw_suite.stream_expectations,
-        config_path=config_path,
         method=raw_suite.method,
-        suite_name=raw_suite.suite_name,
+        schemas=suite_schemas,
+        required_fields=raw_suite.required_fields,
+        stream_rules=raw_suite.effective_stream_rules,
+        tests=tests,
+        suite_label=raw_suite.suite_name,
+        source_path=source_path,
     )
 
 
-def load_test_suite(config_path: Path) -> SpecTestSuite:
-    """Load a suite configuration file (JSON5)."""
+def load_route(config_path: Path, *, route_id: str = "") -> RouteSpec:
+    """Load a route configuration file (JSON5)."""
     with open(config_path, encoding="utf-8") as f:
         raw_data = json5.load(f)
 
-    return load_test_suite_from_dict(raw_data, config_path)
+    if not route_id:
+        route_id = config_path.stem
+
+    return load_route_from_dict(raw_data, route_id=route_id, source_path=config_path)
+
+
+# ── Backward-compatible aliases (will be removed) ────────
+
+load_test_suite_from_dict = load_route_from_dict
+load_test_suite = load_route

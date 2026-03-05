@@ -4,30 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from llm_spec_web.models.base import Base, new_id, now_utc
 
 
 class Task(Base):
-    """Task model.
-
-    Represents a user-initiated execution containing multiple runs.
-
-    Attributes:
-        id: Unique identifier (UUID).
-        name: User-defined name for the task.
-        status: Task status ("running", "completed", "cancelled").
-        mode: Execution mode ("real" or "mock").
-        total_runs: Total number of runs in this task.
-        completed_runs: Number of completed runs.
-        passed_runs: Number of runs that passed all tests.
-        failed_runs: Number of runs that had failures.
-        started_at: Execution start timestamp.
-        finished_at: Execution finish timestamp.
-        created_at: Creation timestamp.
-    """
+    """User-initiated batch execution (1:N RunJob)."""
 
     __tablename__ = "task"
 
@@ -48,71 +32,173 @@ class Task(Base):
 
 
 class RunJob(Base):
-    """Run job model.
-
-    Represents a test execution job.
-
-    Attributes:
-        id: Unique identifier (UUID).
-        status: Job status ("queued", "running", "success", "failed", "cancelled").
-        mode: Execution mode ("real" or "mock").
-        provider: Provider name.
-        route: Route name (registry route key).
-        model: Model ID.
-        endpoint: API endpoint path.
-        model_suite_id: Model suite ID from registry build output.
-        selected_tests: Selected test names for this run (empty means all tests).
-        started_at: Execution start timestamp.
-        finished_at: Execution finish timestamp.
-        progress_total: Total number of tests.
-        progress_done: Number of completed tests.
-        progress_passed: Number of passed tests.
-        progress_failed: Number of failed tests.
-        error_message: Error message if failed.
-    """
+    """Execution job for one SuiteSpec."""
 
     __tablename__ = "run_job"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued", index=True)
-    mode: Mapped[str] = mapped_column(String(16), nullable=False, default="real")
-    provider: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    route: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
-    model: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
-    endpoint: Mapped[str] = mapped_column(String(255), nullable=False)
     task_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("task.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
     )
-    model_suite_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued", index=True)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False, default="real")
+
+    # Suite identity
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    route: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    endpoint: Mapped[str] = mapped_column(String(255), nullable=False)
+    suite_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    suite_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Selection
     selected_tests: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Progress
     progress_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     progress_done: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     progress_passed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     progress_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Timing
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     def __repr__(self) -> str:
         return f"<RunJob {self.id}:{self.status}>"
 
 
+class RunCase(Base):
+    """TestCase snapshot for retry support."""
+
+    __tablename__ = "run_case"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("run_job.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    case_id: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Test identity
+    test_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    is_baseline: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+
+    # Focus parameter
+    focus_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    focus_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+        JSON, nullable=True
+    )
+
+    # Request snapshot
+    request_method: Mapped[str] = mapped_column(String(16), nullable=False)
+    request_endpoint: Mapped[str] = mapped_column(String(255), nullable=False)
+    request_params: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    request_files: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    request_stream: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # Validation rules snapshot
+    response_schema: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    stream_chunk_schema: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    required_fields: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    stream_rules: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    # Provenance
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    route: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    api_family: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    __table_args__ = (Index("uq_run_case_run_case_id", "run_id", "case_id", unique=True),)
+
+    def __repr__(self) -> str:
+        return f"<RunCase {self.run_id}:{self.test_name}>"
+
+
+class RunTestResult(Base):
+    """TestVerdict persistence."""
+
+    __tablename__ = "run_test_result"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("run_job.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    run_case_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("run_case.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    case_id: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Test identity
+    test_name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Focus parameter
+    focus_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    focus_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+        JSON, nullable=True
+    )
+
+    # Verdict
+    status: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Check results
+    schema_ok: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    required_fields_ok: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    stream_rules_ok: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
+    # Failure details
+    fail_stage: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    fail_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fail_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    missing_fields: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    missing_events: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+
+    # Timing
+    started_at: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    finished_at: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+
+    def __repr__(self) -> str:
+        return f"<RunTestResult {self.run_id}:{self.test_name}>"
+
+
+class RunResultRecord(Base):
+    """RunResult JSON archive for one run."""
+
+    __tablename__ = "run_result_record"
+
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("run_job.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    result_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    def __repr__(self) -> str:
+        return f"<RunResultRecord {self.run_id}>"
+
+
 class RunEvent(Base):
-    """Run event model.
-
-    Represents an event during test execution (e.g., test started, test finished).
-
-    Attributes:
-        id: Auto-increment event ID.
-        run_id: Parent run job ID.
-        seq: Sequence number within the run.
-        event_type: Event type (e.g., "test_started", "test_finished").
-        payload: Event data.
-        created_at: Event timestamp.
-    """
+    """Real-time event stream (SSE replay)."""
 
     __tablename__ = "run_event"
 
@@ -134,128 +220,7 @@ class RunEvent(Base):
         return f"<RunEvent {self.run_id}:{self.seq} {self.event_type}>"
 
 
-class TaskResultRecord(Base):
-    """Task result model.
-
-    Stores the final result of a completed run.
-
-    Attributes:
-        run_id: Run job ID (primary key).
-        task_result_json: Full result data as JSON.
-        created_at: Creation timestamp.
-    """
-
-    __tablename__ = "task_result"
-
-    run_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("run_job.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    task_result_json: Mapped[dict] = mapped_column(JSON, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
-
-    def __repr__(self) -> str:
-        return f"<TaskResultRecord {self.run_id}>"
-
-
-class RunCase(Base):
-    """Prepared executable-case snapshot for one run.
-
-    This table stores the exact executable input so retries can run directly
-    from persisted context without rebuilding from registry/config pipeline.
-    """
-
-    __tablename__ = "run_case"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    run_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("run_job.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    case_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
-    test_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    provider: Mapped[str] = mapped_column(String(32), nullable=False)
-    route: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    request_method: Mapped[str] = mapped_column(String(16), nullable=False)
-    request_endpoint: Mapped[str] = mapped_column(String(255), nullable=False)
-    request_params: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    request_files: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    check_stream: Mapped[bool] = mapped_column(nullable=False, default=False)
-    response_schema: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    stream_chunk_schema: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    required_fields: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    stream_expectations: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    parameter_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    parameter_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
-        JSON,
-        nullable=True,
-    )
-    parameter_value_type: Mapped[str] = mapped_column(String(32), nullable=False, default="none")
-    is_baseline: Mapped[bool] = mapped_column(nullable=False, default=False)
-    tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
-
-    __table_args__ = (Index("uq_run_case_run_case_id", "run_id", "case_id", unique=True),)
-
-    def __repr__(self) -> str:
-        return f"<RunCase {self.run_id}:{self.test_name}>"
-
-
-class RunTestResult(Base):
-    """Individual test result model.
-
-    Stores the result of a single test within a run.
-
-    Attributes:
-        id: Unique identifier (UUID).
-        run_id: Parent run job ID.
-        test_id: Test identifier.
-        test_name: Test name.
-        parameter_value: Parameter value.
-        status: Test status ("pass" or "fail").
-        fail_stage: Stage where failure occurred (if any).
-        reason_code: Failure reason code (if any).
-        latency_ms: Request latency in milliseconds.
-        raw_record: Full test record as JSON.
-    """
-
-    __tablename__ = "run_test_result"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    run_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("run_job.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    run_case_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey("run_case.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
-    )
-    test_id: Mapped[str] = mapped_column(String(512), nullable=False)
-    test_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    parameter_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
-        JSON,
-        nullable=True,
-    )
-    status: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
-    fail_stage: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    raw_record: Mapped[dict] = mapped_column(JSON, nullable=False)
-
-    def __repr__(self) -> str:
-        return f"<RunTestResult {self.run_id}:{self.test_name}>"
-
-
-# Additional indexes for common queries
+# Additional indexes
 Index("ix_run_job_provider_status", RunJob.provider, RunJob.status)
 Index("ix_run_job_provider_model_route", RunJob.provider, RunJob.model, RunJob.route)
 Index("ix_run_test_result_run_status", RunTestResult.run_id, RunTestResult.status)

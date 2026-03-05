@@ -25,12 +25,8 @@ import respx
 from mock_loader import MockDataLoader
 
 from llm_spec.adapters.base import ProviderAdapter
-from llm_spec.runners import (
-    ConfigDrivenTestRunner,
-    SpecTestCase,
-    SpecTestSuite,
-)
-from llm_spec.suites.registry import ModelSuite, hydrate_executable_suite, load_registry_suites
+from llm_spec.runners import TestRunner
+from llm_spec.suites import SuiteSpec, TestCase, build_execution_plan, load_registry_suites
 
 if TYPE_CHECKING:
     pass
@@ -43,12 +39,8 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 SUITES_DIR = REPO_ROOT / "suites-registry" / "providers"
 
 # Cache loaded suites
-_SUITE_CACHE: dict[str, tuple[ModelSuite, SpecTestSuite]] = {}
-
-
-def _get_suite(suite_key: str) -> tuple[ModelSuite, SpecTestSuite]:
-    """Get or load a TestSuite (cached)."""
-    return _SUITE_CACHE[suite_key]
+_SUITE_CACHE: dict[str, SuiteSpec] = {}
+_CASE_CACHE: dict[str, TestCase] = {}
 
 
 def discover_test_configs() -> list[tuple[str, str, str]]:
@@ -62,15 +54,16 @@ def discover_test_configs() -> list[tuple[str, str, str]]:
     if not SUITES_DIR.exists():
         return configs
 
-    for item in load_registry_suites(SUITES_DIR):
-        suite = hydrate_executable_suite(item.route_suite)
-        route = str(item.route_suite.get("route", ""))
-        suite_key = f"{item.provider}/{route}/{item.model_name}"
-        _SUITE_CACHE[suite_key] = (item, suite)
+    for suite in load_registry_suites(SUITES_DIR):
+        suite_key = f"{suite.provider_id}/{suite.route_id}/{suite.model_id}"
+        _SUITE_CACHE[suite_key] = suite
 
-        for test in suite.tests:
-            test_id = f"{suite_key}::{test.name}"
-            configs.append((suite_key, test.name, test_id))
+        cases = build_execution_plan(suite)
+        for case in cases:
+            case_key = f"{suite_key}::{case.test_name}"
+            _CASE_CACHE[case_key] = case
+            test_id = case_key
+            configs.append((suite_key, case.test_name, test_id))
 
     return configs
 
@@ -92,37 +85,16 @@ def test_from_config(
     respx_mock: respx.MockRouter | None,
     mock_data_loader: MockDataLoader,
 ) -> None:
-    """Run a single test case from a suite config.
-
-    Supports both real API calls and mock mode (via --mock flag).
-
-    Args:
-        suite_key: provider/route/model key
-        test_name: test case name
-        request: pytest fixture request
-        mock_mode: whether mock mode is enabled
-        respx_mock: respx mock router (if mock mode enabled)
-        mock_data_loader: mock data loader instance
-    """
-    _expanded, suite = _get_suite(suite_key)
+    """Run a single test case from a suite config."""
+    suite = _SUITE_CACHE[suite_key]
+    case = _CASE_CACHE[f"{suite_key}::{test_name}"]
 
     # Resolve the provider client fixture
-    client_fixture_name = f"{suite.provider}_client"
+    client_fixture_name = f"{suite.provider_id}_client"
     try:
         client = request.getfixturevalue(client_fixture_name)
     except pytest.FixtureLookupError:
         pytest.skip(f"Client fixture '{client_fixture_name}' not found")
-        return
-
-    # Find the target test case
-    test_case: SpecTestCase | None = None
-    for t in suite.tests:
-        if t.name == test_name:
-            test_case = t
-            break
-
-    if test_case is None:
-        pytest.fail(f"Test '{test_name}' not found in config")
         return
 
     # Mock mode: setup respx route for this specific test
@@ -131,58 +103,46 @@ def test_from_config(
             respx_mock=respx_mock,
             mock_loader=mock_data_loader,
             suite=suite,
-            test_case=test_case,
+            case=case,
             client=client,
         )
 
     # Run
-    runner = ConfigDrivenTestRunner(suite, client)
-    case_result = runner.run_test(test_case)
-    success = (case_result.get("result") or {}).get("status") == "pass"
+    runner = TestRunner(client, source_path=suite.source_path)
+    verdict = runner.run(case)
 
     # Assert
-    assert success, f"Test '{test_name}' failed"
+    assert verdict.status == "pass", f"Test '{test_name}' failed: {verdict.failure}"
 
 
 def _setup_mock_route(
     respx_mock: respx.MockRouter,
     mock_loader: MockDataLoader,
-    suite: SpecTestSuite,
-    test_case: SpecTestCase,
+    suite: SuiteSpec,
+    case: TestCase,
     client: ProviderAdapter,
 ) -> None:
-    """Setup respx mock route for a single test case.
-
-    Registers HTTP mock responses based on mock data files.
-    Supports both streaming and non-streaming responses.
-
-    Args:
-        respx_mock: respx mock router
-        mock_loader: mock data loader instance
-        suite: test suite configuration
-        test_case: specific test case to mock
-        client: provider client adapter
-    """
+    """Setup respx mock route for a single test case."""
     # Build full URL
     base_url = client.get_base_url()
-    endpoint = test_case.endpoint_override or suite.endpoint
+    endpoint = case.request.endpoint
     full_url = f"{base_url}{endpoint}"
 
-    is_stream = bool(test_case.check_stream)
+    is_stream = case.request.stream
 
     # Load mock data
     try:
         mock_data = mock_loader.load_response(
-            provider=suite.provider,
+            provider=suite.provider_id,
             endpoint=endpoint,
-            test_name=test_case.name,
+            test_name=case.test_name,
             is_stream=is_stream,
         )
     except FileNotFoundError as e:
         pytest.skip(f"Mock data not available: {e}")
         return
     except Exception as e:
-        print(f"\n[MOCK ERROR] Failed to load mock data for '{test_case.name}': {e}")
+        print(f"\n[MOCK ERROR] Failed to load mock data for '{case.test_name}': {e}")
         pytest.fail(f"Mock data error: {e}")
         return
 
@@ -197,7 +157,7 @@ def _setup_mock_route(
         try:
             chunks = list(mock_data)  # mock_data is Iterator[bytes]
         except Exception as e:
-            print(f"\n[MOCK ERROR] Failed to parse stream data for '{test_case.name}': {e}")
+            print(f"\n[MOCK ERROR] Failed to parse stream data for '{case.test_name}': {e}")
             pytest.fail(f"Mock stream error: {e}")
             return
         combined_content = b"".join(chunks)

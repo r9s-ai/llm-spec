@@ -62,16 +62,16 @@ export function TestingPage() {
   // Handle task run
   const handleStartTaskRun = useCallback(async () => {
     // Collect selected model-suite IDs
-    const selectedModelSuiteIds: string[] = [];
+    const selectedSuiteIds: string[] = [];
     suiteList.forEach((suite) => {
-      const tests = selectedTestsBySuite[suite.id];
+      const tests = selectedTestsBySuite[suite.suite_id];
       if (tests && tests.size > 0) {
-        selectedModelSuiteIds.push(suite.id);
+        selectedSuiteIds.push(suite.suite_id);
       }
     });
 
     await startTaskRun(
-      selectedModelSuiteIds,
+      selectedSuiteIds,
       runMode,
       selectedTestsBySuite,
       setNotice,
@@ -100,13 +100,10 @@ export function TestingPage() {
   const handleSelectAll = useCallback(() => {
     selectAllProviders();
     suiteList.forEach((suite) => {
-      const tests = suite.route_suite.tests;
+      const tests = suite.tests;
       if (Array.isArray(tests)) {
         tests.forEach((test) => {
-          const row = test as { name?: unknown };
-          if (typeof row.name === "string") {
-            toggleTest(suite.id, row.name, true);
-          }
+          toggleTest(suite.suite_id, test.name, true);
         });
       }
     });

@@ -23,9 +23,9 @@ export function SuiteCard({
   onToggleSuitePanel,
   onToggleTest,
 }: SuiteCardProps) {
-  const route = String(suite.route_suite.route ?? "");
-  const endpoint = String(suite.route_suite.endpoint ?? "");
-  const suiteName = String(suite.route_suite.suite_name ?? suite.model_name);
+  const route = suite.route_id;
+  const endpoint = suite.endpoint;
+  const suiteName = suite.suite_name || suite.model_id;
 
   return (
     <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50/40 p-2.5">
@@ -34,8 +34,8 @@ export function SuiteCard({
           <input
             type="checkbox"
             className="h-3.5 w-3.5 accent-violet-600"
-            checked={selectedSuiteIds.has(suite.id)}
-            onChange={() => onToggleSuite(suite.id)}
+            checked={selectedSuiteIds.has(suite.suite_id)}
+            onChange={() => onToggleSuite(suite.suite_id)}
           />
           <strong className="truncate">{route}</strong>
         </label>
@@ -46,7 +46,7 @@ export function SuiteCard({
           </span>
           <button
             className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-xs"
-            onClick={() => onToggleSuitePanel(suite.id)}
+            onClick={() => onToggleSuitePanel(suite.suite_id)}
           >
             {testsExpanded ? "▾" : "▸"}
           </button>
@@ -55,7 +55,7 @@ export function SuiteCard({
 
       {!duplicateName && (
         <div className="my-1 text-xs font-medium text-slate-500">
-          {suiteName} · {suite.model_name} · {endpoint}
+          {suiteName} · {suite.model_id} · {endpoint}
         </div>
       )}
 
@@ -64,7 +64,7 @@ export function SuiteCard({
           {tests.length ? (
             tests.map((test) => (
               <label
-                key={`${suite.id}:${test.name}`}
+                key={`${suite.suite_id}:${test.name}`}
                 title={test.valueText}
                 className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-900"
               >
@@ -72,7 +72,7 @@ export function SuiteCard({
                   type="checkbox"
                   className="h-3.5 w-3.5 accent-violet-600"
                   checked={selectedTests.has(test.name)}
-                  onChange={(e) => onToggleTest(suite.id, test.name, e.target.checked)}
+                  onChange={(e) => onToggleTest(suite.suite_id, test.name, e.target.checked)}
                 />
                 {test.paramName}
               </label>
