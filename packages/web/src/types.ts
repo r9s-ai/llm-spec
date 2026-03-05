@@ -120,3 +120,30 @@ export type RunSummary = {
   passed?: number;
   failed?: number;
 };
+
+// Shared test result row shape used by result tables and run cards
+export type TestResultRow = {
+  run_case_id?: string;
+  test_name: string;
+  status?: "pending" | "running" | "pass" | "fail";
+  parameter?: {
+    name: string;
+    value: unknown;
+    value_type: string;
+  };
+  request?: {
+    http_status: number;
+    latency_ms: number;
+  };
+  result?: {
+    status: string;
+    reason?: string;
+  };
+  validation?: {
+    schema_ok: boolean;
+    required_fields_ok: boolean;
+    stream_rules_ok: boolean;
+    missing_fields: string[];
+    missing_events: string[];
+  };
+};

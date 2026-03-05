@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import base64
-import mimetypes
-import re
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +15,7 @@ if TYPE_CHECKING:
 from llm_spec.adapters.base import ProviderAdapter
 from llm_spec.path_utils import get_value_at_path
 from llm_spec.results.result_types import FailureInfo, TestVerdict
+from llm_spec.runners.asset_resolver import AssetResolver
 from llm_spec.runners.parsers import ResponseParser, StreamResponseParser
 from llm_spec.runners.stream_rules import extract_observations, validate_stream
 from llm_spec.suites.types import TestCase
@@ -30,7 +28,7 @@ class TestRunner:
     """Executes TestCase objects and produces TestVerdict results.
 
     Responsibilities:
-    1. Resolve asset placeholders in request params
+    1. Resolve asset placeholders in request params (via AssetResolver)
     2. Execute HTTP requests (normal or streaming)
     3. Validate responses (schema + required fields + stream rules)
     4. Return TestVerdict (no reporting side effects)
@@ -43,7 +41,7 @@ class TestRunner:
     ):
         self.client = client
         self.source_path = source_path
-        self._asset_bytes_cache: dict[Path, bytes] = {}
+        self._asset_resolver = AssetResolver(source_path)
 
     # ── Public API ────────────────────────────────────────
 
@@ -73,131 +71,18 @@ class TestRunner:
             if callable(set_test_name):
                 set_test_name(None)
 
-    # ── Asset resolution ──────────────────────────────────
-
-    @staticmethod
-    def _strip_optional_quotes(text: str) -> str:
-        s = text.strip()
-        if len(s) >= 2 and (
-            (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'"))
-        ):
-            return s[1:-1]
-        return s
-
-    def _read_asset_bytes(self, path_str: str) -> tuple[Path, bytes]:
-        resolved = self._resolve_file_path(path_str)
-        if not resolved.exists():
-            raise FileNotFoundError(f"Asset file not found: {path_str}")
-        cached = self._asset_bytes_cache.get(resolved)
-        if cached is not None:
-            return resolved, cached
-        data = resolved.read_bytes()
-        self._asset_bytes_cache[resolved] = data
-        return resolved, data
-
-    def _resolve_asset_function_string(self, text: str) -> str:
-        stripped = text.strip()
-
-        m_base64 = re.fullmatch(r"\$asset_base64\((.+)\)", stripped)
-        if m_base64:
-            raw_path = self._strip_optional_quotes(m_base64.group(1))
-            _path, data = self._read_asset_bytes(raw_path)
-            return base64.b64encode(data).decode("ascii")
-
-        m_data_uri = re.fullmatch(r"\$asset_data_uri\((.+)\)", stripped)
-        if m_data_uri:
-            arg_str = m_data_uri.group(1)
-            path_part, sep, mime_part = arg_str.partition(",")
-            raw_path = self._strip_optional_quotes(path_part)
-            resolved, data = self._read_asset_bytes(raw_path)
-            mime = self._strip_optional_quotes(mime_part) if sep else ""
-            if not mime:
-                mime = mimetypes.guess_type(str(resolved))[0] or "application/octet-stream"
-            b64 = base64.b64encode(data).decode("ascii")
-            return f"data:{mime};base64,{b64}"
-
-        return text
+    # ── Asset resolution (delegated to AssetResolver) ───
 
     def _resolve_asset_placeholders(self, value: Any) -> Any:
-        if isinstance(value, dict):
-            return {k: self._resolve_asset_placeholders(v) for k, v in value.items()}
-        if isinstance(value, list):
-            return [self._resolve_asset_placeholders(v) for v in value]
-        if isinstance(value, str):
-            return self._resolve_asset_function_string(value)
-        return value
-
-    def _detect_registry_root(self) -> Path | None:
-        if self.source_path is not None:
-            for parent in [self.source_path.parent, *self.source_path.parents]:
-                if parent.name == "suites-registry":
-                    return parent
-                if (parent / "suites-registry").is_dir():
-                    return parent / "suites-registry"
-
-        cwd = Path.cwd()
-        if (cwd / "suites-registry").is_dir():
-            return cwd / "suites-registry"
-        for parent in cwd.parents:
-            if parent.name == "suites-registry":
-                return parent
-            if (parent / "suites-registry").is_dir():
-                return parent / "suites-registry"
-        return None
+        return self._asset_resolver.resolve_placeholders(value)
 
     def _resolve_file_path(self, file_path_str: str) -> Path:
-        raw = Path(file_path_str).expanduser()
-        if raw.is_absolute():
-            return raw
-
-        rel = raw
-        candidates: list[Path] = []
-
-        if self.source_path is not None:
-            cfg_dir = self.source_path.parent
-            candidates.append(cfg_dir / rel)
-
-            registry_root = self._detect_registry_root()
-            cur = cfg_dir
-            while True:
-                candidates.append(cur / rel)
-                if registry_root is not None and cur == registry_root:
-                    break
-                if cur.parent == cur:
-                    break
-                cur = cur.parent
-
-            if registry_root is not None:
-                candidates.append(registry_root / rel)
-
-        registry_root = self._detect_registry_root()
-        if registry_root is not None:
-            candidates.append(registry_root / rel)
-
-        candidates.append(Path.cwd() / rel)
-
-        for candidate in candidates:
-            if candidate.exists():
-                return candidate
-
-        return raw
-
-    # ── File uploads ──────────────────────────────────────
+        return self._asset_resolver.resolve_file_path(file_path_str)
 
     def _prepare_upload_files(self, case: TestCase) -> tuple[dict[str, Any] | None, list[Any]]:
         if not case.request.files:
             return None, []
-
-        files: dict[str, Any] = {}
-        opened: list[Any] = []
-        for param_name, file_path_str in case.request.files.items():
-            path = self._resolve_file_path(file_path_str)
-            if not path.exists():
-                raise FileNotFoundError(f"Test file not found: {file_path_str}")
-            f = open(path, "rb")  # noqa: SIM115
-            opened.append(f)
-            files[param_name] = (path.name, f)
-        return files, opened
+        return self._asset_resolver.prepare_upload_files(case.request.files)
 
     # ── Verdict builder ───────────────────────────────────
 

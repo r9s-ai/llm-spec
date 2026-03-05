@@ -1,8 +1,4 @@
-// Legacy components (kept for backward compatibility)
 export { Header } from "./Header";
-export { ProviderPanel } from "./ProviderPanel";
-export { SuiteCard } from "./SuiteCard";
-export { RunCard } from "./RunCard";
 
 // New UI components
 export * from "./UI";
@@ -27,7 +23,6 @@ export { CompletedRunCard } from "./RunCards";
 export { TaskCard } from "./RunCards";
 
 // ResultPanel components
-export { RunResultPanel } from "./ResultPanel";
 export { TestResultList, type TestResult } from "./ResultPanel";
 export { TestResultItem } from "./ResultPanel";
 export { ErrorDetailModal } from "./ResultPanel";

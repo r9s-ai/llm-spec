@@ -15,7 +15,7 @@ from llm_spec.adapters.base import ProviderAdapter
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import ProviderConfig
 from llm_spec.json_types import Headers, JSONValue
-from packages.core.tests.integration.mock_loader import MockDataLoader
+from llm_spec.testing import MockDataLoader
 
 # Mock delay configuration
 MOCK_MIN_DELAY = 1  # Minimum delay in seconds

@@ -5,6 +5,7 @@ import { CompletedRunCard } from "./CompletedRunCard";
 import { ProgressBar } from "./ProgressBar";
 import type { RunEvent, RunJob, RunSummary, TaskWithRuns } from "../../types";
 import * as api from "../../api";
+import { formatRelativeTime } from "../../utils/formatters";
 
 interface TaskCardProps {
   task: TaskWithRuns;
@@ -14,21 +15,6 @@ interface TaskCardProps {
   onCancel?: (taskId: string) => Promise<void> | void;
   onUpdate?: (task: TaskWithRuns) => void;
   onRetryFailedTest?: (run: RunJob, runCaseId: string, testName: string) => Promise<void> | void;
-}
-
-function formatRelativeTime(dateStr: string | null): string {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${diffDays}d ago`;
 }
 
 function formatTime(dateStr: string | null): string {
