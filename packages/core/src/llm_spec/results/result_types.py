@@ -1,87 +1,97 @@
+"""Result types — Layer 4 of the data model.
+
+FailureInfo → TestVerdict → RunResult
+"""
+
 from __future__ import annotations
 
-from typing import Any, Literal, Required, TypedDict
+from dataclasses import dataclass, field
+from typing import Any, Literal
+
+from llm_spec.suites.types import FocusParam
 
 
-class CaseParameter(TypedDict):
-    name: str | None
-    value: Any
-    value_type: str
+@dataclass
+class FailureInfo:
+    """Failure details, only present when status != 'pass'."""
+
+    stage: str  # "schema" | "request" | "required_fields" | "stream_rules"
+    code: str | None = None  # "SCHEMA_MISMATCH" | "TIMEOUT" etc.
+    message: str = ""
+    missing_fields: list[str] = field(default_factory=list)
+    missing_events: list[str] = field(default_factory=list)
 
 
-class CaseRequest(TypedDict, total=False):
-    method: str
-    endpoint: str
-    params: dict[str, Any]
-    files: list[dict[str, Any]]
-    ok: bool
-    http_status: int
-    latency_ms: int
+@dataclass
+class TestVerdict:
+    """Execution verdict for a single TestCase."""
+
+    case_id: str
+    test_name: str
+
+    # Focus parameter
+    focus: FocusParam | None = None
+
+    # Verdict
+    status: Literal["pass", "fail", "error"] = "error"
+
+    # Timing
+    started_at: str = ""
+    finished_at: str = ""
+    latency_ms: int | None = None
+
+    # HTTP layer
+    http_status: int | None = None
+
+    # Check results (None = not executed)
+    schema_ok: bool | None = None
+    required_fields_ok: bool | None = None
+    stream_rules_ok: bool | None = None
+
+    # Failure details
+    failure: FailureInfo | None = None
+
+    # Debug snapshots (TODO: populate later)
+    request_snapshot: dict[str, Any] | None = None
+    response_body: Any = None
 
 
-class CaseResponse(TypedDict, total=False):
-    http_status: int
-    body: Any
+@dataclass
+class RunResult:
+    """Aggregated result for one SuiteSpec run."""
 
+    run_id: str
+    version: str = "run_result.v1"
 
-class CaseValidation(TypedDict, total=False):
-    schema_ok: bool
-    required_fields_ok: bool
-    stream_rules_ok: bool
-    missing_fields: list[str]
-    missing_events: list[str]
+    # Suite identity
+    provider: str = ""
+    model: str | None = None
+    route: str | None = None
+    endpoint: str = ""
+    suite_name: str = ""
 
+    # Timing
+    started_at: str = ""
+    finished_at: str = ""
 
-class CaseResultState(TypedDict, total=False):
-    status: Literal["pass", "fail", "error"]
-    fail_stage: str | None
-    reason_code: str | None
-    reason: str | None
+    # Verdicts
+    verdicts: list[TestVerdict] = field(default_factory=list)
 
+    @property
+    def total(self) -> int:
+        return len(self.verdicts)
 
-class CaseResult(TypedDict, total=False):
-    version: str
-    run_case_id: str | None
-    test_id: str
-    test_name: Required[str]
-    is_baseline: bool
-    provider: str
-    model: str | None
-    route: str | None
-    endpoint: str
-    parameter: CaseParameter
-    request: CaseRequest
-    response: CaseResponse
-    validation: CaseValidation
-    result: CaseResultState
-    started_at: str
-    finished_at: str
-    meta: dict[str, Any]
+    @property
+    def passed(self) -> int:
+        return sum(1 for v in self.verdicts if v.status == "pass")
 
-
-class TaskSelection(TypedDict, total=False):
-    provider: Required[str]
-    model: Required[str | None]
-    route: Required[str | None]
-    endpoint: Required[str]
-
-
-class TaskResult(TypedDict, total=False):
-    version: Required[str]
-    run_id: Required[str]
-    started_at: Required[str]
-    finished_at: Required[str]
-    selection: Required[TaskSelection]
-    cases: Required[list[CaseResult]]
+    @property
+    def failed(self) -> int:
+        return sum(1 for v in self.verdicts if v.status != "pass")
 
 
 __all__ = [
-    "CaseParameter",
-    "CaseRequest",
-    "CaseResponse",
-    "CaseValidation",
-    "CaseResultState",
-    "CaseResult",
-    "TaskSelection",
-    "TaskResult",
+    "FailureInfo",
+    "TestVerdict",
+    "RunResult",
 ]

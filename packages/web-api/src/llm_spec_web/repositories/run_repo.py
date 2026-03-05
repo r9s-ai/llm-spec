@@ -8,7 +8,8 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from llm_spec_web.models.run import RunCase, RunEvent, RunJob, RunTestResult, Task, TaskResultRecord
+from llm_spec.results.result_types import TestVerdict
+from llm_spec_web.models.run import RunCase, RunEvent, RunJob, RunResultRecord, RunTestResult, Task
 
 
 class RunRepository:
@@ -300,28 +301,14 @@ class RunRepository:
         )
         return self.db.execute(stmt).scalars().all()
 
-    # ==================== TaskResult Operations ====================
+    # ==================== RunResult Operations ====================
 
-    def get_task_result(self, run_id: str) -> TaskResultRecord | None:
-        """Get the task result for a run.
+    def get_run_result(self, run_id: str) -> RunResultRecord | None:
+        """Get the run result record for a run."""
+        return self.db.get(RunResultRecord, run_id)
 
-        Args:
-            run_id: Run job ID.
-
-        Returns:
-            TaskResultRecord instance or None if not found.
-        """
-        return self.db.get(TaskResultRecord, run_id)
-
-    def save_task_result(self, result: TaskResultRecord) -> TaskResultRecord:
-        """Save a task result.
-
-        Args:
-            result: TaskResultRecord instance to save.
-
-        Returns:
-            Saved TaskResultRecord instance.
-        """
+    def save_run_result(self, result: RunResultRecord) -> RunResultRecord:
+        """Save a run result record."""
         self.db.merge(result)
         self.db.flush()
         return result
@@ -363,44 +350,32 @@ class RunRepository:
         *,
         run_id: str,
         run_case_id: str,
-        test_id: str,
-        test_name: str,
-        parameter_value: dict | list | str | int | float | bool | None,
-        status: str,
-        fail_stage: str | None,
-        reason_code: str | None,
-        latency_ms: int | None,
-        raw_record: dict,
+        verdict: TestVerdict,
     ) -> RunTestResult:
         """Insert or update a test result identified by ``run_case_id``."""
         stmt = select(RunTestResult).where(RunTestResult.run_case_id == run_case_id)
         row = self.db.execute(stmt).scalars().first()
         if row is None:
-            row = RunTestResult(
-                run_id=run_id,
-                run_case_id=run_case_id,
-                test_id=test_id,
-                test_name=test_name,
-                parameter_value=parameter_value,
-                status=status,
-                fail_stage=fail_stage,
-                reason_code=reason_code,
-                latency_ms=latency_ms,
-                raw_record=raw_record,
-            )
+            row = RunTestResult(run_id=run_id, run_case_id=run_case_id)
             self.db.add(row)
-        else:
-            row.run_id = run_id
-            row.run_case_id = run_case_id
-            row.test_id = test_id
-            row.test_name = test_name
-            row.parameter_value = parameter_value
-            row.status = status
-            row.fail_stage = fail_stage
-            row.reason_code = reason_code
-            row.latency_ms = latency_ms
-            row.raw_record = raw_record
-            self.db.add(row)
+
+        row.case_id = verdict.case_id
+        row.test_name = verdict.test_name
+        row.focus_name = verdict.focus.name if verdict.focus else None
+        row.focus_value = verdict.focus.value if verdict.focus else None
+        row.status = verdict.status
+        row.latency_ms = verdict.latency_ms
+        row.http_status = verdict.http_status
+        row.schema_ok = verdict.schema_ok
+        row.required_fields_ok = verdict.required_fields_ok
+        row.stream_rules_ok = verdict.stream_rules_ok
+        row.fail_stage = verdict.failure.stage if verdict.failure else None
+        row.fail_code = verdict.failure.code if verdict.failure else None
+        row.fail_message = verdict.failure.message if verdict.failure else None
+        row.missing_fields = list(verdict.failure.missing_fields) if verdict.failure else []
+        row.missing_events = list(verdict.failure.missing_events) if verdict.failure else []
+        row.started_at = verdict.started_at
+        row.finished_at = verdict.finished_at
         self.db.flush()
         return row
 
@@ -428,16 +403,16 @@ class RunRepository:
         progress_passed: int,
         progress_failed: int,
         test_results: list[RunTestResult],
-        task_result_json: dict,
+        result_json: dict,
     ) -> RunJob:
-        """Persist run test rows + task result, mark final run status, and commit."""
+        """Persist run test rows + run result, mark final run status, and commit."""
         for row in test_results:
             self.add_test_result(row)
 
-        self.save_task_result(
-            TaskResultRecord(
+        self.save_run_result(
+            RunResultRecord(
                 run_id=run_job.id,
-                task_result_json=task_result_json,
+                result_json=result_json,
             )
         )
 

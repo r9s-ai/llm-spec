@@ -36,7 +36,7 @@ export function ProviderNode({
     suites.forEach((suite) => {
       const tests = getTestRows(suite);
       total += tests.length;
-      const suiteSelected = selectedTestsBySuite[suite.id] ?? new Set<string>();
+      const suiteSelected = selectedTestsBySuite[suite.suite_id] ?? new Set<string>();
       selected += tests.filter((t) => suiteSelected.has(t.name)).length;
     });
 
@@ -52,7 +52,7 @@ export function ProviderNode({
     suites.forEach((suite) => {
       const tests = getTestRows(suite);
       onToggleTests(
-        suite.id,
+        suite.suite_id,
         tests.map((t) => t.name),
         checked
       );
@@ -64,9 +64,9 @@ export function ProviderNode({
     return suites.filter((suite) => {
       const tests = getTestRows(suite);
       const query = searchQuery.toLowerCase();
-      const route = String(suite.route_suite.route ?? "").toLowerCase();
-      const endpoint = String(suite.route_suite.endpoint ?? "").toLowerCase();
-      const suiteName = String(suite.route_suite.suite_name ?? "").toLowerCase();
+      const route = suite.route_id.toLowerCase();
+      const endpoint = suite.endpoint.toLowerCase();
+      const suiteName = suite.suite_name.toLowerCase();
       return (
         route.includes(query) ||
         endpoint.includes(query) ||
@@ -84,17 +84,17 @@ export function ProviderNode({
   const suitesByModel = useMemo(() => {
     const grouped: Record<string, Suite[]> = {};
     filteredSuites.forEach((suite) => {
-      if (!grouped[suite.model_name]) {
-        grouped[suite.model_name] = [];
+      if (!grouped[suite.model_id]) {
+        grouped[suite.model_id] = [];
       }
-      grouped[suite.model_name].push(suite);
+      grouped[suite.model_id].push(suite);
     });
     return grouped;
   }, [filteredSuites]);
 
   const modelNames = useMemo(() => Object.keys(suitesByModel).sort(), [suitesByModel]);
   const uniqueRouteCount = useMemo(
-    () => new Set(suites.map((suite) => String(suite.route_suite.route ?? ""))).size,
+    () => new Set(suites.map((suite) => suite.route_id)).size,
     [suites]
   );
 

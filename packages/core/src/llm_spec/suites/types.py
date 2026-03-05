@@ -1,4 +1,10 @@
-"""Suite domain types."""
+"""Suite domain types — 4-layer data model.
+
+Layer 1: Config Specs (ProviderSpec, RouteSpec, ModelSpec, TestDef)
+Layer 2: SuiteSpec (expanded provider × model × route)
+Layer 3: TestCase (self-contained executable test) with HttpRequest + ValidationSpec
+Layer 4: Results (TestVerdict, RunResult) — see results/result_types.py
+"""
 
 from __future__ import annotations
 
@@ -6,112 +12,174 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+# ── Value objects ──────────────────────────────────────────
 
-@dataclass
-class SpecTestCase:
-    """A single test case."""
+
+@dataclass(frozen=True)
+class FocusParam:
+    """Marks which parameter this test is exercising."""
 
     name: str
-    """Test name."""
+    value: Any
 
+
+@dataclass(frozen=True)
+class SchemaRef:
+    """Schema reference names for validation."""
+
+    response: str | None = None
+    stream_chunk: str | None = None
+
+
+# ── Layer 1: Config Specs ─────────────────────────────────
+
+
+@dataclass(frozen=True)
+class ProviderSpec:
+    """Loaded from provider.toml."""
+
+    provider_id: str
+    api_family: str | None = None
+    routes_from: str | None = None
+    headers: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class TestDef:
+    """A single test definition within a route."""
+
+    name: str
     description: str = ""
-    """Test description."""
-
     params: dict[str, Any] = field(default_factory=dict)
-    """Test params (merged with suite baseline_params)."""
-
-    focus_param: dict[str, Any] | None = None
-    """Primary parameter to display for this test: {"name": "...", "value": ...}."""
-
+    focus_param: FocusParam | None = None
     baseline: bool = False
-    """Whether this is a baseline test (records all params)."""
-
-    check_stream: Any = False
-    """Whether runner should execute this case in streaming mode."""
-
-    stream_expectations: dict[str, Any] | None = None
-    """Streaming validation rules (e.g. required events)."""
-
-    endpoint_override: str | None = None
-    """Override the suite endpoint for this test."""
-
-    files: dict[str, str] | None = None
-    """File upload mapping: {"param_name": "file_path"}."""
-
-    schemas: dict[str, str] | None = None
-    """Test-level schema overrides."""
-
-    required_fields: list[str] | None = None
-    """List of fields that MUST be present and not None in the response."""
-
-    method: str | None = None
-    """Optional HTTP method override for this test."""
-
-    tags: list[str] = field(default_factory=list)
-    """Optional test tags for filtering (e.g. core, expensive)."""
-
-
-@dataclass
-class SpecTestSuite:
-    """A suite loaded from a JSON5 config."""
-
-    provider: str
-    """Provider name (openai, gemini, anthropic, xai)."""
-
-    endpoint: str
-    """API endpoint path."""
-
-    schemas: dict[str, str] = field(default_factory=dict)
-    """Schema references, e.g. {"response": "openai.ChatCompletionResponse"}."""
-
-    baseline_params: dict[str, Any] = field(default_factory=dict)
-    """Default params sourced from the baseline test params."""
-
-    tests: list[SpecTestCase] = field(default_factory=list)
-    """List of test cases."""
-
-    required_fields: list[str] = field(default_factory=list)
-    """Suite-level required fields."""
-
-    stream_expectations: dict[str, Any] | None = None
-    """Suite-level stream rules (can be overridden per test)."""
-
-    config_path: Path | None = None
-    """Config file path."""
-
-    method: str = "POST"
-    """Default HTTP method for this suite."""
-
-    suite_name: str | None = None
-    """Optional human-friendly suite name."""
-
-
-@dataclass
-class ExecutableCase:
-    """Fully-prepared executable test case.
-
-    Unlike ``SpecTestCase`` (config semantics), this object is execution-ready:
-    request params are already complete and include baseline/model/test overrides.
-    """
-
-    case_id: str
-    test_name: str
-    description: str
-    provider: str
-    route: str | None
-    model: str | None
-    request_method: str
-    request_endpoint: str
-    request_params: dict[str, Any] = field(default_factory=dict)
-    request_files: dict[str, str] | None = None
     check_stream: bool = False
+    stream_rules: dict[str, Any] | None = None
+    endpoint_override: str | None = None
+    files: dict[str, str] | None = None
+    schemas: SchemaRef | None = None
+    required_fields: list[str] | None = None
+    method: str | None = None
+    tags: list[str] = field(default_factory=list)
+
+
+@dataclass
+class RouteSpec:
+    """Loaded from routes/*.json5."""
+
+    route_id: str
+    endpoint: str
+    method: str = "POST"
+    schemas: SchemaRef = field(default_factory=SchemaRef)
+    required_fields: list[str] = field(default_factory=list)
+    stream_rules: dict[str, Any] | None = None
+    tests: list[TestDef] = field(default_factory=list)
+    suite_label: str | None = None
+    source_path: Path | None = None
+
+
+@dataclass
+class ExtraTestDef(TestDef):
+    """Model-specific extra test definition (adds route field)."""
+
+    route: str = ""
+
+
+@dataclass
+class ModelSpec:
+    """Loaded from models/*.toml."""
+
+    model_id: str
+    routes: list[str] = field(default_factory=list)
+    include_tests: list[str] | None = None
+    exclude_tests: list[str] | None = None
+    baseline_params_override: dict[str, Any] = field(default_factory=dict)
+    extra_tests: list[ExtraTestDef] = field(default_factory=list)
+
+
+# ── Layer 2: SuiteSpec ────────────────────────────────────
+
+
+@dataclass
+class SuiteSpec:
+    """Expanded (provider, model, route) test suite — cached by web-api."""
+
+    suite_id: str
+    suite_name: str  # "openai/gpt-4o-mini/chat_completions"
+
+    # Identity triple
+    provider_id: str
+    model_id: str
+    route_id: str
+    api_family: str
+
+    # Request template
+    endpoint: str
+    method: str = "POST"
+    provider_headers: dict[str, str] = field(default_factory=dict)
+
+    # Validation defaults
+    schemas: SchemaRef = field(default_factory=SchemaRef)
+    required_fields: list[str] = field(default_factory=list)
+    stream_rules: dict[str, Any] | None = None
+
+    # Baseline params (model-injected)
+    baseline_params: dict[str, Any] = field(default_factory=dict)
+
+    # Expanded & filtered test definitions
+    tests: list[TestDef] = field(default_factory=list)
+
+    source_path: Path | None = None
+
+
+# ── Layer 3: TestCase (execution-ready) ───────────────────
+
+
+@dataclass
+class HttpRequest:
+    """Fully resolved HTTP request description."""
+
+    method: str
+    endpoint: str
+    params: dict[str, Any] = field(default_factory=dict)
+    headers: dict[str, str] = field(default_factory=dict)
+    files: dict[str, str] | None = None
+    stream: bool = False
+
+
+@dataclass
+class ValidationSpec:
+    """Validation rules for a test case."""
+
     response_schema: str | None = None
     stream_chunk_schema: str | None = None
     required_fields: list[str] = field(default_factory=list)
-    stream_expectations: dict[str, Any] | None = None
-    parameter_name: str | None = None
-    parameter_value: Any = None
-    parameter_value_type: str = "none"
+    stream_rules: dict[str, Any] | None = None
+
+
+@dataclass
+class TestCase:
+    """Self-contained executable test case."""
+
+    case_id: str
+
+    # Test identity
+    test_name: str
+    description: str = ""
     is_baseline: bool = False
     tags: list[str] = field(default_factory=list)
-    run_case_id: str | None = None
+
+    # Focus parameter
+    focus: FocusParam | None = None
+
+    # Full request
+    request: HttpRequest = field(default_factory=lambda: HttpRequest(method="POST", endpoint=""))
+
+    # Validation rules
+    checks: ValidationSpec = field(default_factory=ValidationSpec)
+
+    # Provenance (needed for retry / adapter construction)
+    provider: str = ""
+    model: str | None = None
+    route: str | None = None
+    api_family: str = ""

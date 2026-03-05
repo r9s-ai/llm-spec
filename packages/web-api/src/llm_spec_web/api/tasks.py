@@ -51,7 +51,7 @@ def create_task(
     """Create a new task with multiple runs."""
     task, runs = service.create_task(
         db,
-        model_suite_ids=payload.model_suite_ids,
+        suite_ids=payload.suite_ids,
         mode=payload.mode,
         selected_tests_by_suite=payload.selected_tests_by_suite,
         name=payload.name,

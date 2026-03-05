@@ -1,15 +1,10 @@
 from unittest.mock import MagicMock
 
-from llm_spec.runners.runner import ConfigDrivenTestRunner, SpecTestCase, SpecTestSuite
+from llm_spec.runners.runner import TestRunner
+from llm_spec.suites.types import FocusParam, HttpRequest, TestCase, ValidationSpec
 
 
 def test_runner_required_fields_validation():
-    # Setup
-    suite = SpecTestSuite(
-        provider="openai",
-        endpoint="/v1/chat/completions",
-        required_fields=["id", "choices[0].message.content"],
-    )
     client = MagicMock()
 
     # Mock response
@@ -24,31 +19,31 @@ def test_runner_required_fields_validation():
     }
     client.request.return_value = response_mock
 
-    runner = ConfigDrivenTestRunner(suite, client)
+    runner = TestRunner(client)
 
-    test_case = SpecTestCase(
-        name="test_missing_required",
-        params={"model": "gpt-4"},
-        focus_param={"name": "model", "value": "gpt-4"},
+    case = TestCase(
+        case_id="test_missing_required",
+        test_name="test_missing_required",
+        focus=FocusParam(name="model", value="gpt-4"),
+        request=HttpRequest(
+            method="POST",
+            endpoint="/v1/chat/completions",
+            params={"model": "gpt-4"},
+        ),
+        checks=ValidationSpec(
+            required_fields=["id", "choices[0].message.content"],
+        ),
+        provider="openai",
     )
 
-    # Run test
-    case_result = runner.run_test(test_case)
-    result = case_result.get("result")
-    result_dict = result if isinstance(result, dict) else {}
+    verdict = runner.run(case)
 
-    # Verify
-    assert result_dict.get("status") == "fail"
-    assert "Missing required field: choices[0].message.content" in (
-        str(result_dict.get("reason") or "")
-    )
+    assert verdict.status == "fail"
+    assert verdict.failure is not None
+    assert "choices[0].message.content" in (verdict.failure.message or "")
 
 
 def test_runner_test_level_required_fields():
-    # Setup
-    suite = SpecTestSuite(
-        provider="openai", endpoint="/v1/chat/completions", required_fields=["id"]
-    )
     client = MagicMock()
 
     # Mock response
@@ -63,24 +58,25 @@ def test_runner_test_level_required_fields():
     }
     client.request.return_value = response_mock
 
-    runner = ConfigDrivenTestRunner(suite, client)
+    runner = TestRunner(client)
 
-    test_case = SpecTestCase(
-        name="test_extra_required",
-        params={"model": "gpt-4"},
-        focus_param={"name": "model", "value": "gpt-4"},
-        required_fields=[
-            "choices[0].message.reasoning_content"
-        ],  # This is missing in mock response
+    case = TestCase(
+        case_id="test_extra_required",
+        test_name="test_extra_required",
+        focus=FocusParam(name="model", value="gpt-4"),
+        request=HttpRequest(
+            method="POST",
+            endpoint="/v1/chat/completions",
+            params={"model": "gpt-4"},
+        ),
+        checks=ValidationSpec(
+            required_fields=["id", "choices[0].message.reasoning_content"],
+        ),
+        provider="openai",
     )
 
-    # Run test
-    case_result = runner.run_test(test_case)
-    result = case_result.get("result")
-    result_dict = result if isinstance(result, dict) else {}
+    verdict = runner.run(case)
 
-    # Verify
-    assert result_dict.get("status") == "fail"
-    assert "Missing required field: choices[0].message.reasoning_content" in (
-        str(result_dict.get("reason") or "")
-    )
+    assert verdict.status == "fail"
+    assert verdict.failure is not None
+    assert "choices[0].message.reasoning_content" in (verdict.failure.message or "")

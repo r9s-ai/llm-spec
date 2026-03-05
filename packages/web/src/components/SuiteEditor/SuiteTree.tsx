@@ -22,10 +22,10 @@ export function SuiteTree({
   const suitesByProvider = useMemo(() => {
     const grouped: Record<string, Suite[]> = {};
     suites.forEach((suite) => {
-      if (!grouped[suite.provider]) {
-        grouped[suite.provider] = [];
+      if (!grouped[suite.provider_id]) {
+        grouped[suite.provider_id] = [];
       }
-      grouped[suite.provider].push(suite);
+      grouped[suite.provider_id].push(suite);
     });
     return grouped;
   }, [suites]);
@@ -40,10 +40,10 @@ export function SuiteTree({
     Object.entries(suitesByProvider).forEach(([provider, providerSuites]) => {
       const matchingSuites = providerSuites.filter(
         (suite) =>
-          String(suite.route_suite.suite_name ?? "").toLowerCase().includes(query) ||
-          String(suite.route_suite.endpoint ?? "").toLowerCase().includes(query) ||
-          String(suite.route_suite.route ?? "").toLowerCase().includes(query) ||
-          suite.model_name.toLowerCase().includes(query) ||
+          suite.suite_name.toLowerCase().includes(query) ||
+          suite.endpoint.toLowerCase().includes(query) ||
+          suite.route_id.toLowerCase().includes(query) ||
+          suite.model_id.toLowerCase().includes(query) ||
           provider.toLowerCase().includes(query)
       );
       if (matchingSuites.length > 0) {
@@ -158,30 +158,30 @@ export function SuiteTree({
                 <div className="border-t border-slate-100">
                   {providerSuites.map((suite) => (
                     <div
-                      key={suite.id}
+                      key={suite.suite_id}
                       className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
-                        suite.id === selectedSuiteId
+                        suite.suite_id === selectedSuiteId
                           ? "bg-violet-50 border-l-2 border-violet-500"
                           : "hover:bg-slate-50 border-l-2 border-transparent"
                       }`}
-                      onClick={() => onSelectSuite(suite.id)}
+                      onClick={() => onSelectSuite(suite.suite_id)}
                     >
                       <div className="min-w-0 flex-1">
                         <div
                           className="truncate text-sm font-medium text-slate-900"
-                          title={String(suite.route_suite.suite_name ?? suite.model_name)}
+                          title={suite.suite_name || suite.model_id}
                         >
-                          {String(suite.route_suite.suite_name ?? suite.model_name)}
+                          {suite.suite_name || suite.model_id}
                         </div>
                         <div
                           className="truncate text-xs text-slate-500"
-                          title={String(suite.route_suite.endpoint ?? "")}
+                          title={suite.endpoint}
                         >
-                          {String(suite.route_suite.endpoint ?? "")}
+                          {suite.endpoint}
                         </div>
                       </div>
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                        {suite.model_name}
+                        {suite.model_id}
                       </span>
                     </div>
                   ))}

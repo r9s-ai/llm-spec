@@ -27,7 +27,7 @@ export function ProviderPanel({
   onToggleTest,
   onTogglePanel,
 }: ProviderPanelProps) {
-  const selectedRouteCount = suites.filter((s) => selectedSuiteIds.has(s.id)).length;
+  const selectedRouteCount = suites.filter((s) => selectedSuiteIds.has(s.suite_id)).length;
 
   return (
     <div className="rounded-xl border border-slate-300 bg-white p-3">
@@ -50,15 +50,15 @@ export function ProviderPanel({
         <div className="mt-2 flex flex-col">
           {suites.map((suite) => {
             const tests = getTestRows(suite);
-            const selectedTests = selectedTestsBySuite[suite.id] ?? new Set<string>();
-            const testsExpanded = expandedSuites.has(suite.id);
-            const suiteName = String(suite.route_suite.suite_name ?? suite.model_name);
-            const endpoint = String(suite.route_suite.endpoint ?? "");
-            const duplicateName = isDuplicateName(suiteName, suite.provider, endpoint);
+            const selectedTests = selectedTestsBySuite[suite.suite_id] ?? new Set<string>();
+            const testsExpanded = expandedSuites.has(suite.suite_id);
+            const suiteName = suite.suite_name || suite.model_id;
+            const endpoint = suite.endpoint;
+            const duplicateName = isDuplicateName(suiteName, suite.provider_id, endpoint);
 
             return (
               <SuiteCard
-                key={suite.id}
+                key={suite.suite_id}
                 suite={suite}
                 tests={tests}
                 selectedTests={selectedTests}

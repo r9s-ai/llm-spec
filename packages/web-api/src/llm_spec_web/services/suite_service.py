@@ -1,4 +1,4 @@
-"""Model-suite service backed by suites-registry files (no DB)."""
+"""Suite service backed by suites-registry files (no DB)."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ import time
 from pathlib import Path
 from threading import Lock
 
-from llm_spec.suites.registry import ModelSuite, hydrate_executable_suite, load_registry_suites
+from llm_spec.suites import SuiteSpec, load_registry_suites
 from llm_spec_web.core.exceptions import NotFoundError
 
 
 class SuiteService:
-    """Read-only model-suite service from registry files."""
+    """Read-only suite service from registry files."""
 
     def __init__(
         self,
@@ -21,7 +21,7 @@ class SuiteService:
         self.registry_dir = Path(registry_dir)
         self._cache_ttl_seconds = max(cache_ttl_seconds, 0.0)
         self._cache_lock = Lock()
-        self._model_suites_cache: dict[str, ModelSuite] | None = None
+        self._suites_cache: dict[str, SuiteSpec] | None = None
         self._cache_registry_signature: tuple[int, int, int] | None = None
         self._cache_built_at: float = 0.0
 
@@ -41,25 +41,25 @@ class SuiteService:
             max_mtime_ns = max(max_mtime_ns, int(stat.st_mtime_ns))
         return (file_count, total_size, max_mtime_ns)
 
-    def _build_model_suites_cache(self) -> dict[str, ModelSuite]:
+    def _build_suites_cache(self) -> dict[str, SuiteSpec]:
         now_monotonic = time.monotonic()
         with self._cache_lock:
             if (
-                self._model_suites_cache is not None
+                self._suites_cache is not None
                 and (now_monotonic - self._cache_built_at) <= self._cache_ttl_seconds
             ):
-                return self._model_suites_cache
+                return self._suites_cache
 
         signature = self._registry_signature()
         with self._cache_lock:
-            if self._model_suites_cache is not None and self._cache_registry_signature == signature:
+            if self._suites_cache is not None and self._cache_registry_signature == signature:
                 self._cache_built_at = now_monotonic
-                return self._model_suites_cache
+                return self._suites_cache
 
-        suites = {suite.id: suite for suite in load_registry_suites(self.registry_dir)}
+        suites = {s.suite_id: s for s in load_registry_suites(self.registry_dir)}
 
         with self._cache_lock:
-            self._model_suites_cache = suites
+            self._suites_cache = suites
             self._cache_registry_signature = signature
             self._cache_built_at = now_monotonic
 
@@ -68,14 +68,14 @@ class SuiteService:
     def clear_cache(self) -> None:
         """Clear in-memory registry cache."""
         with self._cache_lock:
-            self._model_suites_cache = None
+            self._suites_cache = None
             self._cache_registry_signature = None
             self._cache_built_at = 0.0
 
     def refresh_cache(self) -> tuple[int, int]:
-        """Force rebuild cache and return counts for model suites."""
+        """Force rebuild cache and return suite count."""
         self.clear_cache()
-        suites = self._build_model_suites_cache()
+        suites = self._build_suites_cache()
         return len(suites), len(suites)
 
     def list_suites(
@@ -84,29 +84,23 @@ class SuiteService:
         model_name: str | None = None,
         route: str | None = None,
         endpoint: str | None = None,
-    ) -> list[ModelSuite]:
-        suites = list(self._build_model_suites_cache().values())
+    ) -> list[SuiteSpec]:
+        suites = list(self._build_suites_cache().values())
         if provider:
-            suites = [s for s in suites if s.provider == provider]
+            suites = [s for s in suites if s.provider_id == provider]
         if model_name:
-            suites = [s for s in suites if s.model_name == model_name]
+            suites = [s for s in suites if s.model_id == model_name]
         if route:
-            suites = [s for s in suites if str(s.route_suite.get("route", "")) == route]
+            suites = [s for s in suites if s.route_id == route]
         if endpoint:
-            suites = [s for s in suites if str(s.route_suite.get("endpoint", "")) == endpoint]
+            suites = [s for s in suites if s.endpoint == endpoint]
         return sorted(
             suites,
-            key=lambda s: (s.provider, s.model_name, str(s.route_suite.get("route", ""))),
+            key=lambda s: (s.provider_id, s.model_id, s.route_id),
         )
 
-    def get_suite(self, suite_id: str) -> ModelSuite:
-        suite = self._build_model_suites_cache().get(suite_id)
+    def get_suite(self, suite_id: str) -> SuiteSpec:
+        suite = self._build_suites_cache().get(suite_id)
         if suite is None:
-            raise NotFoundError("ModelSuite", suite_id)
-        return suite
-
-    def resolve_model_suite(self, model_suite_id: str) -> ModelSuite:
-        """Resolve one model suite and validate route_suite can hydrate to executable suite."""
-        suite = self.get_suite(model_suite_id)
-        hydrate_executable_suite(suite.route_suite)
+            raise NotFoundError("SuiteSpec", suite_id)
         return suite

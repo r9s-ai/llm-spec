@@ -9,17 +9,9 @@ from pydantic import BaseModel, Field
 
 
 class TaskCreateRequest(BaseModel):
-    """Request body for creating a new task.
+    """Request body for creating a new task."""
 
-    Attributes:
-        model_suite_ids: List of model suite IDs to run.
-        mode: Execution mode ("real" or "mock").
-        selected_tests_by_suite: Map of suite_id to list of test names.
-        name: User-defined name for the task.
-        max_concurrent: Maximum number of tests to run concurrently per run job.
-    """
-
-    model_suite_ids: list[str] = Field(..., min_length=1)
+    suite_ids: list[str] = Field(..., min_length=1)
     mode: Literal["real", "mock"] | None = None
     selected_tests_by_suite: dict[str, list[str]] | None = Field(
         default=None, description="Map of suite_id to list of test names"
@@ -33,11 +25,7 @@ class TaskCreateRequest(BaseModel):
 
 
 class TaskUpdateRequest(BaseModel):
-    """Request body for updating a task.
-
-    Attributes:
-        name: New name for the task.
-    """
+    """Request body for updating a task."""
 
     name: str = Field(..., min_length=1, max_length=255, description="New name for the task")
 
@@ -49,63 +37,31 @@ class RunTestRetryRequest(BaseModel):
 
 
 class RunJobResponse(BaseModel):
-    """Response model for run job.
-
-    Attributes:
-        id: Run job ID.
-        status: Job status.
-        mode: Execution mode.
-        provider: Provider name.
-        route: Registry route key.
-        model: Model ID.
-        endpoint: API endpoint path.
-        task_id: Task ID this run belongs to.
-        model_suite_id: Model suite ID.
-        started_at: Execution start timestamp.
-        finished_at: Execution finish timestamp.
-        progress_total: Total number of tests.
-        progress_done: Number of completed tests.
-        progress_passed: Number of passed tests.
-        progress_failed: Number of failed tests.
-        error_message: Error message if failed.
-    """
+    """Response model for a run job."""
 
     id: str
     status: str
     mode: str
     provider: str
-    route: str | None = None
     model: str | None = None
+    route: str | None = None
     endpoint: str
     task_id: str | None = None
-    model_suite_id: str | None
-    started_at: datetime | None
-    finished_at: datetime | None
-    progress_total: int
-    progress_done: int
-    progress_passed: int
-    progress_failed: int
-    error_message: str | None
+    suite_id: str | None = None
+    suite_name: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    progress_total: int = 0
+    progress_done: int = 0
+    progress_passed: int = 0
+    progress_failed: int = 0
+    error_message: str | None = None
 
     model_config = {"from_attributes": True}
 
 
 class TaskResponse(BaseModel):
-    """Response model for task.
-
-    Attributes:
-        id: Task ID.
-        name: User-defined name for the task.
-        status: Task status.
-        mode: Execution mode.
-        total_runs: Total number of runs.
-        completed_runs: Number of completed runs.
-        passed_runs: Number of passed runs.
-        failed_runs: Number of failed runs.
-        started_at: Execution start timestamp.
-        finished_at: Execution finish timestamp.
-        created_at: Creation timestamp.
-    """
+    """Response model for a task."""
 
     id: str
     name: str
@@ -115,37 +71,21 @@ class TaskResponse(BaseModel):
     completed_runs: int
     passed_runs: int
     failed_runs: int
-    started_at: datetime | None
-    finished_at: datetime | None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
 class TaskWithRunsResponse(TaskResponse):
-    """Response model for task with runs.
-
-    Attributes:
-        runs: List of runs in this task.
-    """
+    """Response model for task with runs."""
 
     runs: list[RunJobResponse] = []
 
 
-# Backwards-compat export names were intentionally removed as part of the aggressive rename.
-
-
 class RunEventResponse(BaseModel):
-    """Response model for run event.
-
-    Attributes:
-        id: Event ID.
-        run_id: Run job ID.
-        seq: Sequence number.
-        event_type: Event type.
-        payload: Event data.
-        created_at: Event timestamp.
-    """
+    """Response model for a run event."""
 
     id: int
     run_id: str

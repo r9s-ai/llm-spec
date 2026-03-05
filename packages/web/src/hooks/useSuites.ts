@@ -14,16 +14,16 @@ export function useSuites() {
   const [isRefreshingRegistryCache, setIsRefreshingRegistryCache] = useState(false);
 
   const providers = useMemo(
-    () => Array.from(new Set(suites.map((s) => s.provider))).sort(),
+    () => Array.from(new Set(suites.map((s) => s.provider_id))).sort(),
     [suites]
   );
 
   const visibleSuites = useMemo(
-    () => suites.filter((suite) => selectedProviders.has(suite.provider)),
+    () => suites.filter((suite) => selectedProviders.has(suite.provider_id)),
     [selectedProviders, suites]
   );
 
-  const visibleSuiteIds = useMemo(() => new Set(visibleSuites.map((s) => s.id)), [visibleSuites]);
+  const visibleSuiteIds = useMemo(() => new Set(visibleSuites.map((s) => s.suite_id)), [visibleSuites]);
 
   const selectedTestCount = useMemo(
     () => Object.values(selectedTestsBySuite).reduce((acc, bucket) => acc + bucket.size, 0),
@@ -31,7 +31,7 @@ export function useSuites() {
   );
 
   const getSuiteById = useCallback(
-    (suiteId: string) => suites.find((s) => s.id === suiteId),
+    (suiteId: string) => suites.find((s) => s.suite_id === suiteId),
     [suites]
   );
 
@@ -43,13 +43,13 @@ export function useSuites() {
 
       setSelectedSuiteId((prev) => {
         if (!nextSuites.length) return null;
-        if (prev && nextSuites.some((s) => s.id === prev)) return prev;
-        return nextSuites[0].id;
+        if (prev && nextSuites.some((s) => s.suite_id === prev)) return prev;
+        return nextSuites[0].suite_id;
       });
 
       setSelectedProviders((prev) => {
         if (prev.size > 0) return prev;
-        return new Set(nextSuites.map((s) => s.provider));
+        return new Set(nextSuites.map((s) => s.provider_id));
       });
 
       setExpandedProviders((prev) => {
@@ -59,12 +59,12 @@ export function useSuites() {
       });
 
       setSelectedSuiteIds((prev) => {
-        const valid = new Set(nextSuites.map((s) => s.id));
+        const valid = new Set(nextSuites.map((s) => s.suite_id));
         return new Set(Array.from(prev).filter((id) => valid.has(id)));
       });
 
       setSelectedTestsBySuite((prev) => {
-        const valid = new Set(nextSuites.map((s) => s.id));
+        const valid = new Set(nextSuites.map((s) => s.suite_id));
         const next: TestSelectionMap = {};
         Object.entries(prev).forEach(([suiteId, bucket]) => {
           if (valid.has(suiteId)) next[suiteId] = new Set(bucket);

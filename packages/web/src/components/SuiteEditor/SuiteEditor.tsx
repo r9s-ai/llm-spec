@@ -8,7 +8,7 @@ interface SuiteEditorProps {
 export function SuiteEditor({ suite }: SuiteEditorProps) {
   const rawJson5 = useMemo(() => {
     if (!suite) return "";
-    return JSON.stringify(suite.route_suite, null, 2);
+    return JSON.stringify(suite, null, 2);
   }, [suite]);
 
   if (!suite) {
@@ -39,13 +39,13 @@ export function SuiteEditor({ suite }: SuiteEditorProps) {
       <div className="flex-shrink-0 border-b border-slate-100 px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-bold text-violet-700">
-            {suite.provider}
+            {suite.provider_id}
           </span>
           <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">
-            {suite.model_name}
+            {suite.model_id}
           </span>
           <code className="rounded bg-slate-100 px-2 py-1 text-xs font-mono text-slate-600">
-            {String(suite.route_suite.endpoint ?? "")}
+            {suite.endpoint}
           </code>
         </div>
       </div>
@@ -54,11 +54,11 @@ export function SuiteEditor({ suite }: SuiteEditorProps) {
         <div className="grid grid-cols-[100px_1fr] gap-3">
           <span className="flex items-center text-sm font-medium text-slate-600">Route</span>
           <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-800">
-            {String(suite.route_suite.route ?? "")}
+            {suite.route_id}
           </span>
           <span className="flex items-center text-sm font-medium text-slate-600">Suite Name</span>
           <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-800">
-            {String(suite.route_suite.suite_name ?? "")}
+            {suite.suite_name}
           </span>
         </div>
       </div>

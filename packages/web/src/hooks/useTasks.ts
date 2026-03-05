@@ -235,7 +235,7 @@ export function useTasks() {
       }
 
       const task = await createTask({
-        model_suite_ids: modelSuiteIds,
+        suite_ids: modelSuiteIds,
         mode,
         selected_tests_by_suite: selectedTestsBySuiteStr,
         max_concurrent: maxConcurrent,
