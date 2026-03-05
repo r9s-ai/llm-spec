@@ -170,6 +170,14 @@ export function useTasks() {
           // Ignore errors
         }
 
+        // Evict events for completed run — results are now available
+        setRunEventsById((prev) => {
+          if (!(runId in prev)) return prev;
+          const next = { ...prev };
+          delete next[runId];
+          return next;
+        });
+
         // Now update the run status and task state
         if (status) {
           setTasks((prev) => {
@@ -280,7 +288,23 @@ export function useTasks() {
 
   // Remove a task from local state (not from server)
   const removeTask = useCallback((taskId: string): void => {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    setTasks((prev) => {
+      const task = prev.find((t) => t.id === taskId);
+      if (task) {
+        const runIds = new Set(task.runs.map((r) => r.id));
+        setRunEventsById((prevEvents) => {
+          const next = { ...prevEvents };
+          for (const id of runIds) delete next[id];
+          return next;
+        });
+        setRunResultById((prevResults) => {
+          const next = { ...prevResults };
+          for (const id of runIds) delete next[id];
+          return next;
+        });
+      }
+      return prev.filter((t) => t.id !== taskId);
+    });
   }, []);
 
   // Delete a task from server

@@ -1,45 +1,9 @@
-import type { RunJob, RunEvent } from "../../types";
-
-interface TestResultRow {
-  test_name: string;
-  status: "pending" | "running" | "pass" | "fail";
-  parameter?: {
-    name: string;
-    value: unknown;
-    value_type: string;
-  };
-  request?: {
-    http_status: number;
-    latency_ms: number;
-  };
-  result?: {
-    status: string;
-    reason?: string;
-  };
-  validation?: {
-    schema_ok: boolean;
-    required_fields_ok: boolean;
-    stream_rules_ok: boolean;
-    missing_fields: string[];
-    missing_events: string[];
-  };
-}
+import type { RunJob, RunEvent, TestResultRow } from "../../types";
+import { formatLatency, formatValue, httpStatusClassName } from "../../utils/formatters";
 
 interface ActiveRunCardProps {
   run: RunJob;
   events: RunEvent[];
-}
-
-function formatLatency(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function formatValue(value: unknown): string {
-  if (value === null || value === undefined) return "-";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  return JSON.stringify(value);
 }
 
 export function ActiveRunCard({ run, events }: ActiveRunCardProps) {
@@ -205,13 +169,7 @@ export function ActiveRunCard({ run, events }: ActiveRunCardProps) {
                 <td className="px-3 py-2 text-center">
                   {test.request?.http_status ? (
                     <span
-                      className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-xs font-medium ${
-                        test.request.http_status === 200
-                          ? "bg-green-100 text-green-700"
-                          : test.request.http_status >= 400
-                            ? "bg-red-100 text-red-700"
-                            : "bg-slate-100 text-slate-700"
-                      }`}
+                      className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-xs font-medium ${httpStatusClassName(test.request.http_status)}`}
                     >
                       {test.request.http_status}
                     </span>

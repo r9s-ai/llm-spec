@@ -1,32 +1,8 @@
 import { useMemo } from "react";
 import { Badge } from "../UI";
 import { TestResultTable } from "../ResultPanel/TestResultTable";
-import type { RunJob, RunSummary } from "../../types";
-
-interface TestResultRow {
-  run_case_id?: string;
-  test_name: string;
-  parameter?: {
-    name: string;
-    value: unknown;
-    value_type: string;
-  };
-  request?: {
-    http_status: number;
-    latency_ms: number;
-  };
-  result?: {
-    status: string;
-    reason?: string;
-  };
-  validation?: {
-    schema_ok: boolean;
-    required_fields_ok: boolean;
-    stream_rules_ok: boolean;
-    missing_fields: string[];
-    missing_events: string[];
-  };
-}
+import type { RunJob, RunSummary, TestResultRow } from "../../types";
+import { formatRelativeTime } from "../../utils/formatters";
 
 interface RunResultData {
   version?: string;
@@ -39,21 +15,6 @@ interface CompletedRunCardProps {
   summary?: RunSummary;
   result?: RunResultData;
   onRetryFailedTest?: (run: RunJob, runCaseId: string, testName: string) => Promise<void> | void;
-}
-
-function formatRelativeTime(dateStr: string | null): string {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${diffDays}d ago`;
 }
 
 function calculateDuration(start: string | null, end: string | null): string {
