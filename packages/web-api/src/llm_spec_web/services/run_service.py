@@ -17,9 +17,7 @@ from sqlalchemy.orm import Session
 
 from llm_spec_web.models.run import RunEvent, RunJob, Task
 from llm_spec_web.services.run_execution_service import (
-    RunExecutionContext,
     RunExecutionService,
-    create_provider_client,
 )
 from llm_spec_web.services.run_query_service import RunQueryService
 from llm_spec_web.services.task_service import TaskService
@@ -106,9 +104,5 @@ class RunService:
             db, task_id, max_concurrent=max_concurrent, run_concurrency=run_concurrency
         )
 
-    async def run_by_context(self, context: RunExecutionContext) -> None:
-        return await self._exec.run_by_context(context)
 
-
-# Re-export for backward compatibility
-__all__ = ["RunService", "RunExecutionContext", "create_provider_client"]
+__all__ = ["RunService"]
