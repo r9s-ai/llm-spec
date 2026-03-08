@@ -1,6 +1,8 @@
 """Registry loader — expands (provider × model × route) into SuiteSpec list.
 
-Also provides ``build_execution_plan()`` to convert a SuiteSpec into executable TestCase list.
+Also provides:
+- ``Registry``: immutable snapshot of the registry, caller controls lifecycle/caching.
+- ``build_execution_plan()``: convert a SuiteSpec into executable TestCase list.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ import json5
 from .loader import (
     _raw_focus_to_focus_param,
     _raw_schemas_to_schema_ref,
-    load_route_from_dict,
+    parse_route_dict,
 )
 from .types import (
     ExtraTestDef,
@@ -228,20 +230,23 @@ def load_registry_suites(
         for p in sorted(registry_dir.iterdir())
         if p.is_dir() and not p.name.startswith(".")
     }
-    specs = {name: _load_provider_spec(path) for name, path in provider_dirs.items()}
+    provider_specs = {
+        provider_name: _load_provider_spec(provider_dir)
+        for provider_name, provider_dir in provider_dirs.items()
+    }
 
     route_cache: dict[str, dict[str, tuple[Path, dict[str, Any]]]] = {}
-    expanded: list[SuiteSpec] = []
+    expanded_suites: list[SuiteSpec] = []
 
-    for provider, provider_dir in provider_dirs.items():
-        provider_spec = specs[provider]
-        api_family = provider_spec.api_family or provider
+    for provider_name, provider_dir in provider_dirs.items():
+        provider_spec = provider_specs[provider_name]
+        api_family = provider_spec.api_family or provider_name
         model_specs = _load_model_specs(provider_dir)
 
-        routes = _resolve_routes_for_provider(
-            provider,
+        resolved_routes = _resolve_routes_for_provider(
+            provider_name,
             provider_dirs=provider_dirs,
-            specs=specs,
+            specs=provider_specs,
             cache=route_cache,
             stack=[],
         )
@@ -249,13 +254,13 @@ def load_registry_suites(
         for model_id, model_spec in model_specs.items():
             for route_name in model_spec.routes:
                 route_name = str(route_name)
-                if route_name not in routes:
+                if route_name not in resolved_routes:
                     raise ValueError(
-                        f"Provider '{provider}' model '{model_id}' references unknown route '{route_name}'"
+                        f"Provider '{provider_name}' model '{model_id}' references unknown route '{route_name}'"
                     )
-                route_path, route_payload = routes[route_name]
+                route_path, route_payload = resolved_routes[route_name]
                 suite_dict = copy.deepcopy(route_payload)
-                suite_dict["provider"] = provider
+                suite_dict["provider"] = provider_name
 
                 # Gemini model placeholder in endpoint
                 endpoint = str(suite_dict.get("endpoint", ""))
@@ -311,10 +316,10 @@ def load_registry_suites(
 
                 filtered_tests: list[dict[str, Any]] = []
                 for test in raw_tests:
-                    name = str(test.get("name", ""))
-                    if include_set is not None and name not in include_set:
+                    test_name = str(test.get("name", ""))
+                    if include_set is not None and test_name not in include_set:
                         continue
-                    if name and name in exclude_set:
+                    if test_name and test_name in exclude_set:
                         continue
                     filtered_tests.append(test)
 
@@ -322,7 +327,7 @@ def load_registry_suites(
                 baseline_tests = [t for t in filtered_tests if t.get("baseline") is True]
                 if len(baseline_tests) != 1:
                     raise ValueError(
-                        f"Provider '{provider}' model '{model_id}' route '{route_name}' must "
+                        f"Provider '{provider_name}' model '{model_id}' route '{route_name}' must "
                         f"have exactly one baseline test after expansion, got {len(baseline_tests)}"
                     )
 
@@ -340,18 +345,18 @@ def load_registry_suites(
 
                 # Put filtered tests back and run through loader for variant expansion
                 suite_dict["tests"] = filtered_tests
-                route_spec = load_route_from_dict(
+                route_spec = parse_route_dict(
                     suite_dict, route_id=route_name, source_path=route_path
                 )
 
                 # Build suite-level SchemaRef
                 suite_schemas = route_spec.schemas
 
-                expanded.append(
+                expanded_suites.append(
                     SuiteSpec(
-                        suite_id=_suite_id(provider, model_id, route_name),
-                        suite_name=f"{provider}/{model_id}/{route_name}",
-                        provider_id=provider,
+                        suite_id=_suite_id(provider_name, model_id, route_name),
+                        suite_name=f"{provider_name}/{model_id}/{route_name}",
+                        provider_id=provider_name,
                         model_id=model_id,
                         route_id=route_name,
                         api_family=api_family,
@@ -367,7 +372,7 @@ def load_registry_suites(
                     )
                 )
 
-    return expanded
+    return expanded_suites
 
 
 # ── Execution plan builder ────────────────────────────────
@@ -448,3 +453,72 @@ def build_execution_plan(
         )
 
     return cases
+
+
+# ── Registry (immutable snapshot) ─────────────────────────
+
+
+class Registry:
+    """Immutable snapshot of the suite registry.
+
+    Callers decide when to create / discard instances — core does not manage caching.
+
+    - CLI/scripts: create once, use for the process lifetime.
+    - Web backend: wrap in a caching layer (e.g. TTL + file-signature).
+    - Tests: create fresh per test.
+    """
+
+    __slots__ = ("_suites",)
+
+    def __init__(self, suites: dict[str, SuiteSpec]) -> None:
+        self._suites = suites
+
+    @classmethod
+    def from_directory(cls, registry_dir: Path | str) -> Registry:
+        """Parse registry files once and return an immutable snapshot."""
+        specs = load_registry_suites(registry_dir)
+        return cls({s.suite_id: s for s in specs})
+
+    # ── Query API ─────────────────────────────────────────
+
+    def list_suites(
+        self,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+        route: str | None = None,
+        endpoint: str | None = None,
+    ) -> list[SuiteSpec]:
+        suites = list(self._suites.values())
+        if provider:
+            suites = [s for s in suites if s.provider_id == provider]
+        if model:
+            suites = [s for s in suites if s.model_id == model]
+        if route:
+            suites = [s for s in suites if s.route_id == route]
+        if endpoint:
+            suites = [s for s in suites if s.endpoint == endpoint]
+        return sorted(suites, key=lambda s: (s.provider_id, s.model_id, s.route_id))
+
+    def get_suite(self, suite_id: str) -> SuiteSpec | None:
+        return self._suites.get(suite_id)
+
+    def get_execution_plan(
+        self,
+        suite_id: str,
+        selected_tests: set[str] | None = None,
+    ) -> list[TestCase]:
+        suite = self._suites.get(suite_id)
+        if suite is None:
+            raise KeyError(f"Suite not found: {suite_id}")
+        return build_execution_plan(suite, selected_tests=selected_tests)
+
+    @property
+    def suite_ids(self) -> list[str]:
+        return list(self._suites.keys())
+
+    def __len__(self) -> int:
+        return len(self._suites)
+
+    def __contains__(self, suite_id: str) -> bool:
+        return suite_id in self._suites

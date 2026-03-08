@@ -211,7 +211,7 @@ def replace_parameter_references(obj: Any, ref_name: str, ref_value: Any) -> Non
 # ── Public loading API ────────────────────────────────────
 
 
-def load_route_from_dict(
+def parse_route_dict(
     data: dict[str, Any],
     *,
     route_id: str = "",
@@ -255,10 +255,4 @@ def load_route(config_path: Path, *, route_id: str = "") -> RouteSpec:
     if not route_id:
         route_id = config_path.stem
 
-    return load_route_from_dict(raw_data, route_id=route_id, source_path=config_path)
-
-
-# ── Backward-compatible aliases (will be removed) ────────
-
-load_test_suite_from_dict = load_route_from_dict
-load_test_suite = load_route
+    return parse_route_dict(raw_data, route_id=route_id, source_path=config_path)

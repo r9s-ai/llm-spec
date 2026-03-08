@@ -125,12 +125,28 @@ export function useTasks() {
               const runIdx = task.runs.findIndex((r) => r.id === runId);
               if (runIdx < 0) return prev;
               const newRuns = [...task.runs];
+              const currentRun = newRuns[runIdx];
+
+              const nextDone = Math.max(currentRun.progress_done, progressDone);
+              const nextTotal = Math.max(
+                currentRun.progress_total,
+                progressTotal ?? currentRun.progress_total
+              );
+              const nextPassed = Math.max(
+                currentRun.progress_passed,
+                progressPassed ?? currentRun.progress_passed
+              );
+              const nextFailed = Math.max(
+                currentRun.progress_failed,
+                progressFailed ?? currentRun.progress_failed
+              );
+
               newRuns[runIdx] = {
-                ...newRuns[runIdx],
-                progress_done: progressDone,
-                progress_total: progressTotal ?? newRuns[runIdx].progress_total,
-                progress_passed: progressPassed ?? newRuns[runIdx].progress_passed,
-                progress_failed: progressFailed ?? newRuns[runIdx].progress_failed,
+                ...currentRun,
+                progress_done: nextDone,
+                progress_total: nextTotal,
+                progress_passed: nextPassed,
+                progress_failed: nextFailed,
               };
               const idx = prev.findIndex((t) => t.id === taskId);
               const next = [...prev];

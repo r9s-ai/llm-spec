@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
+from llm_spec.executor import cancel_task_execution as cancel_core_task_execution
 from llm_spec_web.core.event_bus import event_bus
 from llm_spec_web.core.exceptions import NotFoundError
-from llm_spec_web.core.execution_registry import execution_registry
 from llm_spec_web.models.run import RunJob, Task
 from llm_spec_web.repositories.run_repo import RunRepository
 from llm_spec_web.services.suite_service import SuiteService
@@ -30,6 +30,7 @@ class TaskService:
     ) -> tuple[Task, list[RunJob]]:
         run_repo = RunRepository(db)
         suite_service = SuiteService()
+        registry = suite_service.get_registry()
 
         resolved_mode = mode or ("mock" if settings.mock_mode else "real")
 
@@ -49,6 +50,9 @@ class TaskService:
             if selected_tests_by_suite and suite_id in selected_tests_by_suite:
                 selected_tests = selected_tests_by_suite[suite_id]
 
+            selected_set = set(selected_tests) if selected_tests else None
+            planned_cases = registry.get_execution_plan(suite_id, selected_tests=selected_set)
+
             run_job = RunJob(
                 status="queued",
                 mode=resolved_mode,
@@ -59,6 +63,10 @@ class TaskService:
                 suite_id=suite.suite_id,
                 suite_name=suite.suite_name,
                 selected_tests=selected_tests or [],
+                progress_total=len(planned_cases),
+                progress_done=0,
+                progress_passed=0,
+                progress_failed=0,
             )
             run_jobs.append(run_job)
 
@@ -149,7 +157,7 @@ class TaskService:
         if task is None:
             raise NotFoundError("Task", task_id)
 
-        execution_registry.cancel_task(task_id)
+        cancel_core_task_execution(task_id)
         runs = run_repo.list_runs_by_task(task_id)
         now = datetime.now(UTC)
         for run in runs:
