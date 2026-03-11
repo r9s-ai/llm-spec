@@ -1,2 +1,24 @@
 name = "DALL-E 3"
 routes = ["images_generations"]
+
+exclude_tests = [
+  "size[256x256]",
+  "size[512x512]",
+  "size[1536x1024]",
+  "size[1024x1536]",
+  "quality[high]",
+  "quality[low]",
+  "quality[medium]",
+    "quality[auto]",
+    "output_compression[webp_80]",
+    "output_compression[jpeg_80]",
+    "moderation[auto]",
+    "moderation[low]",
+    "background[auto]",
+    "background[opaque]",
+    "background[transparent]",
+    "stream",
+    "output_format[png]",
+"output_format[jpeg]",
+"output_format[webp]",
+]

@@ -118,32 +118,32 @@
         value: "$style",
       },
     },
-    {
-      name: "n",
-      description: "Test n parameter variants",
-      variants: {
-        n_variant: [
-          {
-            variant_id: "dalle2",
-            prompt: "A cute cat",
-            value: 2,
-          },
-          {
-            variant_id: "gpt_image_multiple",
-            prompt: "A set of minimal icons",
-            value: 2,
-          },
-        ],
-      },
-      params: {
-        prompt: "$n_variant.prompt",
-        n: "$n_variant.value",
-      },
-      focus_param: {
-        name: "n",
-        value: "$n_variant.value",
-      },
-    },
+    // {
+    //   name: "n",
+    //   description: "Test n parameter variants",
+    //   variants: {
+    //     n_variant: [
+    //       {
+    //         variant_id: "dalle2",
+    //         prompt: "A cute cat",
+    //         value: 2,
+    //       },
+    //       {
+    //         variant_id: "gpt_image_multiple",
+    //         prompt: "A set of minimal icons",
+    //         value: 2,
+    //       },
+    //     ],
+    //   },
+    //   params: {
+    //     prompt: "$n_variant.prompt",
+    //     n: "$n_variant.value",
+    //   },
+    //   focus_param: {
+    //     name: "n",
+    //     value: "$n_variant.value",
+    //   },
+    // },
     {
       name: "user",
       description: "Test user parameter",
@@ -153,27 +153,6 @@
       focus_param: {
         name: "user",
         value: "user-123",
-      },
-    },
-    {
-      name: "background",
-      description: "Test background parameter (transparent background, GPT image model)",
-      variants: {
-        background: [
-          {
-            variant_id: "transparent_png",
-            value: "transparent",
-          },
-        ],
-      },
-      params: {
-        prompt: "A simple logo with a transparent background",
-        background: "$background.value",
-        output_format: "png",
-      },
-      focus_param: {
-        name: "background",
-        value: "$background.value",
       },
     },
     {

@@ -28,6 +28,7 @@ from .types import (
     SchemaRef,
     SuiteSpec,
     TestCase,
+    TestDef,
     ValidationSpec,
 )
 
@@ -217,6 +218,139 @@ def _resolve_routes_for_provider(
 # ── Main expansion ────────────────────────────────────────
 
 
+def _discover_provider_dirs(registry_dir: Path) -> dict[str, Path]:
+    return {
+        p.name: p
+        for p in sorted(registry_dir.iterdir())
+        if p.is_dir() and not p.name.startswith(".")
+    }
+
+
+def _load_provider_specs(provider_dirs: dict[str, Path]) -> dict[str, ProviderSpec]:
+    return {
+        provider_name: _load_provider_spec(provider_dir)
+        for provider_name, provider_dir in provider_dirs.items()
+    }
+
+
+def _collect_raw_tests(
+    suite_dict: dict[str, Any],
+    model_spec: ModelSpec,
+    route_name: str,
+) -> list[dict[str, Any]]:
+    raw_tests: list[dict[str, Any]] = []
+    for test in suite_dict.get("tests", []):
+        if isinstance(test, dict):
+            raw_tests.append(test)
+
+    for extra in model_spec.extra_tests:
+        if extra.route != route_name:
+            continue
+        raw_tests.append(
+            {
+                "name": extra.name,
+                "description": extra.description,
+                "params": copy.deepcopy(extra.params),
+                "focus_param": (
+                    {"name": extra.focus_param.name, "value": extra.focus_param.value}
+                    if extra.focus_param
+                    else None
+                ),
+                "baseline": extra.baseline,
+                "check_stream": extra.check_stream,
+                "stream_rules": extra.stream_rules,
+                "endpoint_override": extra.endpoint_override,
+                "files": extra.files,
+                "schemas": (
+                    {
+                        k: v
+                        for k, v in [
+                            ("response", extra.schemas.response),
+                            ("stream_chunk", extra.schemas.stream_chunk),
+                        ]
+                        if v is not None
+                    }
+                    if extra.schemas
+                    else None
+                ),
+                "required_fields": extra.required_fields,
+                "method": extra.method,
+                "tags": extra.tags,
+            }
+        )
+
+    return raw_tests
+
+
+def _filter_tests(
+    route_spec_tests: list[TestDef],
+    model_spec: ModelSpec,
+) -> list[TestDef]:
+    include_set = set(model_spec.include_tests) if model_spec.include_tests else None
+    exclude_set = set(model_spec.exclude_tests) if model_spec.exclude_tests else set()
+
+    filtered_tests: list[TestDef] = []
+    for test_def in route_spec_tests:
+        test_name = str(test_def.name or "")
+        if include_set is not None and test_name not in include_set:
+            continue
+        if test_name and test_name in exclude_set:
+            continue
+        filtered_tests.append(test_def)
+
+    return filtered_tests
+
+
+def _inject_baseline_params(
+    baseline: TestDef,
+    *,
+    model_id: str,
+    api_family: str,
+    baseline_params_override: dict[str, Any],
+) -> dict[str, Any]:
+    baseline_params = copy.deepcopy(baseline.params or {})
+    if not isinstance(baseline_params, dict):
+        baseline_params = {}
+    if api_family == "gemini":
+        baseline_params.pop("model", None)
+    else:
+        baseline_params["model"] = model_id
+    baseline_params = _deep_merge(baseline_params, baseline_params_override)
+    baseline.params = baseline_params
+    return baseline_params
+
+
+def _build_suite_spec(
+    *,
+    provider_name: str,
+    model_id: str,
+    route_name: str,
+    api_family: str,
+    provider_spec: ProviderSpec,
+    route_spec: Any,
+    route_path: Path,
+    baseline_params: dict[str, Any],
+    filtered_tests: list[TestDef],
+) -> SuiteSpec:
+    return SuiteSpec(
+        suite_id=_suite_id(provider_name, model_id, route_name),
+        suite_name=f"{provider_name}/{model_id}/{route_name}",
+        provider_id=provider_name,
+        model_id=model_id,
+        route_id=route_name,
+        api_family=api_family,
+        endpoint=route_spec.endpoint,
+        method=route_spec.method,
+        provider_headers=copy.deepcopy(provider_spec.headers),
+        schemas=route_spec.schemas,
+        required_fields=route_spec.required_fields,
+        stream_rules=route_spec.stream_rules,
+        baseline_params=baseline_params,
+        tests=filtered_tests,
+        source_path=route_path,
+    )
+
+
 def load_registry_suites(
     registry_dir: Path | str = "suites-registry/providers",
 ) -> list[SuiteSpec]:
@@ -225,15 +359,8 @@ def load_registry_suites(
     if not registry_dir.exists():
         return []
 
-    provider_dirs = {
-        p.name: p
-        for p in sorted(registry_dir.iterdir())
-        if p.is_dir() and not p.name.startswith(".")
-    }
-    provider_specs = {
-        provider_name: _load_provider_spec(provider_dir)
-        for provider_name, provider_dir in provider_dirs.items()
-    }
+    provider_dirs = _discover_provider_dirs(registry_dir)
+    provider_specs = _load_provider_specs(provider_dirs)
 
     route_cache: dict[str, dict[str, tuple[Path, dict[str, Any]]]] = {}
     expanded_suites: list[SuiteSpec] = []
@@ -269,62 +396,19 @@ def load_registry_suites(
                 suite_dict["endpoint"] = endpoint
 
                 # Collect all tests (route tests + model extra tests)
-                raw_tests: list[dict[str, Any]] = []
-                for test in suite_dict.get("tests", []):
-                    if isinstance(test, dict):
-                        raw_tests.append(test)
+                raw_tests = _collect_raw_tests(suite_dict, model_spec, route_name)
 
-                for extra in model_spec.extra_tests:
-                    if extra.route != route_name:
-                        continue
-                    raw_tests.append(
-                        {
-                            "name": extra.name,
-                            "description": extra.description,
-                            "params": copy.deepcopy(extra.params),
-                            "focus_param": (
-                                {"name": extra.focus_param.name, "value": extra.focus_param.value}
-                                if extra.focus_param
-                                else None
-                            ),
-                            "baseline": extra.baseline,
-                            "check_stream": extra.check_stream,
-                            "stream_rules": extra.stream_rules,
-                            "endpoint_override": extra.endpoint_override,
-                            "files": extra.files,
-                            "schemas": (
-                                {
-                                    k: v
-                                    for k, v in [
-                                        ("response", extra.schemas.response),
-                                        ("stream_chunk", extra.schemas.stream_chunk),
-                                    ]
-                                    if v is not None
-                                }
-                                if extra.schemas
-                                else None
-                            ),
-                            "required_fields": extra.required_fields,
-                            "method": extra.method,
-                            "tags": extra.tags,
-                        }
-                    )
+                # Expand variants first
+                suite_dict["tests"] = raw_tests
+                route_spec = parse_route_dict(
+                    suite_dict, route_id=route_name, source_path=route_path
+                )
 
-                # Filter by include/exclude
-                include_set = set(model_spec.include_tests) if model_spec.include_tests else None
-                exclude_set = set(model_spec.exclude_tests) if model_spec.exclude_tests else set()
-
-                filtered_tests: list[dict[str, Any]] = []
-                for test in raw_tests:
-                    test_name = str(test.get("name", ""))
-                    if include_set is not None and test_name not in include_set:
-                        continue
-                    if test_name and test_name in exclude_set:
-                        continue
-                    filtered_tests.append(test)
+                # Filter by include/exclude (after expansion)
+                filtered_tests = _filter_tests(route_spec.tests, model_spec)
 
                 # Validate exactly one baseline
-                baseline_tests = [t for t in filtered_tests if t.get("baseline") is True]
+                baseline_tests = [t for t in filtered_tests if t.baseline is True]
                 if len(baseline_tests) != 1:
                     raise ValueError(
                         f"Provider '{provider_name}' model '{model_id}' route '{route_name}' must "
@@ -332,43 +416,24 @@ def load_registry_suites(
                     )
 
                 # Inject model into baseline params
-                baseline = baseline_tests[0]
-                baseline_params = copy.deepcopy(baseline.get("params", {}))
-                if not isinstance(baseline_params, dict):
-                    baseline_params = {}
-                if api_family == "gemini":
-                    baseline_params.pop("model", None)
-                else:
-                    baseline_params["model"] = model_id
-                baseline_params = _deep_merge(baseline_params, model_spec.baseline_params_override)
-                baseline["params"] = baseline_params
-
-                # Put filtered tests back and run through loader for variant expansion
-                suite_dict["tests"] = filtered_tests
-                route_spec = parse_route_dict(
-                    suite_dict, route_id=route_name, source_path=route_path
+                baseline_params = _inject_baseline_params(
+                    baseline_tests[0],
+                    model_id=model_id,
+                    api_family=api_family,
+                    baseline_params_override=model_spec.baseline_params_override,
                 )
 
-                # Build suite-level SchemaRef
-                suite_schemas = route_spec.schemas
-
                 expanded_suites.append(
-                    SuiteSpec(
-                        suite_id=_suite_id(provider_name, model_id, route_name),
-                        suite_name=f"{provider_name}/{model_id}/{route_name}",
-                        provider_id=provider_name,
+                    _build_suite_spec(
+                        provider_name=provider_name,
                         model_id=model_id,
-                        route_id=route_name,
+                        route_name=route_name,
                         api_family=api_family,
-                        endpoint=route_spec.endpoint,
-                        method=route_spec.method,
-                        provider_headers=copy.deepcopy(provider_spec.headers),
-                        schemas=suite_schemas,
-                        required_fields=route_spec.required_fields,
-                        stream_rules=route_spec.stream_rules,
+                        provider_spec=provider_spec,
+                        route_spec=route_spec,
+                        route_path=route_path,
                         baseline_params=baseline_params,
-                        tests=route_spec.tests,
-                        source_path=route_path,
+                        filtered_tests=filtered_tests,
                     )
                 )
 

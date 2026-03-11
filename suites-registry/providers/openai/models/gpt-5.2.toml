@@ -1,3 +1,7 @@
 name = "gpt-5.2"
 routes = ["responses"]
-include_tests=["baseline","instructions"]
+include_tests=["baseline",
+"instructions",
+"reasoning_effort[none]",
+"reasoning_effort[minimal]",
+]

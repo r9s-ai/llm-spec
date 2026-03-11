@@ -30,7 +30,7 @@ from llm_spec.config.loader import AppConfig
 from llm_spec.results.result_types import FailureInfo, RunResult, TestVerdict
 from llm_spec.results.task_result import build_run_result
 from llm_spec.runners.runner import TestRunner
-from llm_spec.suites.registry import Registry
+from llm_spec.suites.registry import Registry, build_execution_plan
 from llm_spec.suites.types import SuiteSpec, TestCase
 
 
@@ -380,7 +380,6 @@ async def _execute_one_suite(
     client_factory: ClientFactory,
 ) -> SuiteResult:
     """Execute one suite end-to-end: create client → run → cleanup."""
-    from llm_spec.suites.registry import build_execution_plan
 
     cases = build_execution_plan(suite, selected_tests=selected)
     http_client, adapter = client_factory(suite.provider_id, config)

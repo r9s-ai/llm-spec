@@ -140,9 +140,9 @@ export type TestResultRow = {
     reason?: string;
   };
   validation?: {
-    schema_ok: boolean;
-    required_fields_ok: boolean;
-    stream_rules_ok: boolean;
+    schema_ok: boolean | null;
+    required_fields_ok: boolean | null;
+    stream_rules_ok: boolean | null;
     missing_fields: string[];
     missing_events: string[];
   };

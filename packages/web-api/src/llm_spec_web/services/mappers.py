@@ -151,11 +151,9 @@ def verdict_to_case_row(verdict: TestVerdict, run_case_id: str | None = None) ->
     if verdict.failure:
         row["result"]["reason"] = verdict.failure.message
     row["validation"] = {
-        "schema_ok": verdict.schema_ok if verdict.schema_ok is not None else True,
-        "required_fields_ok": verdict.required_fields_ok
-        if verdict.required_fields_ok is not None
-        else True,
-        "stream_rules_ok": verdict.stream_rules_ok if verdict.stream_rules_ok is not None else True,
+        "schema_ok": verdict.schema_ok,
+        "required_fields_ok": verdict.required_fields_ok,
+        "stream_rules_ok": verdict.stream_rules_ok,
         "missing_fields": verdict.failure.missing_fields if verdict.failure else [],
         "missing_events": verdict.failure.missing_events if verdict.failure else [],
     }
