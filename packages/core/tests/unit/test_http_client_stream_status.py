@@ -1,4 +1,5 @@
 import httpx
+import pytest
 
 from llm_spec.client.http_client import HTTPClient
 
@@ -22,30 +23,7 @@ def test_http_client_stream_raises_on_http_error() -> None:
     client = HTTPClient()
     client._sync_client = httpx.Client(transport=transport, timeout=1.0)
 
-    try:
-        for _ in client.stream(
-            method="POST",
-            url="https://example.test/v1/stream",
-            headers={},
-            json={"stream": True},
-            timeout=1.0,
-        ):
-            raise AssertionError("should not yield bytes on HTTP error")
-    except httpx.HTTPStatusError as e:
-        assert e.response.status_code == 502
-        assert "upstream_auth_failed" in e.response.text
-        assert client.stream_status_code == 502
-
-
-def test_http_client_stream_records_success_status_code() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(201, content=b"hello")
-
-    transport = httpx.MockTransport(handler)
-    client = HTTPClient()
-    client._sync_client = httpx.Client(transport=transport, timeout=1.0)
-
-    chunks = list(
+    with pytest.raises(httpx.HTTPStatusError) as exc_info:
         client.stream(
             method="POST",
             url="https://example.test/v1/stream",
@@ -53,6 +31,24 @@ def test_http_client_stream_records_success_status_code() -> None:
             json={"stream": True},
             timeout=1.0,
         )
+    assert exc_info.value.response.status_code == 502
+    assert "upstream_auth_failed" in exc_info.value.response.text
+
+
+def test_http_client_stream_returns_status_code_and_chunks() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(201, content=b"hello")
+
+    transport = httpx.MockTransport(handler)
+    client = HTTPClient()
+    client._sync_client = httpx.Client(transport=transport, timeout=1.0)
+
+    status_code, chunks = client.stream(
+        method="POST",
+        url="https://example.test/v1/stream",
+        headers={},
+        json={"stream": True},
+        timeout=1.0,
     )
+    assert status_code == 201
     assert chunks == [b"hello"]
-    assert client.stream_status_code == 201

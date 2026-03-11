@@ -6,7 +6,6 @@ Those responsibilities belong to upper layers (adapters/runners).
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import httpx
@@ -32,8 +31,6 @@ class HTTPClient(BaseHTTPClient):
         # Lazy-initialized clients (connection pooling)
         self._sync_client: httpx.Client | None = None
         self._async_client: httpx.AsyncClient | None = None
-        # Status code of the most recent stream response (useful for callers)
-        self.stream_status_code: int | None = None
 
     @property
     def sync_client(self) -> httpx.Client:
@@ -127,26 +124,19 @@ class HTTPClient(BaseHTTPClient):
         data: Any | None = None,
         files: Any | None = None,
         timeout: float | None = None,
-    ) -> Iterator[bytes]:
+    ) -> tuple[int, list[bytes]]:
         """Send a synchronous streaming request (Server-Sent Events).
 
-        Transport-only streaming. Chunk aggregation and logging are handled by upper layers.
+        Collects all chunks internally and returns them with the status code.
 
-        Args:
-            method: HTTP method
-            url: request URL
-            headers: request headers
-            json: JSON request body
-            data: form data
-            files: upload files
-            timeout: timeout in seconds
+        Returns:
+            ``(status_code, chunks)`` tuple.
 
-        Yields:
-            response byte chunks
+        Raises:
+            httpx.HTTPStatusError: on 4xx/5xx responses.
         """
         timeout_val = timeout if timeout is not None else self.default_timeout
 
-        # Stream using the pooled client
         with self.sync_client.stream(
             method=method,
             url=url,
@@ -156,14 +146,10 @@ class HTTPClient(BaseHTTPClient):
             files=files,
             timeout=timeout_val,
         ) as response:
-            self.stream_status_code = response.status_code
-            # Raise on non-2xx to prevent upper layers from validating error responses as normal streams.
-            # Call read() so e.response.text is available to callers catching HTTPStatusError.
             if response.status_code >= 400:
                 response.read()
                 response.raise_for_status()
-            # Transport-only: yield raw bytes
-            yield from response.iter_bytes()
+            return response.status_code, list(response.iter_bytes())
 
     async def stream_async(
         self,
@@ -174,22 +160,16 @@ class HTTPClient(BaseHTTPClient):
         data: Any | None = None,
         files: Any | None = None,
         timeout: float | None = None,
-    ) -> AsyncIterator[bytes]:
+    ) -> tuple[int, list[bytes]]:
         """Send an asynchronous streaming request (Server-Sent Events).
 
-        Transport-only streaming.
+        Collects all chunks internally and returns them with the status code.
 
-        Args:
-            method: HTTP method
-            url: request URL
-            headers: request headers
-            json: JSON request body
-            data: form data
-            files: upload files
-            timeout: timeout in seconds
+        Returns:
+            ``(status_code, chunks)`` tuple.
 
-        Yields:
-            response byte chunks
+        Raises:
+            httpx.HTTPStatusError: on 4xx/5xx responses.
         """
         timeout_val = timeout if timeout is not None else self.default_timeout
 
@@ -202,9 +182,7 @@ class HTTPClient(BaseHTTPClient):
             files=files,
             timeout=timeout_val,
         ) as response:
-            self.stream_status_code = response.status_code
             if response.status_code >= 400:
                 await response.aread()
                 response.raise_for_status()
-            async for chunk in response.aiter_bytes():
-                yield chunk
+            return response.status_code, [chunk async for chunk in response.aiter_bytes()]

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json as _json
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import httpx
@@ -47,6 +46,13 @@ class ProviderAdapter(ABC):
         """
         self.config = config
         self.http_client = http_client
+
+    def set_current_test_name(self, test_name: str | None) -> None:  # noqa: B027
+        """Set current test name for contextual logging/routing.
+
+        No-op by default. Only MockAdapter overrides this to route
+        requests to the correct mock data by test name.
+        """
 
     @abstractmethod
     def prepare_headers(self, additional_headers: Headers | None = None) -> dict[str, str]:
@@ -162,18 +168,11 @@ class ProviderAdapter(ABC):
         additional_headers: Headers | None = None,
         method: str = "POST",
         files: Any | None = None,
-    ) -> Iterator[bytes]:
+    ) -> tuple[int, list[bytes]]:
         """Send a synchronous streaming request.
 
-        Args:
-            endpoint: API endpoint path
-            params: request params
-            additional_headers: extra headers
-            method: HTTP method
-            files: multipart/form-data files
-
-        Yields:
-            response byte chunks
+        Returns:
+            ``(status_code, chunks)`` tuple.
         """
         url = self.get_base_url().rstrip("/") + endpoint
         headers = self.prepare_headers(additional_headers)
@@ -197,32 +196,25 @@ class ProviderAdapter(ABC):
             timeout=self.config.timeout,
         )
 
-    def stream_async(
+    async def stream_async(
         self,
         endpoint: str,
         params: JSONValue,
         additional_headers: Headers | None = None,
         method: str = "POST",
         files: Any | None = None,
-    ) -> AsyncIterator[bytes]:
+    ) -> tuple[int, list[bytes]]:
         """Send an asynchronous streaming request.
 
-        Args:
-            endpoint: API endpoint path
-            params: request params
-            additional_headers: extra headers
-            method: HTTP method
-            files: multipart/form-data files
-
-        Yields:
-            response byte chunks
+        Returns:
+            ``(status_code, chunks)`` tuple.
         """
         url = self.get_base_url().rstrip("/") + endpoint
         headers = self.prepare_headers(additional_headers)
 
         if files:
             headers = {k: v for k, v in headers.items() if k.lower() != "content-type"}
-            return self.http_client.stream_async(
+            return await self.http_client.stream_async(
                 method=method,
                 url=url,
                 headers=headers,
@@ -231,7 +223,7 @@ class ProviderAdapter(ABC):
                 timeout=self.config.timeout,
             )
 
-        return self.http_client.stream_async(
+        return await self.http_client.stream_async(
             method=method,
             url=url,
             headers=headers,

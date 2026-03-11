@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import random
-from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -170,18 +169,11 @@ class MockProviderAdapter(ProviderAdapter):
         additional_headers: Headers | None = None,
         method: str = "POST",
         files: Any | None = None,
-    ) -> Iterator[bytes]:
+    ) -> tuple[int, list[bytes]]:
         """Make a mock streaming request.
 
-        Args:
-            endpoint: API endpoint path.
-            params: Request parameters (ignored in mock mode).
-            additional_headers: Additional headers (ignored in mock mode).
-            method: HTTP method (ignored in mock mode).
-            files: Files to upload (ignored in mock mode).
-
         Returns:
-            Mock streaming response iterator.
+            ``(status_code, chunks)`` tuple.
 
         Raises:
             TypeError: If mock response is not an iterator.
@@ -201,14 +193,11 @@ class MockProviderAdapter(ProviderAdapter):
         if isinstance(data, dict):
             raise TypeError(f"Expected iterator mock response, got {type(data)}")
 
-        def delayed_stream() -> Iterator[bytes]:
-            """Wrap stream with delays between chunks."""
-            for chunk in data:
-                # Small delay between chunks to simulate streaming
-                time.sleep(random.uniform(0.01, 0.05))
-                yield chunk
-
-        return delayed_stream()
+        chunks: list[bytes] = []
+        for chunk in data:
+            time.sleep(random.uniform(0.01, 0.05))
+            chunks.append(chunk)
+        return 200, chunks
 
     async def stream_async(
         self,
@@ -217,18 +206,11 @@ class MockProviderAdapter(ProviderAdapter):
         additional_headers: Headers | None = None,
         method: str = "POST",
         files: Any | None = None,
-    ) -> AsyncIterator[bytes]:
+    ) -> tuple[int, list[bytes]]:
         """Make an async mock streaming request.
 
-        Args:
-            endpoint: API endpoint path.
-            params: Request parameters (ignored in mock mode).
-            additional_headers: Additional headers (ignored in mock mode).
-            method: HTTP method (ignored in mock mode).
-            files: Files to upload (ignored in mock mode).
-
         Returns:
-            Mock streaming response async iterator.
+            ``(status_code, chunks)`` tuple.
 
         Raises:
             TypeError: If mock response is not an iterator.
@@ -246,7 +228,8 @@ class MockProviderAdapter(ProviderAdapter):
         if isinstance(data, dict):
             raise TypeError(f"Expected iterator mock response, got {type(data)}")
 
+        chunks: list[bytes] = []
         for chunk in data:
-            # Small delay between chunks to simulate streaming (async)
             await asyncio.sleep(random.uniform(0.01, 0.05))
-            yield chunk
+            chunks.append(chunk)
+        return 200, chunks

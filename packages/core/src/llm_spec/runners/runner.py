@@ -23,6 +23,39 @@ from llm_spec.validation.validator import ResponseValidator
 
 from .schema_registry import get_schema
 
+# ── Shared verdict helpers ────────────────────────────────
+
+
+def error_verdict(
+    case: TestCase,
+    *,
+    message: str,
+    code: str | None = None,
+    started_at: str = "",
+    finished_at: str = "",
+    latency_ms: int | None = None,
+    http_status: int = 0,
+) -> TestVerdict:
+    """Build an error TestVerdict for infrastructure / connection failures."""
+    now = datetime.now(UTC).isoformat()
+    if code is None:
+        code = "CONNECTION_ERROR" if not http_status else f"HTTP_{http_status}"
+    return TestVerdict(
+        case_id=case.case_id,
+        test_name=case.test_name,
+        focus=case.focus,
+        status="error",
+        started_at=started_at or now,
+        finished_at=finished_at or now,
+        latency_ms=latency_ms,
+        http_status=http_status if http_status else None,
+        failure=FailureInfo(
+            stage="request",
+            code=code,
+            message=message,
+        ),
+    )
+
 
 class TestRunner:
     """Executes TestCase objects and produces TestVerdict results.
@@ -47,29 +80,23 @@ class TestRunner:
 
     def run(self, case: TestCase) -> TestVerdict:
         """Execute a TestCase synchronously and return a TestVerdict."""
-        set_test_name = getattr(self.client, "set_current_test_name", None)
-        if callable(set_test_name):
-            set_test_name(case.test_name)
+        self.client.set_current_test_name(case.test_name)
         try:
             if case.request.stream:
                 return self._run_stream(case)
             return self._run_normal(case)
         finally:
-            if callable(set_test_name):
-                set_test_name(None)
+            self.client.set_current_test_name(None)
 
     async def run_async(self, case: TestCase) -> TestVerdict:
         """Execute a TestCase asynchronously and return a TestVerdict."""
-        set_test_name = getattr(self.client, "set_current_test_name", None)
-        if callable(set_test_name):
-            set_test_name(case.test_name)
+        self.client.set_current_test_name(case.test_name)
         try:
             if case.request.stream:
                 return await self._run_stream_async(case)
             return await self._run_normal_async(case)
         finally:
-            if callable(set_test_name):
-                set_test_name(None)
+            self.client.set_current_test_name(None)
 
     # ── Asset resolution (delegated to AssetResolver) ───
 
@@ -157,31 +184,186 @@ class TestRunner:
             failure=failure,
         )
 
-    def _error_verdict(
+    # ── Shared validation logic ───────────────────────────
+
+    def _validate_normal_response(
         self,
         case: TestCase,
-        *,
-        error_message: str,
+        response: httpx.Response,
         started_at: str,
-        finished_at: str,
-        latency_ms: int,
-        http_status: int = 0,
+        start_mono: float,
     ) -> TestVerdict:
-        """Shorthand for building an error verdict."""
-        return TestVerdict(
-            case_id=case.case_id,
-            test_name=case.test_name,
-            focus=case.focus,
-            status="error",
+        """Validate a normal HTTP response (schema + required fields)."""
+        status_code = response.status_code
+        response_body = ResponseParser.parse_response(response)
+        http_success = 200 <= status_code < 300
+
+        schema_valid = True
+        validation_errors: list[str] = []
+        schema_missing: list[str] = []
+
+        response_schema: type[BaseModel] | None = get_schema(case.checks.response_schema)
+        if response_schema and http_success:
+            if isinstance(response_body, dict):
+                result = ResponseValidator.validate_json(response_body, response_schema)
+            else:
+                result = ResponseValidator.validate_response(response, response_schema)
+            if not result.is_valid:
+                schema_valid = False
+                schema_missing = list(result.missing_fields)
+                validation_errors.append(result.error_message or "Schema validation failed")
+
+        missing_required: list[str] = []
+        if http_success and isinstance(response_body, dict):
+            for field_path in case.checks.required_fields:
+                val = get_value_at_path(response_body, field_path)
+                if val is None:
+                    missing_required.append(field_path)
+                    validation_errors.append(f"Missing required field: {field_path}")
+
+        all_missing = schema_missing + missing_required
+        error_msg = None
+        if not http_success:
+            error_msg = f"HTTP {status_code}: {response_body}"
+        elif validation_errors:
+            error_msg = "; ".join(validation_errors)
+
+        finished_at = datetime.now(UTC).isoformat()
+        latency_ms = int((time.monotonic() - start_mono) * 1000)
+
+        return self._build_verdict(
+            case,
+            http_status=status_code,
+            schema_ok=http_success and schema_valid,
+            required_fields_ok=http_success and not bool(all_missing),
+            error_message=error_msg,
+            missing_fields=all_missing,
             started_at=started_at,
             finished_at=finished_at,
             latency_ms=latency_ms,
-            http_status=http_status if http_status else None,
-            failure=FailureInfo(
-                stage="request",
-                code="CONNECTION_ERROR" if not http_status else f"HTTP_{http_status}",
-                message=error_message,
-            ),
+        )
+
+    def _validate_stream_response(
+        self,
+        case: TestCase,
+        http_status_code: int,
+        all_raw_chunks: list[bytes],
+        started_at: str,
+        start_mono: float,
+    ) -> TestVerdict:
+        """Validate stream chunks (parse → schema → stream rules)."""
+        parser = StreamResponseParser(case.provider)
+
+        # Parse chunks
+        try:
+            _formatted, parsed_chunks = parser.format_stream_response(all_raw_chunks)
+        except Exception as e:
+            finished_at = datetime.now(UTC).isoformat()
+            latency_ms = int((time.monotonic() - start_mono) * 1000)
+            return self._build_verdict(
+                case,
+                http_status=http_status_code,
+                schema_ok=False,
+                stream_rules_ok=False,
+                error_message=f"Stream parse error: {e}",
+                fail_stage="schema",
+                fail_code="PARSE_ERROR",
+                started_at=started_at,
+                finished_at=finished_at,
+                latency_ms=latency_ms,
+            )
+
+        if not parsed_chunks:
+            finished_at = datetime.now(UTC).isoformat()
+            latency_ms = int((time.monotonic() - start_mono) * 1000)
+            return self._build_verdict(
+                case,
+                http_status=http_status_code,
+                schema_ok=False,
+                stream_rules_ok=False,
+                error_message="No parsed chunks received",
+                fail_stage="schema",
+                fail_code="EMPTY_STREAM",
+                started_at=started_at,
+                finished_at=finished_at,
+                latency_ms=latency_ms,
+            )
+
+        # Validate chunk schemas
+        chunk_schema: type[BaseModel] | None = get_schema(case.checks.stream_chunk_schema)
+        validation_errors: list[str] = []
+        if chunk_schema and parsed_chunks:
+            for i, parsed in enumerate(parsed_chunks):
+                if isinstance(parsed, dict) and parsed.get("done") is True:
+                    continue
+                result = ResponseValidator.validate_json(parsed, chunk_schema)
+                if not result.is_valid:
+                    err = result.error_message or "Chunk schema validation failed"
+                    validation_errors.append(f"Chunk {i}: {err}")
+
+            if validation_errors:
+                finished_at = datetime.now(UTC).isoformat()
+                latency_ms = int((time.monotonic() - start_mono) * 1000)
+                return self._build_verdict(
+                    case,
+                    http_status=http_status_code,
+                    schema_ok=False,
+                    required_fields_ok=True,
+                    stream_rules_ok=True,
+                    error_message="; ".join(validation_errors),
+                    fail_stage="schema",
+                    fail_code="SCHEMA_MISMATCH",
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    latency_ms=latency_ms,
+                )
+
+        # Validate stream rules
+        stream_rules = case.checks.stream_rules
+        observations = extract_observations(
+            provider=case.provider,
+            endpoint=case.request.endpoint,
+            parsed_chunks=parsed_chunks,
+            raw_chunks=all_raw_chunks,
+            stream_rules=stream_rules,
+        )
+        missing_events = validate_stream(
+            provider=case.provider,
+            endpoint=case.request.endpoint,
+            observations=observations,
+            stream_rules=stream_rules,
+        )
+        if missing_events:
+            validation_errors.append(f"Missing required stream events: {', '.join(missing_events)}")
+
+        if validation_errors:
+            finished_at = datetime.now(UTC).isoformat()
+            latency_ms = int((time.monotonic() - start_mono) * 1000)
+            return self._build_verdict(
+                case,
+                http_status=http_status_code,
+                schema_ok=True,
+                required_fields_ok=True,
+                stream_rules_ok=False,
+                error_message="; ".join(validation_errors),
+                missing_events=missing_events,
+                started_at=started_at,
+                finished_at=finished_at,
+                latency_ms=latency_ms,
+            )
+
+        # Success
+        finished_at = datetime.now(UTC).isoformat()
+        latency_ms = int((time.monotonic() - start_mono) * 1000)
+        return self._build_verdict(
+            case,
+            http_status=http_status_code,
+            schema_ok=True,
+            required_fields_ok=True,
+            stream_rules_ok=True,
+            started_at=started_at,
+            finished_at=finished_at,
+            latency_ms=latency_ms,
         )
 
     # ── Normal (non-streaming) test execution ─────────────
@@ -189,10 +371,8 @@ class TestRunner:
     def _run_normal(self, case: TestCase) -> TestVerdict:
         started_at = datetime.now(UTC).isoformat()
         start_mono = time.monotonic()
-
         params = self._resolve_asset_placeholders(case.request.params)
         files, opened = self._prepare_upload_files(case)
-
         try:
             response = self.client.request(
                 endpoint=case.request.endpoint,
@@ -204,9 +384,9 @@ class TestRunner:
         except Exception as e:
             finished_at = datetime.now(UTC).isoformat()
             latency_ms = int((time.monotonic() - start_mono) * 1000)
-            return self._error_verdict(
+            return error_verdict(
                 case,
-                error_message=f"Connection error: {e}",
+                message=f"Connection error: {e}",
                 started_at=started_at,
                 finished_at=finished_at,
                 latency_ms=latency_ms,
@@ -214,65 +394,13 @@ class TestRunner:
         finally:
             for f in opened:
                 f.close()
-
-        status_code = response.status_code
-        response_body = ResponseParser.parse_response(response)
-        http_success = 200 <= status_code < 300
-
-        # Schema validation
-        schema_valid = True
-        validation_errors: list[str] = []
-        schema_missing: list[str] = []
-
-        response_schema: type[BaseModel] | None = get_schema(case.checks.response_schema)
-        if response_schema and http_success:
-            if isinstance(response_body, dict):
-                result = ResponseValidator.validate_json(response_body, response_schema)
-            else:
-                result = ResponseValidator.validate_response(response, response_schema)
-            if not result.is_valid:
-                schema_valid = False
-                schema_missing = list(result.missing_fields)
-                validation_errors.append(result.error_message or "Schema validation failed")
-
-        # Required fields check
-        missing_required: list[str] = []
-        if http_success and isinstance(response_body, dict):
-            for field_path in case.checks.required_fields:
-                val = get_value_at_path(response_body, field_path)
-                if val is None:
-                    missing_required.append(field_path)
-                    validation_errors.append(f"Missing required field: {field_path}")
-
-        all_missing = schema_missing + missing_required
-        error_msg = None
-        if not http_success:
-            error_msg = f"HTTP {status_code}: {response_body}"
-        elif validation_errors:
-            error_msg = "; ".join(validation_errors)
-
-        finished_at = datetime.now(UTC).isoformat()
-        latency_ms = int((time.monotonic() - start_mono) * 1000)
-
-        return self._build_verdict(
-            case,
-            http_status=status_code,
-            schema_ok=http_success and schema_valid,
-            required_fields_ok=http_success and not bool(all_missing),
-            error_message=error_msg,
-            missing_fields=all_missing,
-            started_at=started_at,
-            finished_at=finished_at,
-            latency_ms=latency_ms,
-        )
+        return self._validate_normal_response(case, response, started_at, start_mono)
 
     async def _run_normal_async(self, case: TestCase) -> TestVerdict:
         started_at = datetime.now(UTC).isoformat()
         start_mono = time.monotonic()
-
         params = self._resolve_asset_placeholders(case.request.params)
         files, opened = self._prepare_upload_files(case)
-
         try:
             response = await self.client.request_async(
                 endpoint=case.request.endpoint,
@@ -284,9 +412,9 @@ class TestRunner:
         except Exception as e:
             finished_at = datetime.now(UTC).isoformat()
             latency_ms = int((time.monotonic() - start_mono) * 1000)
-            return self._error_verdict(
+            return error_verdict(
                 case,
-                error_message=f"Connection error: {e}",
+                message=f"Connection error: {e}",
                 started_at=started_at,
                 finished_at=finished_at,
                 latency_ms=latency_ms,
@@ -294,243 +422,72 @@ class TestRunner:
         finally:
             for f in opened:
                 f.close()
-
-        status_code = response.status_code
-        response_body = ResponseParser.parse_response(response)
-        http_success = 200 <= status_code < 300
-
-        schema_valid = True
-        validation_errors: list[str] = []
-        schema_missing: list[str] = []
-
-        response_schema: type[BaseModel] | None = get_schema(case.checks.response_schema)
-        if response_schema and http_success:
-            if isinstance(response_body, dict):
-                result = ResponseValidator.validate_json(response_body, response_schema)
-            else:
-                result = ResponseValidator.validate_response(response, response_schema)
-            if not result.is_valid:
-                schema_valid = False
-                schema_missing = list(result.missing_fields)
-                validation_errors.append(result.error_message or "Schema validation failed")
-
-        missing_required: list[str] = []
-        if http_success and isinstance(response_body, dict):
-            for field_path in case.checks.required_fields:
-                val = get_value_at_path(response_body, field_path)
-                if val is None:
-                    missing_required.append(field_path)
-                    validation_errors.append(f"Missing required field: {field_path}")
-
-        all_missing = schema_missing + missing_required
-        error_msg = None
-        if not http_success:
-            error_msg = f"HTTP {status_code}: {response_body}"
-        elif validation_errors:
-            error_msg = "; ".join(validation_errors)
-
-        finished_at = datetime.now(UTC).isoformat()
-        latency_ms = int((time.monotonic() - start_mono) * 1000)
-
-        return self._build_verdict(
-            case,
-            http_status=status_code,
-            schema_ok=http_success and schema_valid,
-            required_fields_ok=http_success and not bool(all_missing),
-            error_message=error_msg,
-            missing_fields=all_missing,
-            started_at=started_at,
-            finished_at=finished_at,
-            latency_ms=latency_ms,
-        )
+        return self._validate_normal_response(case, response, started_at, start_mono)
 
     # ── Streaming test execution ──────────────────────────
 
     def _run_stream(self, case: TestCase) -> TestVerdict:
         started_at = datetime.now(UTC).isoformat()
         start_mono = time.monotonic()
-        finished_timing: tuple[str, int] | None = None
-
-        def _finish() -> tuple[str, int]:
-            nonlocal finished_timing
-            if finished_timing is None:
-                finished_timing = (
-                    datetime.now(UTC).isoformat(),
-                    int((time.monotonic() - start_mono) * 1000),
-                )
-            return finished_timing
-
         params = self._resolve_asset_placeholders(case.request.params)
         files, opened = self._prepare_upload_files(case)
-        parser = StreamResponseParser(case.provider)
-        all_raw_chunks: list[bytes] = []
-        parsed_chunks: list[dict[str, Any]] = []
-        http_status_code = 200
-
         try:
-            # Stage 1: collect raw chunks
             try:
-                for chunk_bytes in self.client.stream(
+                http_status_code, all_raw_chunks = self.client.stream(
                     endpoint=case.request.endpoint,
                     params=params,
                     method=case.request.method,
                     files=files,
-                ):
-                    all_raw_chunks.append(chunk_bytes)
-
-                http_client = getattr(self.client, "http_client", None)
-                status = getattr(http_client, "stream_status_code", None)
-                if isinstance(status, int):
-                    http_status_code = status
-
-                if not all_raw_chunks:
-                    ft, lat = _finish()
-                    return self._error_verdict(
-                        case,
-                        error_message="No chunks received",
-                        started_at=started_at,
-                        finished_at=ft,
-                        latency_ms=lat,
-                    )
+                )
             except httpx.HTTPStatusError as e:
-                http_status_code = e.response.status_code
-                ft, lat = _finish()
-                return self._error_verdict(
+                finished_at = datetime.now(UTC).isoformat()
+                latency_ms = int((time.monotonic() - start_mono) * 1000)
+                return error_verdict(
                     case,
-                    error_message=f"HTTP {http_status_code}: {e.response.text}",
+                    message=f"HTTP {e.response.status_code}: {e.response.text}",
                     started_at=started_at,
-                    finished_at=ft,
-                    latency_ms=lat,
-                    http_status=http_status_code,
+                    finished_at=finished_at,
+                    latency_ms=latency_ms,
+                    http_status=e.response.status_code,
                 )
             except Exception as e:
-                ft, lat = _finish()
-                return self._error_verdict(
+                finished_at = datetime.now(UTC).isoformat()
+                latency_ms = int((time.monotonic() - start_mono) * 1000)
+                return error_verdict(
                     case,
-                    error_message=f"Connection error: {e}",
+                    message=f"Connection error: {e}",
                     started_at=started_at,
-                    finished_at=ft,
-                    latency_ms=lat,
+                    finished_at=finished_at,
+                    latency_ms=latency_ms,
                 )
 
-            # Stage 2: parse chunks
-            try:
-                _formatted, parsed_chunks = parser.format_stream_response(all_raw_chunks)
-            except Exception as e:
-                ft, lat = _finish()
-                return self._build_verdict(
+            if not all_raw_chunks:
+                finished_at = datetime.now(UTC).isoformat()
+                latency_ms = int((time.monotonic() - start_mono) * 1000)
+                return error_verdict(
                     case,
-                    http_status=http_status_code,
-                    schema_ok=False,
-                    stream_rules_ok=False,
-                    error_message=f"Stream parse error: {e}",
-                    fail_stage="schema",
-                    fail_code="PARSE_ERROR",
+                    message="No chunks received",
                     started_at=started_at,
-                    finished_at=ft,
-                    latency_ms=lat,
+                    finished_at=finished_at,
+                    latency_ms=latency_ms,
                 )
 
-            if not parsed_chunks:
-                ft, lat = _finish()
-                return self._build_verdict(
-                    case,
-                    http_status=http_status_code,
-                    schema_ok=False,
-                    stream_rules_ok=False,
-                    error_message="No parsed chunks received",
-                    fail_stage="schema",
-                    fail_code="EMPTY_STREAM",
-                    started_at=started_at,
-                    finished_at=ft,
-                    latency_ms=lat,
-                )
-
-            # Stage 3: validate chunk schemas
-            chunk_schema: type[BaseModel] | None = get_schema(case.checks.stream_chunk_schema)
-            validation_errors: list[str] = []
-            if chunk_schema and parsed_chunks:
-                for i, parsed in enumerate(parsed_chunks):
-                    if isinstance(parsed, dict) and parsed.get("done") is True:
-                        continue
-                    result = ResponseValidator.validate_json(parsed, chunk_schema)
-                    if not result.is_valid:
-                        err = result.error_message or "Chunk schema validation failed"
-                        validation_errors.append(f"Chunk {i}: {err}")
-
-                if validation_errors:
-                    ft, lat = _finish()
-                    return self._build_verdict(
-                        case,
-                        http_status=http_status_code,
-                        schema_ok=False,
-                        required_fields_ok=True,
-                        stream_rules_ok=True,
-                        error_message="; ".join(validation_errors),
-                        fail_stage="schema",
-                        fail_code="SCHEMA_MISMATCH",
-                        started_at=started_at,
-                        finished_at=ft,
-                        latency_ms=lat,
-                    )
-
-            # Stage 4: validate stream rules
-            stream_rules = case.checks.stream_rules
-            missing_events: list[str] = []
-            observations = extract_observations(
-                provider=case.provider,
-                endpoint=case.request.endpoint,
-                parsed_chunks=parsed_chunks,
-                raw_chunks=all_raw_chunks,
-                stream_rules=stream_rules,
-            )
-            missing_events = validate_stream(
-                provider=case.provider,
-                endpoint=case.request.endpoint,
-                observations=observations,
-                stream_rules=stream_rules,
-            )
-            if missing_events:
-                validation_errors.append(
-                    f"Missing required stream events: {', '.join(missing_events)}"
-                )
-
-            if validation_errors:
-                ft, lat = _finish()
-                return self._build_verdict(
-                    case,
-                    http_status=http_status_code,
-                    schema_ok=True,
-                    required_fields_ok=True,
-                    stream_rules_ok=False,
-                    error_message="; ".join(validation_errors),
-                    missing_events=missing_events,
-                    started_at=started_at,
-                    finished_at=ft,
-                    latency_ms=lat,
-                )
-
-            # Success
-            ft, lat = _finish()
-            return self._build_verdict(
+            return self._validate_stream_response(
                 case,
-                http_status=http_status_code,
-                schema_ok=True,
-                required_fields_ok=True,
-                stream_rules_ok=True,
-                started_at=started_at,
-                finished_at=ft,
-                latency_ms=lat,
+                http_status_code,
+                all_raw_chunks,
+                started_at,
+                start_mono,
             )
-
         except Exception as e:
-            ft, lat = _finish()
-            return self._error_verdict(
+            finished_at = datetime.now(UTC).isoformat()
+            latency_ms = int((time.monotonic() - start_mono) * 1000)
+            return error_verdict(
                 case,
-                error_message=f"Unexpected error: {e}",
+                message=f"Unexpected error: {e}",
                 started_at=started_at,
-                finished_at=ft,
-                latency_ms=lat,
+                finished_at=finished_at,
+                latency_ms=latency_ms,
                 http_status=500,
             )
         finally:
@@ -540,188 +497,65 @@ class TestRunner:
     async def _run_stream_async(self, case: TestCase) -> TestVerdict:
         started_at = datetime.now(UTC).isoformat()
         start_mono = time.monotonic()
-        finished_timing: tuple[str, int] | None = None
-
-        def _finish() -> tuple[str, int]:
-            nonlocal finished_timing
-            if finished_timing is None:
-                finished_timing = (
-                    datetime.now(UTC).isoformat(),
-                    int((time.monotonic() - start_mono) * 1000),
-                )
-            return finished_timing
-
         params = self._resolve_asset_placeholders(case.request.params)
         files, opened = self._prepare_upload_files(case)
-        parser = StreamResponseParser(case.provider)
-        all_raw_chunks: list[bytes] = []
-        parsed_chunks: list[dict[str, Any]] = []
-        http_status_code = 200
-
         try:
-            # Stage 1: collect raw chunks
             try:
-                async for chunk_bytes in self.client.stream_async(
+                http_status_code, all_raw_chunks = await self.client.stream_async(
                     endpoint=case.request.endpoint,
                     params=params,
                     method=case.request.method,
                     files=files,
-                ):
-                    all_raw_chunks.append(chunk_bytes)
-
-                http_client = getattr(self.client, "http_client", None)
-                status = getattr(http_client, "stream_status_code", None)
-                if isinstance(status, int):
-                    http_status_code = status
-
-                if not all_raw_chunks:
-                    ft, lat = _finish()
-                    return self._error_verdict(
-                        case,
-                        error_message="No chunks received",
-                        started_at=started_at,
-                        finished_at=ft,
-                        latency_ms=lat,
-                    )
+                )
             except httpx.HTTPStatusError as e:
-                http_status_code = e.response.status_code
-                ft, lat = _finish()
-                return self._error_verdict(
+                finished_at = datetime.now(UTC).isoformat()
+                latency_ms = int((time.monotonic() - start_mono) * 1000)
+                return error_verdict(
                     case,
-                    error_message=f"HTTP {http_status_code}: {e.response.text}",
+                    message=f"HTTP {e.response.status_code}: {e.response.text}",
                     started_at=started_at,
-                    finished_at=ft,
-                    latency_ms=lat,
-                    http_status=http_status_code,
+                    finished_at=finished_at,
+                    latency_ms=latency_ms,
+                    http_status=e.response.status_code,
                 )
             except Exception as e:
-                ft, lat = _finish()
-                return self._error_verdict(
+                finished_at = datetime.now(UTC).isoformat()
+                latency_ms = int((time.monotonic() - start_mono) * 1000)
+                return error_verdict(
                     case,
-                    error_message=f"Connection error: {e}",
+                    message=f"Connection error: {e}",
                     started_at=started_at,
-                    finished_at=ft,
-                    latency_ms=lat,
+                    finished_at=finished_at,
+                    latency_ms=latency_ms,
                 )
 
-            # Stage 2: parse chunks
-            try:
-                _formatted, parsed_chunks = parser.format_stream_response(all_raw_chunks)
-            except Exception as e:
-                ft, lat = _finish()
-                return self._build_verdict(
+            if not all_raw_chunks:
+                finished_at = datetime.now(UTC).isoformat()
+                latency_ms = int((time.monotonic() - start_mono) * 1000)
+                return error_verdict(
                     case,
-                    http_status=http_status_code,
-                    schema_ok=False,
-                    stream_rules_ok=False,
-                    error_message=f"Stream parse error: {e}",
-                    fail_stage="schema",
-                    fail_code="PARSE_ERROR",
+                    message="No chunks received",
                     started_at=started_at,
-                    finished_at=ft,
-                    latency_ms=lat,
+                    finished_at=finished_at,
+                    latency_ms=latency_ms,
                 )
 
-            if not parsed_chunks:
-                ft, lat = _finish()
-                return self._build_verdict(
-                    case,
-                    http_status=http_status_code,
-                    schema_ok=False,
-                    stream_rules_ok=False,
-                    error_message="No parsed chunks received",
-                    fail_stage="schema",
-                    fail_code="EMPTY_STREAM",
-                    started_at=started_at,
-                    finished_at=ft,
-                    latency_ms=lat,
-                )
-
-            # Stage 3: validate chunk schemas
-            chunk_schema: type[BaseModel] | None = get_schema(case.checks.stream_chunk_schema)
-            validation_errors: list[str] = []
-            if chunk_schema and parsed_chunks:
-                for i, parsed in enumerate(parsed_chunks):
-                    if isinstance(parsed, dict) and parsed.get("done") is True:
-                        continue
-                    result = ResponseValidator.validate_json(parsed, chunk_schema)
-                    if not result.is_valid:
-                        err = result.error_message or "Chunk schema validation failed"
-                        validation_errors.append(f"Chunk {i}: {err}")
-
-                if validation_errors:
-                    ft, lat = _finish()
-                    return self._build_verdict(
-                        case,
-                        http_status=http_status_code,
-                        schema_ok=False,
-                        required_fields_ok=True,
-                        stream_rules_ok=True,
-                        error_message="; ".join(validation_errors),
-                        fail_stage="schema",
-                        fail_code="SCHEMA_MISMATCH",
-                        started_at=started_at,
-                        finished_at=ft,
-                        latency_ms=lat,
-                    )
-
-            # Stage 4: validate stream rules
-            stream_rules = case.checks.stream_rules
-            missing_events: list[str] = []
-            observations = extract_observations(
-                provider=case.provider,
-                endpoint=case.request.endpoint,
-                parsed_chunks=parsed_chunks,
-                raw_chunks=all_raw_chunks,
-                stream_rules=stream_rules,
-            )
-            missing_events = validate_stream(
-                provider=case.provider,
-                endpoint=case.request.endpoint,
-                observations=observations,
-                stream_rules=stream_rules,
-            )
-            if missing_events:
-                validation_errors.append(
-                    f"Missing required stream events: {', '.join(missing_events)}"
-                )
-
-            if validation_errors:
-                ft, lat = _finish()
-                return self._build_verdict(
-                    case,
-                    http_status=http_status_code,
-                    schema_ok=True,
-                    required_fields_ok=True,
-                    stream_rules_ok=False,
-                    error_message="; ".join(validation_errors),
-                    missing_events=missing_events,
-                    started_at=started_at,
-                    finished_at=ft,
-                    latency_ms=lat,
-                )
-
-            # Success
-            ft, lat = _finish()
-            return self._build_verdict(
+            return self._validate_stream_response(
                 case,
-                http_status=http_status_code,
-                schema_ok=True,
-                required_fields_ok=True,
-                stream_rules_ok=True,
-                started_at=started_at,
-                finished_at=ft,
-                latency_ms=lat,
+                http_status_code,
+                all_raw_chunks,
+                started_at,
+                start_mono,
             )
-
         except Exception as e:
-            ft, lat = _finish()
-            return self._error_verdict(
+            finished_at = datetime.now(UTC).isoformat()
+            latency_ms = int((time.monotonic() - start_mono) * 1000)
+            return error_verdict(
                 case,
-                error_message=f"Unexpected error: {e}",
+                message=f"Unexpected error: {e}",
                 started_at=started_at,
-                finished_at=ft,
-                latency_ms=lat,
+                finished_at=finished_at,
+                latency_ms=latency_ms,
                 http_status=500,
             )
         finally:

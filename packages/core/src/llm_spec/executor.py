@@ -29,7 +29,7 @@ from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import AppConfig
 from llm_spec.results.result_types import FailureInfo, RunResult, TestVerdict
 from llm_spec.results.task_result import build_run_result
-from llm_spec.runners.runner import TestRunner
+from llm_spec.runners.runner import TestRunner, error_verdict
 from llm_spec.suites.registry import Registry, build_execution_plan
 from llm_spec.suites.types import SuiteSpec, TestCase
 
@@ -69,23 +69,6 @@ class SuiteContext:
 OnSuiteStart = Callable[["SuiteContext"], Awaitable[None]] | None
 OnSuiteDone = Callable[["SuiteContext", "SuiteResult"], Awaitable[None]] | None
 OnSuiteError = Callable[["SuiteContext", Exception], Awaitable[None]] | None
-
-
-def _error_verdict(case: TestCase, error: Exception) -> TestVerdict:
-    now = datetime.now(UTC).isoformat()
-    return TestVerdict(
-        case_id=case.case_id,
-        test_name=case.test_name,
-        focus=case.focus,
-        status="error",
-        started_at=now,
-        finished_at=now,
-        failure=FailureInfo(
-            stage="request",
-            code="REQUEST_ERROR",
-            message=str(error),
-        ),
-    )
 
 
 def _cancelled_verdict(case: TestCase) -> TestVerdict:
@@ -231,7 +214,7 @@ class Executor:
         except asyncio.CancelledError:
             return _cancelled_verdict(case)
         except Exception as e:
-            return _error_verdict(case, e)
+            return error_verdict(case, message=str(e), code="REQUEST_ERROR")
 
 
 # ── High-level multi-suite API ────────────────────────────
@@ -321,42 +304,21 @@ async def run_task_suites(
     task_id: str,
     registry: Registry,
     config: AppConfig,
-    *,
-    suite_ids: list[str] | None = None,
-    selected_tests: dict[str, set[str]] | None = None,
-    max_concurrent_suites: int = 3,
-    max_concurrent_tests: int = 5,
-    on_test_start: OnTestStart = None,
-    on_test_done: OnTestDone = None,
-    on_suite_start: OnSuiteStart = None,
-    on_suite_done: OnSuiteDone = None,
-    on_suite_error: OnSuiteError = None,
-    client_factory: ClientFactory | None = None,
+    **kwargs: Any,
 ) -> list[SuiteResult]:
     """Execute suites and register/unregister task cancellation handles.
 
     This wraps ``run_suites`` so caller layers (web/CLI) do not need to manage
     loop/task registration for cross-thread cancellation.
+
+    Accepts all keyword arguments of :func:`run_suites`.
     """
     current = asyncio.current_task()
     if current is not None:
         cancellation_registry.register_task(task_id, asyncio.get_running_loop(), current)
 
     try:
-        return await run_suites(
-            registry,
-            config,
-            suite_ids=suite_ids,
-            selected_tests=selected_tests,
-            max_concurrent_suites=max_concurrent_suites,
-            max_concurrent_tests=max_concurrent_tests,
-            on_test_start=on_test_start,
-            on_test_done=on_test_done,
-            on_suite_start=on_suite_start,
-            on_suite_done=on_suite_done,
-            on_suite_error=on_suite_error,
-            client_factory=client_factory,
-        )
+        return await run_suites(registry, config, **kwargs)
     finally:
         cancellation_registry.unregister_task(task_id)
 
