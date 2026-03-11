@@ -141,6 +141,7 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[TestDef]
                 )
             variant_id = value["variant_id"]
             suffix = str(variant_id).replace("/", "_")
+            value = {k: v for k, v in value.items() if k != "variant_id"}
         elif isinstance(value, list):
             suffix = ",".join(str(v) for v in value)
         else:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import httpx
@@ -84,7 +83,7 @@ class BaseHTTPClient(ABC):
         data: Any | None = None,
         files: Any | None = None,
         timeout: float | None = None,
-    ) -> Iterator[bytes]:
+    ) -> tuple[int, list[bytes]]:
         """Send a synchronous streaming request (Server-Sent Events).
 
         Transport only; no business logic. Chunk aggregation and logging are handled by upper layers.
@@ -98,16 +97,16 @@ class BaseHTTPClient(ABC):
             files: upload files
             timeout: timeout in seconds
 
-        Yields:
-            response byte chunks
+        Returns:
+            ``(status_code, chunks)`` tuple.
 
         Raises:
-            Exception: various HTTP/network errors
+            httpx.HTTPStatusError: on 4xx/5xx responses.
         """
         pass
 
     @abstractmethod
-    def stream_async(
+    async def stream_async(
         self,
         method: str,
         url: str,
@@ -116,7 +115,7 @@ class BaseHTTPClient(ABC):
         data: Any | None = None,
         files: Any | None = None,
         timeout: float | None = None,
-    ) -> AsyncIterator[bytes]:
+    ) -> tuple[int, list[bytes]]:
         """Send an asynchronous streaming request (Server-Sent Events).
 
         Transport only; no business logic.
@@ -130,10 +129,10 @@ class BaseHTTPClient(ABC):
             files: upload files
             timeout: timeout in seconds
 
-        Yields:
-            response byte chunks
+        Returns:
+            ``(status_code, chunks)`` tuple.
 
         Raises:
-            Exception: various HTTP/network errors
+            httpx.HTTPStatusError: on 4xx/5xx responses.
         """
         pass
