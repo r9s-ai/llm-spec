@@ -10,15 +10,16 @@
         "content": {
           "role": "model",
           "parts": [
+                        {
+              "text": "Here is a tiny PNG image."
+            },
             {
               "inlineData": {
                 "mimeType": "image/png",
                 "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
               }
-            },
-            {
-              "text": "Here is a tiny PNG image."
             }
+
           ]
         },
         "finishReason": "STOP",

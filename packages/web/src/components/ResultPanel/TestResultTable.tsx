@@ -24,7 +24,20 @@ export function TestResultTable({ tests, onRetryFailedTest }: TestResultTablePro
   };
 
   const isFailed = (test: TestResultRow): boolean => {
-    return test.result?.status === "fail";
+    if (!test.result?.status) {
+      return false;
+    }
+    return test.result.status !== "pass";
+  };
+
+  const renderValidationState = (value: boolean | null | undefined): string => {
+    if (value === true) {
+      return "✓";
+    }
+    if (value === false) {
+      return "✗";
+    }
+    return "N/A";
   };
 
   const handleRetry = async (runCaseId: string, testName: string): Promise<void> => {
@@ -235,13 +248,13 @@ export function TestResultTable({ tests, onRetryFailedTest }: TestResultTablePro
 
                         {/* Validation Details */}
                         <div className="flex gap-4 text-slate-600">
-                          <span>Schema: {test.validation?.schema_ok ? "✓" : "✗"}</span>
+                          <span>Schema: {renderValidationState(test.validation?.schema_ok)}</span>
                           <span>
-                            Required Fields: {test.validation?.required_fields_ok ? "✓" : "✗"}
+                            Required Fields: {renderValidationState(test.validation?.required_fields_ok)}
                           </span>
-                          {test.validation?.stream_rules_ok !== undefined && (
-                            <span>Stream Rules: {test.validation.stream_rules_ok ? "✓" : "✗"}</span>
-                          )}
+                          <span>
+                            Stream Rules: {renderValidationState(test.validation?.stream_rules_ok)}
+                          </span>
                         </div>
                       </div>
                     </td>

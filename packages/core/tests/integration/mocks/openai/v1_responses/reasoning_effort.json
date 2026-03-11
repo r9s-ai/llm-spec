@@ -1,0 +1,36 @@
+{
+  "status_code": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "id": "resp_mock_reasoning",
+    "object": "response",
+    "created_at": 1700000000,
+    "model": "gpt-5.2",
+    "status": "completed",
+    "reasoning": {
+      "effort": "medium"
+    },
+    "output": [
+      {
+        "id": "rs_001",
+        "type": "reasoning",
+        "summary": []
+      },
+      {
+        "id": "msg_001",
+        "type": "message"
+      }
+    ],
+    "output_text": "I have completed the reasoning task.",
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 80,
+      "total_tokens": 90,
+      "output_tokens_details": {
+        "reasoning_tokens": 64
+      }
+    }
+  }
+}

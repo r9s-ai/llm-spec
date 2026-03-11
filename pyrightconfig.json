@@ -4,6 +4,7 @@
   "venv": ".venv",
   "typeCheckingMode": "standard",
   "reportMissingTypeStubs": "none",
-  "include": ["llm_spec", "tests"],
+  "include": ["packages/core/src", "packages/core/tests", "packages/web-api/src"],
+  "extraPaths": ["packages/core/src", "packages/web-api/src"],
   "exclude": ["**/__pycache__", "temp", "logs", "reports", ".venv"]
 }

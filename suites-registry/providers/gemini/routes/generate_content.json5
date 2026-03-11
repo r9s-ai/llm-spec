@@ -229,14 +229,19 @@
     {
       name: "generationConfig.responseModalities",
       description: "Test image modality output (TEXT+IMAGE) using gemini-3-flash-image",
-      endpoint_override: "/v1beta/models/gemini-3-flash-image:generateContent",
+      // endpoint_override: "/v1beta/models/gemini-2.5-flash-image:generateContent",
       // Multimodal response generation: must explicitly request IMAGE.
       // See: https://ai.google.dev/gemini-api/docs/image-generation
-      params: { generationConfig: { responseModalities: ["TEXT", "IMAGE"] } },
+      params: {  contents: [
+          {
+            role: "user",
+            parts: [{ text: "give me a picture of pig" }],
+          }],
+        generationConfig: { responseModalities: ["TEXT", "IMAGE"] } },
       focus_param: { name: "generationConfig.responseModalities", value: ["TEXT", "IMAGE"] },
       required_fields: [
-        "candidates[0].content.parts[0].inlineData.data",
-        "candidates[0].content.parts[0].inlineData.mimeType",
+        "candidates[0].content.parts[1].inlineData.data",
+        "candidates[0].content.parts[1].inlineData.mimeType",
       ],
     },
   ],
