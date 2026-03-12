@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { Badge } from "../UI";
 import { TestResultTable } from "../ResultPanel/TestResultTable";
 import type { RunJob, RunSummary, TestResultRow } from "../../types";
 
@@ -32,13 +31,6 @@ function calculateDuration(start: string | null, end: string | null): string {
 }
 
 export function CompletedRunCard({ run, summary, result, onRetryFailedTest }: CompletedRunCardProps) {
-  // Backend sets status to "success" or "failed" (not "finished")
-  // success = all tests passed, failed = some tests failed or run error
-  const isSuccess = run.status === "success";
-
-  const statusVariant = isSuccess ? "success" : "error";
-  const statusText = isSuccess ? "Success" : "Failed";
-
   const duration = calculateDuration(run.started_at, run.finished_at);
 
   // Extract tests from task result cases
@@ -62,7 +54,6 @@ export function CompletedRunCard({ run, summary, result, onRetryFailedTest }: Co
       {/* Header */}
       <div className="flex items-center justify-between gap-2 bg-slate-50 px-4 py-3 border-b border-slate-100">
         <div className="flex items-center gap-3">
-          <Badge variant={statusVariant}>{statusText}</Badge>
           <div>
             <div className="flex items-center gap-3">
               <h4 className="text-sm font-semibold text-slate-900">

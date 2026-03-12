@@ -32,7 +32,6 @@ export function TestSelector({
   providers,
   suites,
   selectedTestsBySuite,
-  selectedProviders,
   expandedSuites,
   selectedTestCount,
   runMode,
@@ -81,6 +80,15 @@ export function TestSelector({
     [suites]
   );
   const isAllSelected = totalTestCount > 0 && selectedTestCount === totalTestCount;
+  const providerSelectedCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    suites.forEach((suite) => {
+      const bucket = selectedTestsBySuite[suite.suite_id];
+      if (!bucket || bucket.size === 0) return;
+      counts.set(suite.provider_id, (counts.get(suite.provider_id) ?? 0) + bucket.size);
+    });
+    return counts;
+  }, [suites, selectedTestsBySuite]);
 
   const filteredGroups = useMemo(() => {
     const groups = Object.values(suitesByProviderModel);
@@ -159,11 +167,11 @@ export function TestSelector({
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex-shrink-0 space-y-1 pb-2">
-        <div className="grid grid-cols-[1fr_128px] gap-2">
-          <div className="space-y-1">
-            {/* Row 1: Run controls */}
+        <div className="flex items-center gap-2">
+          {/* Block C: stacked A + B */}
+          <div className="flex-1 space-y-1">
+            {/* Block A: mode + concurrent */}
             <div className="flex items-center gap-3">
-              {/* Mode selector */}
               <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5 flex-1">
                 <button
                   onClick={() => onRunModeChange("real")}
@@ -191,7 +199,6 @@ export function TestSelector({
                 </button>
               </div>
 
-              {/* Concurrent selector */}
               <div className="ml-auto flex items-center gap-1">
                 <span className="text-xs text-slate-500">Concurrent:</span>
                 <select
@@ -211,7 +218,7 @@ export function TestSelector({
               </div>
             </div>
 
-            {/* Row 2: Stats - centered */}
+            {/* Block B: stats */}
             <div className="text-center text-xs font-mono tracking-wide text-slate-600">
               <span className="inline-block min-w-[3ch] text-right font-semibold text-slate-900 tabular-nums">
                 {modelCount}
@@ -224,11 +231,11 @@ export function TestSelector({
             </div>
           </div>
 
-          {/* Run button (spans two rows) */}
+          {/* Block D: Run button */}
           <button
             onClick={onRun}
             disabled={selectedTestCount === 0 || isRunning}
-            className={`row-span-2 flex items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold transition-all h-12 ${
+            className={`flex items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold transition-all h-12 w-32 ${
               selectedTestCount > 0 && !isRunning
                 ? "bg-violet-600 text-white shadow-lg shadow-violet-200 hover:bg-violet-700 active:scale-[0.98]"
                 : "cursor-not-allowed bg-slate-200 text-slate-400"
@@ -278,7 +285,7 @@ export function TestSelector({
         {/* Row 4: Provider buttons */}
         <div className="flex flex-wrap gap-1.5">
           {providers.map((provider) => {
-            const isSelected = selectedProviders.has(provider);
+            const isSelected = (providerSelectedCounts.get(provider) ?? 0) > 0;
             return (
               <button
                 key={provider}
