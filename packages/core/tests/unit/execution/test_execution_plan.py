@@ -5,8 +5,15 @@ from pathlib import Path
 from llm_spec.suites.registry import build_executable_cases, load_SuiteSpecs
 
 
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "suites-registry").exists():
+            return parent
+    raise RuntimeError("repo root not found for suites-registry")
+
+
 def test_build_execution_plan_merges_and_overrides() -> None:
-    repo_root = Path(__file__).resolve().parents[4]
+    repo_root = _repo_root()
     suites = load_SuiteSpecs(repo_root / "suites-registry" / "providers")
 
     suite = next(

@@ -5,8 +5,15 @@ from pathlib import Path
 from llm_spec.suites.registry import load_SuiteSpecs
 
 
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "suites-registry").exists():
+            return parent
+    raise RuntimeError("repo root not found for suites-registry")
+
+
 def test_registry_expands_openai_chat_model() -> None:
-    repo_root = Path(__file__).resolve().parents[4]
+    repo_root = _repo_root()
     suites = load_SuiteSpecs(repo_root / "suites-registry" / "providers")
 
     match = next(
@@ -22,7 +29,7 @@ def test_registry_expands_openai_chat_model() -> None:
 
 
 def test_registry_expands_gemini_endpoint_placeholder() -> None:
-    repo_root = Path(__file__).resolve().parents[4]
+    repo_root = _repo_root()
     suites = load_SuiteSpecs(repo_root / "suites-registry" / "providers")
 
     match = next(
@@ -39,7 +46,7 @@ def test_registry_expands_gemini_endpoint_placeholder() -> None:
 
 
 def test_registry_resolves_routes_from_inheritance() -> None:
-    repo_root = Path(__file__).resolve().parents[4]
+    repo_root = _repo_root()
     suites = load_SuiteSpecs(repo_root / "suites-registry" / "providers")
 
     match = next(
