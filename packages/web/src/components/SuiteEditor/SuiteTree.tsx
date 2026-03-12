@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import type { Suite } from "../../types";
 
 interface SuiteTreeProps {
@@ -16,64 +16,33 @@ export function SuiteTree({
   onSelectSuite,
   onSearchChange,
 }: SuiteTreeProps) {
-  const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set());
-
-  // Group suites by provider
-  const suitesByProvider = useMemo(() => {
-    const grouped: Record<string, Suite[]> = {};
-    suites.forEach((suite) => {
-      if (!grouped[suite.provider_id]) {
-        grouped[suite.provider_id] = [];
-      }
-      grouped[suite.provider_id].push(suite);
-    });
-    return grouped;
-  }, [suites]);
-
   // Filter suites by search query
-  const filteredSuitesByProvider = useMemo(() => {
-    if (!searchQuery) return suitesByProvider;
-
-    const filtered: Record<string, Suite[]> = {};
+  const filteredSuites = useMemo(() => {
+    if (!searchQuery) return suites;
     const query = searchQuery.toLowerCase();
+    return suites.filter(
+      (suite) =>
+        suite.suite_name.toLowerCase().includes(query) ||
+        suite.endpoint.toLowerCase().includes(query) ||
+        suite.route_id.toLowerCase().includes(query) ||
+        suite.model_id.toLowerCase().includes(query) ||
+        suite.provider_id.toLowerCase().includes(query)
+    );
+  }, [suites, searchQuery]);
 
-    Object.entries(suitesByProvider).forEach(([provider, providerSuites]) => {
-      const matchingSuites = providerSuites.filter(
-        (suite) =>
-          suite.suite_name.toLowerCase().includes(query) ||
-          suite.endpoint.toLowerCase().includes(query) ||
-          suite.route_id.toLowerCase().includes(query) ||
-          suite.model_id.toLowerCase().includes(query) ||
-          provider.toLowerCase().includes(query)
-      );
-      if (matchingSuites.length > 0) {
-        filtered[provider] = matchingSuites;
-      }
-    });
+  const sortedSuites = useMemo(
+    () =>
+      filteredSuites.slice().sort(
+        (a, b) =>
+          a.provider_id.localeCompare(b.provider_id) ||
+          a.model_id.localeCompare(b.model_id) ||
+          a.route_id.localeCompare(b.route_id)
+      ),
+    [filteredSuites]
+  );
 
-    return filtered;
-  }, [suitesByProvider, searchQuery]);
-
-  const providers = Object.keys(filteredSuitesByProvider).sort();
-
-  const toggleProvider = (provider: string) => {
-    setExpandedProviders((prev) => {
-      const next = new Set(prev);
-      if (next.has(provider)) {
-        next.delete(provider);
-      } else {
-        next.add(provider);
-      }
-      return next;
-    });
-  };
-
-  // Auto-expand all when searching
   const handleSearchChange = (value: string) => {
     onSearchChange(value);
-    if (value) {
-      setExpandedProviders(new Set(providers));
-    }
   };
 
   return (
@@ -119,79 +88,41 @@ export function SuiteTree({
         </div>
       </div>
 
-      {/* Provider List */}
+      {/* Suite List */}
       <div className="flex-1 space-y-2 overflow-auto">
-        {providers.map((provider) => {
-          const providerSuites = filteredSuitesByProvider[provider] ?? [];
-          const isExpanded = expandedProviders.has(provider);
-
-          return (
-            <div key={provider} className="rounded-xl border border-slate-200 bg-white">
-              {/* Provider Header */}
-              <div
-                className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-slate-50"
-                onClick={() => toggleProvider(provider)}
+        {sortedSuites.map((suite) => (
+          <div
+            key={suite.suite_id}
+            className={`rounded-lg border px-3 py-2 transition-colors cursor-pointer ${
+              suite.suite_id === selectedSuiteId
+                ? "border-violet-200 bg-violet-50"
+                : "border-slate-200 bg-white hover:bg-slate-50"
+            }`}
+            onClick={() => onSelectSuite(suite.suite_id)}
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className="truncate text-sm font-medium text-slate-900"
+                title={suite.suite_name || suite.model_id}
               >
-                <svg
-                  className={`h-4 w-4 text-slate-400 transition-transform ${
-                    isExpanded ? "rotate-90" : ""
-                  }`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
-                <span className="text-sm font-bold text-slate-900">{provider}</span>
-                <span className="ml-auto text-xs text-slate-500">
-                  {providerSuites.length} model suites
-                </span>
-              </div>
-
-              {/* Suite List */}
-              {isExpanded && (
-                <div className="border-t border-slate-100">
-                  {providerSuites.map((suite) => (
-                    <div
-                      key={suite.suite_id}
-                      className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
-                        suite.suite_id === selectedSuiteId
-                          ? "bg-violet-50 border-l-2 border-violet-500"
-                          : "hover:bg-slate-50 border-l-2 border-transparent"
-                      }`}
-                      onClick={() => onSelectSuite(suite.suite_id)}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div
-                          className="truncate text-sm font-medium text-slate-900"
-                          title={suite.suite_name || suite.model_id}
-                        >
-                          {suite.suite_name || suite.model_id}
-                        </div>
-                        <div
-                          className="truncate text-xs text-slate-500"
-                          title={suite.endpoint}
-                        >
-                          {suite.endpoint}
-                        </div>
-                      </div>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                        {suite.model_id}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+                {suite.suite_name || suite.model_id}
+              </span>
+              <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                {suite.provider_id}:{suite.model_id}
+              </span>
             </div>
-          );
-        })}
+            <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+              <span className="truncate" title={suite.endpoint}>
+                {suite.endpoint}
+              </span>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                {suite.route_id}
+              </span>
+            </div>
+          </div>
+        ))}
 
-        {providers.length === 0 && (
+        {sortedSuites.length === 0 && (
           <div className="py-8 text-center text-sm text-slate-500">
             {searchQuery ? "No matching suites" : "No suites available"}
           </div>

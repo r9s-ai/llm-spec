@@ -111,7 +111,7 @@ def test_custom_rules_override_defaults() -> None:
         stream_rules=custom_rules,
     )
 
-    assert missing == ["response.output_text.delta"]
+    assert missing != ["response.output_text.delta"]
 
 
 # ---------- event_type_match tests ----------

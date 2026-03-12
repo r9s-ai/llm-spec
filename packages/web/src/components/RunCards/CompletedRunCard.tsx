@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { Badge } from "../UI";
 import { TestResultTable } from "../ResultPanel/TestResultTable";
 import type { RunJob, RunSummary, TestResultRow } from "../../types";
-import { formatRelativeTime } from "../../utils/formatters";
 
 interface RunResultData {
   version?: string;
@@ -41,7 +40,6 @@ export function CompletedRunCard({ run, summary, result, onRetryFailedTest }: Co
   const statusText = isSuccess ? "Success" : "Failed";
 
   const duration = calculateDuration(run.started_at, run.finished_at);
-  const relativeTime = formatRelativeTime(run.finished_at);
 
   // Extract tests from task result cases
   const tests = useMemo((): TestResultRow[] => {
@@ -66,39 +64,33 @@ export function CompletedRunCard({ run, summary, result, onRetryFailedTest }: Co
         <div className="flex items-center gap-3">
           <Badge variant={statusVariant}>{statusText}</Badge>
           <div>
-            <h4 className="font-semibold text-slate-900">
-              {run.provider} / {run.model ?? "unknown"} / {run.route ?? run.endpoint}
-            </h4>
-            <p className="text-xs text-slate-500">
-              {run.id} · {run.mode} · {run.endpoint}
-            </p>
+            <div className="flex items-center gap-3">
+              <h4 className="text-sm font-semibold text-slate-900">
+                {run.route ?? run.endpoint}
+              </h4>
+              <div className="flex items-center gap-3 text-xs text-slate-500">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-green-500" />
+                  <span className="font-medium text-slate-700">
+                    {resultSummary?.passed ?? run.progress_passed}
+                  </span>
+                  <span className="text-slate-500">passed</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-red-500" />
+                  <span className="font-medium text-slate-700">
+                    {resultSummary?.failed ?? run.progress_failed}
+                  </span>
+                  <span className="text-slate-500">failed</span>
+                </span>
+                <span className="text-slate-400">
+                  {resultSummary?.total ?? run.progress_total} tests
+                </span>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="text-right">
-          <span className="text-xs text-slate-400">{relativeTime}</span>
-          {duration && <p className="text-xs text-slate-500">{duration}</p>}
-        </div>
-      </div>
-
-      {/* Stats Summary */}
-      <div className="flex items-center gap-4 px-4 py-2 border-b border-slate-50 text-sm">
-        <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-green-500" />
-          <span className="font-medium text-slate-700">
-            {resultSummary?.passed ?? run.progress_passed}
-          </span>
-          <span className="text-slate-500">passed</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-red-500" />
-          <span className="font-medium text-slate-700">
-            {resultSummary?.failed ?? run.progress_failed}
-          </span>
-          <span className="text-slate-500">failed</span>
-        </div>
-        <div className="ml-auto text-xs text-slate-400">
-          {resultSummary?.total ?? run.progress_total} tests
-        </div>
+        <div className="text-right">{duration && <p className="text-xs text-slate-500">{duration}</p>}</div>
       </div>
 
       {/* Test Results Table */}
