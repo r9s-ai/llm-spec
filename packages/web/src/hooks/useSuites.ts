@@ -174,6 +174,7 @@ export function useSuites() {
     loadSuites,
     refreshRegistryCache,
     setSelectedSuiteId,
+    setSelectedProviders,
     toggleProvider,
     selectAllProviders,
     clearAllProviders,

@@ -29,6 +29,10 @@ export function ModelNode({
   onToggleTests,
   onToggleTest,
 }: ModelNodeProps) {
+  const splitIndex = model.indexOf(":");
+  const providerLabel = splitIndex > 0 ? model.slice(0, splitIndex) : null;
+  const modelLabel = splitIndex > 0 ? model.slice(splitIndex + 1) : model;
+
   const { totalTests, selectedTests, isAllSelected, isIndeterminate } = useMemo(() => {
     let total = 0;
     let selected = 0;
@@ -66,7 +70,7 @@ export function ModelNode({
 
   return (
     <div className="rounded-md border border-slate-200/70 bg-white">
-      <div className="flex items-center gap-1.5 border-b border-slate-100 bg-slate-50 px-2 py-1">
+      <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-1.5">
         <button
           onClick={onToggleExpanded}
           className="flex h-4 w-4 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600"
@@ -87,7 +91,19 @@ export function ModelNode({
           onChange={(e) => handleCheckboxChange(e.target.checked)}
         />
 
-        <span className="truncate text-sm font-semibold text-slate-800">{model}</span>
+        <span className="truncate text-sm text-slate-800">
+          {providerLabel ? (
+            <>
+              <span className="font-mono font-semibold text-slate-700 capitalize">
+                {providerLabel}
+              </span>
+              <span className="text-slate-400">:</span>
+              <span className="font-mono font-medium text-slate-700">{modelLabel}</span>
+            </>
+          ) : (
+            <span className="font-mono font-medium text-slate-700">{modelLabel}</span>
+          )}
+        </span>
 
         <span
           className={`rounded-full px-1.5 py-0.5 text-[11px] font-medium ${
@@ -103,7 +119,7 @@ export function ModelNode({
       </div>
 
       {isExpanded && (
-        <div className="space-y-0.5 p-1">
+        <div className="space-y-1 p-1.5">
           {suites
             .sort(
               (a, b) =>

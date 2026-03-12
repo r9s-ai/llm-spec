@@ -10,18 +10,17 @@ export function TestingPage() {
     providers,
     suites: suiteList,
     selectedTestsBySuite,
-    expandedProviders,
     expandedSuites,
     selectedTestCount,
     isLoading,
     isRefreshingRegistryCache,
     refreshRegistryCache,
-    toggleProvider,
-    toggleProviderPanel,
     toggleSuitePanel,
     toggleTest,
     selectAllProviders,
     clearAllProviders,
+    setSelectedProviders,
+    selectedProviders,
   } = suites;
 
   const {
@@ -115,6 +114,44 @@ export function TestingPage() {
     suites.setSelectedTestsBySuite({});
   }, [clearAllProviders, suites]);
 
+  const handleSelectProvider = useCallback(
+    (providerId: string) => {
+      const providerSuites = suiteList.filter((suite) => suite.provider_id === providerId);
+      const totalTests = providerSuites.reduce(
+        (sum, suite) => sum + (Array.isArray(suite.tests) ? suite.tests.length : 0),
+        0
+      );
+      const selectedTests = providerSuites.reduce((sum, suite) => {
+        const bucket = selectedTestsBySuite[suite.suite_id];
+        return sum + (bucket ? bucket.size : 0);
+      }, 0);
+      const isFullySelected = totalTests > 0 && selectedTests >= totalTests;
+
+      setSelectedProviders((prev) => {
+        const next = new Set(prev);
+        if (isFullySelected) next.delete(providerId);
+        else next.add(providerId);
+        return next;
+      });
+
+      suites.setSelectedTestsBySuite((prev) => {
+        const next: typeof prev = { ...prev };
+        providerSuites.forEach((suite) => {
+          if (!Array.isArray(suite.tests)) return;
+          if (isFullySelected) {
+            delete next[suite.suite_id];
+            return;
+          }
+          const bucket = new Set(next[suite.suite_id] ?? []);
+          suite.tests.forEach((test) => bucket.add(test.name));
+          next[suite.suite_id] = bucket;
+        });
+        return next;
+      });
+    },
+    [selectedTestsBySuite, setSelectedProviders, suiteList, suites]
+  );
+
   // Handle delete task
   const handleDeleteTask = useCallback(
     async (taskId: string) => {
@@ -152,7 +189,7 @@ export function TestingPage() {
             providers={providers}
             suites={suiteList}
             selectedTestsBySuite={selectedTestsBySuite}
-            expandedProviders={expandedProviders}
+            selectedProviders={selectedProviders}
             expandedSuites={expandedSuites}
             selectedTestCount={selectedTestCount}
             runMode={runMode}
@@ -160,13 +197,12 @@ export function TestingPage() {
             isLoading={isLoading}
             isRefreshingCache={isRefreshingRegistryCache}
             maxConcurrent={maxConcurrent}
-            onToggleProvider={toggleProvider}
-            onToggleProviderExpanded={toggleProviderPanel}
             onToggleSuiteExpanded={toggleSuitePanel}
             onToggleTests={handleToggleTests}
             onToggleTest={toggleTest}
             onSelectAll={handleSelectAll}
             onClearAll={handleClearAll}
+            onSelectProvider={handleSelectProvider}
             onRunModeChange={setRunMode}
             onMaxConcurrentChange={setMaxConcurrent}
             onRefreshCache={() => void handleRefreshMemory()}

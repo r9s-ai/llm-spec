@@ -1,13 +1,14 @@
 import { useState, useMemo, useCallback } from "react";
 import { SearchInput } from "./SearchInput";
-import { ProviderNode } from "./ProviderNode";
+import { ModelNode } from "./ModelNode";
 import type { Suite, TestSelectionMap, RunMode } from "../../types";
+import { getTestRows } from "../../utils";
 
 interface TestSelectorProps {
   providers: string[];
   suites: Suite[];
   selectedTestsBySuite: TestSelectionMap;
-  expandedProviders: Set<string>;
+  selectedProviders: Set<string>;
   expandedSuites: Set<string>;
   selectedTestCount: number;
   runMode: RunMode;
@@ -15,13 +16,12 @@ interface TestSelectorProps {
   isRunning: boolean;
   isLoading: boolean;
   isRefreshingCache: boolean;
-  onToggleProvider: (provider: string) => void;
-  onToggleProviderExpanded: (provider: string) => void;
   onToggleSuiteExpanded: (suiteId: string) => void;
   onToggleTests: (suiteId: string, testNames: string[], checked: boolean) => void;
   onToggleTest: (suiteId: string, testName: string, checked: boolean) => void;
   onSelectAll: () => void;
   onClearAll: () => void;
+  onSelectProvider: (providerId: string) => void;
   onRunModeChange: (mode: RunMode) => void;
   onMaxConcurrentChange: (max: number) => void;
   onRefreshCache: () => void;
@@ -32,7 +32,7 @@ export function TestSelector({
   providers,
   suites,
   selectedTestsBySuite,
-  expandedProviders,
+  selectedProviders,
   expandedSuites,
   selectedTestCount,
   runMode,
@@ -40,32 +40,34 @@ export function TestSelector({
   isRunning,
   isLoading,
   isRefreshingCache,
-  onToggleProviderExpanded,
   onToggleSuiteExpanded,
   onToggleTests,
   onToggleTest,
   onSelectAll,
   onClearAll,
+  onSelectProvider,
   onRunModeChange,
   onMaxConcurrentChange,
   onRefreshCache,
   onRun,
 }: TestSelectorProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [expandedModelGroups, setExpandedModelGroups] = useState<Set<string>>(new Set<string>());
 
-  // Group suites by provider
-  const suitesByProvider = useMemo(() => {
-    const grouped: Record<string, Suite[]> = {};
+  const suitesByProviderModel = useMemo(() => {
+    const grouped: Record<string, { key: string; provider: string; model: string; suites: Suite[] }> =
+      {};
     suites.forEach((suite) => {
-      if (!grouped[suite.provider_id]) {
-        grouped[suite.provider_id] = [];
+      const key = `${suite.provider_id}:${suite.model_id}`;
+      if (!grouped[key]) {
+        grouped[key] = { key, provider: suite.provider_id, model: suite.model_id, suites: [] };
       }
-      grouped[suite.provider_id].push(suite);
+      grouped[key].suites.push(suite);
     });
     return grouped;
   }, [suites]);
 
-  const { routeCount, modelCount } = useMemo(() => {
+  const { modelCount } = useMemo(() => {
     const routeSet = new Set<string>();
     const modelSet = new Set<string>();
     suites.forEach((suite) => {
@@ -74,133 +76,166 @@ export function TestSelector({
     });
     return { routeCount: routeSet.size, modelCount: modelSet.size };
   }, [suites]);
-
-  // Expand all when searching
-  const handleSearchChange = useCallback(
-    (value: string) => {
-      setSearchQuery(value);
-      // Auto-expand all providers when searching
-      if (value) {
-        providers.forEach((provider) => {
-          if (!expandedProviders.has(provider)) {
-            onToggleProviderExpanded(provider);
-          }
-        });
-      }
-    },
-    [providers, expandedProviders, onToggleProviderExpanded]
+  const totalTestCount = useMemo(
+    () => suites.reduce((sum, suite) => sum + getTestRows(suite).length, 0),
+    [suites]
   );
+  const isAllSelected = totalTestCount > 0 && selectedTestCount === totalTestCount;
+
+  const filteredGroups = useMemo(() => {
+    const groups = Object.values(suitesByProviderModel);
+    if (!searchQuery) return groups;
+    const query = searchQuery.toLowerCase();
+
+    return groups
+      .map((group) => {
+        if (
+          group.provider.toLowerCase().includes(query) ||
+          group.model.toLowerCase().includes(query)
+        ) {
+          return group;
+        }
+
+        const suitesMatching = group.suites.filter((suite) => {
+          const tests = getTestRows(suite);
+          const route = suite.route_id.toLowerCase();
+          const endpoint = suite.endpoint.toLowerCase();
+          const suiteName = suite.suite_name.toLowerCase();
+          return (
+            route.includes(query) ||
+            endpoint.includes(query) ||
+            suiteName.includes(query) ||
+            tests.some(
+              (t) =>
+                t.name.toLowerCase().includes(query) ||
+                t.paramName.toLowerCase().includes(query) ||
+                t.tags.some((tag) => tag.toLowerCase().includes(query))
+            )
+          );
+        });
+
+        if (suitesMatching.length === 0) return null;
+        return { ...group, suites: suitesMatching };
+      })
+      .filter((group): group is { key: string; provider: string; model: string; suites: Suite[] } =>
+        Boolean(group)
+      );
+  }, [suitesByProviderModel, searchQuery]);
+
+  const sortedGroups = useMemo(
+    () =>
+      filteredGroups.slice().sort(
+        (a, b) =>
+          a.provider.localeCompare(b.provider) || a.model.localeCompare(b.model)
+      ),
+    [filteredGroups]
+  );
+
+  const groupKeys = useMemo(() => sortedGroups.map((group) => group.key), [sortedGroups]);
+
+  const effectiveExpandedGroups = useMemo(() => {
+    if (searchQuery) return new Set(groupKeys);
+    return new Set(Array.from(expandedModelGroups).filter((key) => groupKeys.includes(key)));
+  }, [expandedModelGroups, searchQuery, groupKeys]);
+
+  const handleToggleGroupExpanded = useCallback(
+    (groupKey: string) => {
+      if (searchQuery) return;
+      setExpandedModelGroups((prev) => {
+        const next = new Set(prev);
+        if (next.has(groupKey)) next.delete(groupKey);
+        else next.add(groupKey);
+        return next;
+      });
+    },
+    [searchQuery]
+  );
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+  }, []);
 
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex-shrink-0 space-y-2 pb-2">
-        {/* Row 1: Run controls */}
-        <div className="flex items-center gap-2">
-          {/* Mode selector */}
-          <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
-            <button
-              onClick={() => onRunModeChange("real")}
-              disabled={isRunning}
-              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
-                runMode === "real"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              } ${isRunning ? "cursor-not-allowed opacity-50" : ""}`}
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-              Real
-            </button>
-            <button
-              onClick={() => onRunModeChange("mock")}
-              disabled={isRunning}
-              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
-                runMode === "mock"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              } ${isRunning ? "cursor-not-allowed opacity-50" : ""}`}
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-              Mock
-            </button>
+      <div className="flex-shrink-0 space-y-1 pb-2">
+        <div className="grid grid-cols-[1fr_128px] gap-2">
+          <div className="space-y-1">
+            {/* Row 1: Run controls */}
+            <div className="flex items-center gap-3">
+              {/* Mode selector */}
+              <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5 flex-1">
+                <button
+                  onClick={() => onRunModeChange("real")}
+                  disabled={isRunning}
+                  className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
+                    runMode === "real"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  } ${isRunning ? "cursor-not-allowed opacity-50" : ""}`}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                  Real
+                </button>
+                <button
+                  onClick={() => onRunModeChange("mock")}
+                  disabled={isRunning}
+                  className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
+                    runMode === "mock"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  } ${isRunning ? "cursor-not-allowed opacity-50" : ""}`}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  Mock
+                </button>
+              </div>
+
+              {/* Concurrent selector */}
+              <div className="ml-auto flex items-center gap-1">
+                <span className="text-xs text-slate-500">Concurrent:</span>
+                <select
+                  value={maxConcurrent}
+                  onChange={(e) => onMaxConcurrentChange(Number(e.target.value))}
+                  disabled={isRunning}
+                  className={`h-7 rounded-md border border-slate-200 bg-white px-1.5 text-xs font-medium text-slate-700 ${
+                    isRunning ? "cursor-not-allowed opacity-50" : ""
+                  }`}
+                >
+                  <option value={1}>1</option>
+                  <option value={3}>3</option>
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Row 2: Stats - centered */}
+            <div className="text-center text-xs font-mono tracking-wide text-slate-600">
+              <span className="inline-block min-w-[3ch] text-right font-semibold text-slate-900 tabular-nums">
+                {modelCount}
+              </span>{" "}
+              models ·{" "}
+              <span className="inline-block min-w-[3ch] text-right font-semibold text-slate-900 tabular-nums">
+                {selectedTestCount}
+              </span>{" "}
+              selected
+            </div>
           </div>
 
-          {/* Concurrent selector */}
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-slate-500">Concurrent:</span>
-            <select
-              value={maxConcurrent}
-              onChange={(e) => onMaxConcurrentChange(Number(e.target.value))}
-              disabled={isRunning}
-              className={`h-7 rounded-md border border-slate-200 bg-white px-1.5 text-xs font-medium text-slate-700 ${
-                isRunning ? "cursor-not-allowed opacity-50" : ""
-              }`}
-            >
-              <option value={1}>1</option>
-              <option value={3}>3</option>
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-            </select>
-          </div>
-
-          {/* Run button */}
+          {/* Run button (spans two rows) */}
           <button
             onClick={onRun}
             disabled={selectedTestCount === 0 || isRunning}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+            className={`row-span-2 flex items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold transition-all h-12 ${
               selectedTestCount > 0 && !isRunning
                 ? "bg-violet-600 text-white shadow-lg shadow-violet-200 hover:bg-violet-700 active:scale-[0.98]"
                 : "cursor-not-allowed bg-slate-200 text-slate-400"
             }`}
           >
-            {isRunning ? (
-              <>
-                <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                Running...
-              </>
-            ) : (
-              <>
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                Run {selectedTestCount}
-              </>
-            )}
+            Run
           </button>
-        </div>
-
-        {/* Row 2: Stats - centered with bold numbers */}
-        <div className="text-center text-xs text-slate-600">
-          <span className="font-bold text-slate-900">{providers.length}</span> providers ·{" "}
-          <span className="font-bold text-slate-900">{modelCount}</span> models ·{" "}
-          <span className="font-bold text-slate-900">{routeCount}</span> routes ·{" "}
-          <span className="font-bold text-slate-900">{selectedTestCount}</span> selected
         </div>
 
         {/* Row 3: Search + Buttons (same height) */}
@@ -211,26 +246,53 @@ export function TestSelector({
           <button
             onClick={onRefreshCache}
             disabled={isRefreshingCache || isLoading}
-            className={`h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-medium ${
+            className={`h-8 w-8 rounded-lg border border-slate-200 text-xs font-medium flex items-center justify-center ${
               isRefreshingCache || isLoading
                 ? "cursor-not-allowed text-slate-400"
                 : "text-slate-600 hover:bg-slate-50"
             }`}
+            title="Refresh Memory"
           >
-            {isRefreshingCache ? "Refreshing..." : "Refresh Memory"}
+            <svg
+              className={`h-4 w-4 ${isRefreshingCache ? "animate-spin" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v6h6M20 20v-6h-6M5 19a9 9 0 0014-7M19 5a9 9 0 00-14 7"
+              />
+            </svg>
           </button>
           <button
-            onClick={onSelectAll}
+            onClick={isAllSelected ? onClearAll : onSelectAll}
             className="h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
           >
-            All
+            {isAllSelected ? "Clear" : "All"}
           </button>
-          <button
-            onClick={onClearAll}
-            className="h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
-          >
-            Clear
-          </button>
+        </div>
+
+        {/* Row 4: Provider buttons */}
+        <div className="flex flex-wrap gap-1.5">
+          {providers.map((provider) => {
+            const isSelected = selectedProviders.has(provider);
+            return (
+              <button
+                key={provider}
+                onClick={() => onSelectProvider(provider)}
+                className={`h-8 rounded-lg border px-2.5 text-xs font-medium transition-colors ${
+                  isSelected
+                    ? "border-violet-300 bg-violet-50 text-violet-700"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {provider}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -238,7 +300,7 @@ export function TestSelector({
       <div className="border-b border-slate-200" />
 
       {/* Provider List */}
-      <div className="flex-1 overflow-auto pt-2">
+      <div className="flex-1 overflow-auto pt-2 space-y-1.5">
         {isLoading && (
           <div className="space-y-2 px-1 py-2">
             {[0, 1, 2].map((idx) => (
@@ -251,28 +313,23 @@ export function TestSelector({
         )}
 
         {!isLoading &&
-          providers.sort().map((provider) => {
-            const providerSuites = suitesByProvider[provider] ?? [];
-            if (searchQuery && providerSuites.length === 0) return null;
+          sortedGroups.map((group) => (
+            <ModelNode
+              key={group.key}
+              model={`${group.provider}:${group.model}`}
+              suites={group.suites}
+              selectedTestsBySuite={selectedTestsBySuite}
+              expandedSuites={expandedSuites}
+              isExpanded={effectiveExpandedGroups.has(group.key)}
+              searchQuery={searchQuery}
+              onToggleExpanded={() => handleToggleGroupExpanded(group.key)}
+              onToggleSuiteExpanded={onToggleSuiteExpanded}
+              onToggleTests={onToggleTests}
+              onToggleTest={onToggleTest}
+            />
+          ))}
 
-            return (
-              <ProviderNode
-                key={provider}
-                provider={provider}
-                suites={providerSuites}
-                selectedTestsBySuite={selectedTestsBySuite}
-                expandedSuites={expandedSuites}
-                isExpanded={expandedProviders.has(provider)}
-                searchQuery={searchQuery}
-                onToggleExpanded={() => onToggleProviderExpanded(provider)}
-                onToggleSuiteExpanded={onToggleSuiteExpanded}
-                onToggleTests={onToggleTests}
-                onToggleTest={onToggleTest}
-              />
-            );
-          })}
-
-        {!isLoading && providers.length === 0 && (
+        {!isLoading && sortedGroups.length === 0 && (
           <div className="py-8 text-center text-sm text-slate-500">No suites available</div>
         )}
       </div>

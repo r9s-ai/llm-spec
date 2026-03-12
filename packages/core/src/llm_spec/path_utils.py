@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-_INDEXED_PART_RE = re.compile(r"^(\w+)\[(\d+)\]$")
+_INDEXED_PART_RE = re.compile(r"^(\w+)\[(\d+|\*)\]$")
 
 
 def get_value_at_path(obj: Any, path: str | None) -> Any:
@@ -14,12 +14,14 @@ def get_value_at_path(obj: Any, path: str | None) -> Any:
     Supports paths like:
     - ``choices[0].message.content``
     - ``generationConfig.temperature``
+    - ``candidates[0].content.parts[*].inlineData.data`` (wildcard list match)
     """
     if not path:
         return None
 
     current = obj
-    for part in path.split("."):
+    parts = path.split(".")
+    for i, part in enumerate(parts):
         indexed = _INDEXED_PART_RE.match(part)
         if indexed:
             key, idx_str = indexed.groups()
@@ -27,6 +29,17 @@ def get_value_at_path(obj: Any, path: str | None) -> Any:
                 return None
             current = current[key]
             if not isinstance(current, list):
+                return None
+            if idx_str == "*":
+                remaining_path = ".".join(parts[i + 1 :])
+                for item in current:
+                    if remaining_path:
+                        val = get_value_at_path(item, remaining_path)
+                        if val is not None:
+                            return val
+                    else:
+                        if item is not None:
+                            return item
                 return None
             idx = int(idx_str)
             if idx >= len(current):

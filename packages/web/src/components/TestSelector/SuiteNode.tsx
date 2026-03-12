@@ -53,7 +53,7 @@ export function SuiteNode({
   return (
     <div className="rounded-sm border border-slate-200/40 bg-white/80">
       {/* Route Header */}
-      <div className="flex items-center gap-0.5 px-1 py-0.5 hover:bg-slate-50">
+      <div className="flex items-center gap-1 px-2 py-1 hover:bg-slate-50">
         {/* Expand Button */}
         <button
           onClick={onToggleExpanded}
@@ -107,7 +107,7 @@ export function SuiteNode({
 
       {/* Tests List - Very compact */}
       {isExpanded && filteredTests.length > 0 && (
-        <div className="border-t border-slate-100 py-0.5">
+        <div className="border-t border-slate-100 py-1">
           {filteredTests.map((test) => (
             <TestNode
               key={test.name}

@@ -279,7 +279,6 @@ export function useTasks() {
         attachRunStream(task.id, run.id);
       }
 
-      onNotice("Task started.");
     },
     [upsertTask, attachRunStream]
   );

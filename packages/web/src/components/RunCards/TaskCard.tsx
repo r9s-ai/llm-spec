@@ -71,47 +71,42 @@ export function TaskCard({
   );
 
   const groupedRuns = useMemo(() => {
-    const grouped = new Map<string, Map<string, typeof task.runs>>();
+    const grouped = new Map<string, { provider: string; model: string; runs: typeof task.runs }>();
     for (const run of task.runs) {
-      const providerKey = run.provider;
       const modelKey = run.model ?? "unknown";
-      if (!grouped.has(providerKey)) {
-        grouped.set(providerKey, new Map<string, typeof task.runs>());
+      const groupKey = `${run.provider}:${modelKey}`;
+      if (!grouped.has(groupKey)) {
+        grouped.set(groupKey, { provider: run.provider, model: modelKey, runs: [] });
       }
-      const providerMap = grouped.get(providerKey)!;
-      if (!providerMap.has(modelKey)) {
-        providerMap.set(modelKey, []);
-      }
-      providerMap.get(modelKey)!.push(run);
+      grouped.get(groupKey)!.runs.push(run);
     }
 
     return Array.from(grouped.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([provider, models]) => ({
-        provider,
-        models: Array.from(models.entries())
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([model, runs]) => {
-            const modelTotal = runs.reduce((sum, run) => sum + run.progress_total, 0);
-            const modelDone = runs.reduce((sum, run) => sum + run.progress_done, 0);
-            const modelPassed = runs.reduce((sum, run) => sum + run.progress_passed, 0);
-            const modelFailed = runs.reduce((sum, run) => sum + run.progress_failed, 0);
-            return {
-              model,
-              runs: [...runs].sort((a, b) => {
-                const routeA = a.route ?? a.endpoint;
-                const routeB = b.route ?? b.endpoint;
-                return routeA.localeCompare(routeB);
-              }),
-              summary: {
-                total: modelTotal,
-                done: modelDone,
-                passed: modelPassed,
-                failed: modelFailed,
-              },
-            };
+      .map(([groupKey, entry]) => {
+        const modelTotal = entry.runs.reduce((sum, run) => sum + run.progress_total, 0);
+        const modelDone = entry.runs.reduce((sum, run) => sum + run.progress_done, 0);
+        const modelPassed = entry.runs.reduce((sum, run) => sum + run.progress_passed, 0);
+        const modelFailed = entry.runs.reduce((sum, run) => sum + run.progress_failed, 0);
+        return {
+          key: groupKey,
+          provider: entry.provider,
+          model: entry.model,
+          runs: [...entry.runs].sort((a, b) => {
+            const routeA = a.route ?? a.endpoint;
+            const routeB = b.route ?? b.endpoint;
+            return routeA.localeCompare(routeB);
           }),
-      }));
+          summary: {
+            total: modelTotal,
+            done: modelDone,
+            passed: modelPassed,
+            failed: modelFailed,
+          },
+        };
+      })
+      .sort(
+        (a, b) => a.provider.localeCompare(b.provider) || a.model.localeCompare(b.model)
+      );
   }, [task]);
 
   const handleDelete = async () => {
@@ -399,46 +394,43 @@ export function TaskCard({
       {isExpanded && (
         <div className="border-t border-slate-100">
           <div className="space-y-2 p-3 bg-slate-50/50">
-            {groupedRuns.map((providerGroup) => (
-              <div key={providerGroup.provider} className="rounded-lg border border-slate-200 bg-white">
-                <div className="border-b border-slate-100 px-3 py-2 text-sm font-bold text-slate-900">
-                  {providerGroup.provider}
+            {groupedRuns.map((group) => (
+              <div key={group.key} className="rounded-lg border border-slate-200 bg-white">
+                <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 text-xs">
+                  <span className="text-base text-slate-800">
+                    <span className="font-mono font-medium text-slate-700">
+                      <span className="font-semibold capitalize">{group.provider}</span>
+                    </span>
+                    <span className="text-slate-400">:</span>
+                    <span className="font-mono font-medium text-slate-700">
+                      {group.model}
+                    </span>
+                  </span>
+                  <span className="text-slate-500">
+                    {group.summary.done}/{group.summary.total} ·{" "}
+                    <span className="text-green-700">{group.summary.passed} pass</span> ·{" "}
+                    <span className="text-red-700">{group.summary.failed} fail</span>
+                  </span>
                 </div>
-                <div className="space-y-2 p-2">
-                  {providerGroup.models.map((modelGroup) => (
-                    <div key={`${providerGroup.provider}:${modelGroup.model}`} className="rounded-md border border-slate-100">
-                      <div className="flex items-center justify-between bg-slate-50 px-3 py-1.5 text-xs">
-                        <span className="font-semibold text-slate-700">
-                          Model: {modelGroup.model}
-                        </span>
-                        <span className="text-slate-500">
-                          {modelGroup.summary.done}/{modelGroup.summary.total} ·{" "}
-                          <span className="text-green-700">{modelGroup.summary.passed} pass</span> ·{" "}
-                          <span className="text-red-700">{modelGroup.summary.failed} fail</span>
-                        </span>
-                      </div>
-                      <div className="divide-y divide-slate-100">
-                        {modelGroup.runs.map((run) => {
-                          const events = eventsByRunId[run.id] ?? [];
-                          const result = resultsByRunId[run.id];
-                          const summary = result?.summary as RunSummary | undefined;
+                <div className="divide-y divide-slate-100">
+                  {group.runs.map((run) => {
+                    const events = eventsByRunId[run.id] ?? [];
+                    const result = resultsByRunId[run.id];
+                    const summary = result?.summary as RunSummary | undefined;
 
-                          if (run.status === "running" || run.status === "queued") {
-                            return <ActiveRunCard key={run.id} run={run} events={events} />;
-                          }
-                          return (
-                            <CompletedRunCard
-                              key={run.id}
-                              run={run}
-                              summary={summary}
-                              result={result}
-                              onRetryFailedTest={onRetryFailedTest}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
+                    if (run.status === "running" || run.status === "queued") {
+                      return <ActiveRunCard key={run.id} run={run} events={events} />;
+                    }
+                    return (
+                      <CompletedRunCard
+                        key={run.id}
+                        run={run}
+                        summary={summary}
+                        result={result}
+                        onRetryFailedTest={onRetryFailedTest}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             ))}
