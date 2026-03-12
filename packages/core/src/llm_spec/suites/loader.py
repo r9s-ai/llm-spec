@@ -7,7 +7,6 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-import json5
 from pydantic import BaseModel as PydanticBaseModel
 from pydantic import ConfigDict, Field, model_validator
 
@@ -100,25 +99,6 @@ def _raw_schemas_to_schema_ref(raw: dict[str, str] | None) -> SchemaRef | None:
     if not raw:
         return None
     return SchemaRef(response=raw.get("response"), stream_chunk=raw.get("stream_chunk"))
-
-
-def _raw_to_test_def(t: _RawTestCase) -> TestDef:
-    """Convert a validated _RawTestCase (no variants) to a TestDef."""
-    return TestDef(
-        name=t.name,
-        description=t.description,
-        params=t.params,
-        focus_param=_raw_focus_to_focus_param(t.focus_param),
-        baseline=t.baseline,
-        check_stream=t.check_stream if isinstance(t.check_stream, bool) else False,
-        stream_rules=t.effective_stream_rules,
-        endpoint_override=t.endpoint_override,
-        files=t.files,
-        schemas=_raw_schemas_to_schema_ref(t.schemas),
-        required_fields=t.required_fields,
-        method=t.method,
-        tags=t.tags,
-    )
 
 
 # ── Variant expansion ────────────────────────────────────
@@ -228,7 +208,23 @@ def parse_route_dict(
         if t.variants:
             tests.extend(expand_parameterized_tests(t_dict))
         else:
-            tests.append(_raw_to_test_def(t))
+            tests.append(
+                TestDef(
+                    name=t.name,
+                    description=t.description,
+                    params=t.params,
+                    focus_param=_raw_focus_to_focus_param(t.focus_param),
+                    baseline=t.baseline,
+                    check_stream=t.check_stream if isinstance(t.check_stream, bool) else False,
+                    stream_rules=t.effective_stream_rules,
+                    endpoint_override=t.endpoint_override,
+                    files=t.files,
+                    schemas=_raw_schemas_to_schema_ref(t.schemas),
+                    required_fields=t.required_fields,
+                    method=t.method,
+                    tags=t.tags,
+                )
+            )
 
     suite_schemas = SchemaRef(
         response=raw_suite.schemas.get("response"),
@@ -246,14 +242,3 @@ def parse_route_dict(
         suite_label=raw_suite.suite_name,
         source_path=source_path,
     )
-
-
-def load_route(config_path: Path, *, route_id: str = "") -> RouteSpec:
-    """Load a route configuration file (JSON5)."""
-    with open(config_path, encoding="utf-8") as f:
-        raw_data = json5.load(f)
-
-    if not route_id:
-        route_id = config_path.stem
-
-    return parse_route_dict(raw_data, route_id=route_id, source_path=config_path)

@@ -5,7 +5,7 @@ from llm_spec.suites.types import FocusParam
 
 def test_build_run_result_contains_verdicts() -> None:
     verdict = TestVerdict(
-        case_id="openai:gpt-5.2:responses:baseline",
+        case_id="suite:openai:gpt-5.2:responses:baseline",
         test_name="baseline",
         focus=FocusParam(name="temperature", value=0.7),
         status="pass",

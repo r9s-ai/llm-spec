@@ -25,7 +25,7 @@ from llm_spec.executor import (
     run_task_suites,
 )
 from llm_spec.results.result_types import TestVerdict
-from llm_spec.suites import TestCase
+from llm_spec.suites import ExecutableCase
 from llm_spec_web.config import settings
 from llm_spec_web.core.event_bus import event_bus
 from llm_spec_web.core.exceptions import ConfigurationError, NotFoundError, ValidationError
@@ -111,7 +111,7 @@ class RunExecutionService:
         run_repo: RunRepository,
         run_job: RunJob,
         run_case: Any,
-        target_case: TestCase,
+        target_case: ExecutableCase,
         app_config: Any,
     ) -> None:
         http_client = None
@@ -237,7 +237,7 @@ class RunExecutionService:
                 },
             )
 
-        async def _on_test_start(case: TestCase, idx: int, total: int) -> None:
+        async def _on_test_start(case: ExecutableCase, idx: int, total: int) -> None:
             for sid, cmap in case_id_maps.items():
                 if case.case_id in cmap:
                     job = run_map[sid]
@@ -448,7 +448,7 @@ class RunExecutionService:
                 },
             )
 
-        async def _on_test_start(case: TestCase, idx: int, total: int) -> None:
+        async def _on_test_start(case: ExecutableCase, idx: int, total: int) -> None:
             for sid, cmap in case_id_maps.items():
                 if case.case_id in cmap:
                     job = run_map[sid]

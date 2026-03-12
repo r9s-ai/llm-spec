@@ -2,14 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from llm_spec.suites.registry import load_registry_suites
+from llm_spec.suites.registry import load_SuiteSpecs
 
 
 def test_registry_expands_openai_chat_model() -> None:
     repo_root = Path(__file__).resolve().parents[4]
-    suites = load_registry_suites(repo_root / "suites-registry" / "providers")
+    suites = load_SuiteSpecs(repo_root / "suites-registry" / "providers")
 
     match = next(
         s
@@ -25,7 +23,7 @@ def test_registry_expands_openai_chat_model() -> None:
 
 def test_registry_expands_gemini_endpoint_placeholder() -> None:
     repo_root = Path(__file__).resolve().parents[4]
-    suites = load_registry_suites(repo_root / "suites-registry" / "providers")
+    suites = load_SuiteSpecs(repo_root / "suites-registry" / "providers")
 
     match = next(
         s
@@ -42,7 +40,7 @@ def test_registry_expands_gemini_endpoint_placeholder() -> None:
 
 def test_registry_resolves_routes_from_inheritance() -> None:
     repo_root = Path(__file__).resolve().parents[4]
-    suites = load_registry_suites(repo_root / "suites-registry" / "providers")
+    suites = load_SuiteSpecs(repo_root / "suites-registry" / "providers")
 
     match = next(
         s
@@ -79,58 +77,13 @@ def test_registry_filters_tests_with_include_and_exclude(tmp_path: Path) -> None
         """
         name = "demo-model"
         routes = ["chat"]
-        include_tests = ["baseline", "temperature", "extra_kept"]
+        include_tests = ["baseline", "temperature", "top_p"]
         exclude_tests = ["temperature"]
-
-        [[extra_tests]]
-        route = "chat"
-        name = "extra_kept"
-        params = { user = "u1" }
-        focus_param = { name = "user", value = "u1" }
-
-        [[extra_tests]]
-        route = "chat"
-        name = "extra_dropped"
-        params = { user = "u2" }
-        focus_param = { name = "user", value = "u2" }
         """,
         encoding="utf-8",
     )
 
-    suites = load_registry_suites(providers_dir)
+    suites = load_SuiteSpecs(providers_dir)
     assert len(suites) == 1
     test_names = [t.name for t in suites[0].tests]
-    assert test_names == ["baseline", "extra_kept"]
-
-
-def test_registry_rejects_legacy_skip_tests(tmp_path: Path) -> None:
-    providers_dir = tmp_path / "providers"
-    provider_dir = providers_dir / "demo"
-    routes_dir = provider_dir / "routes"
-    models_dir = provider_dir / "models"
-    routes_dir.mkdir(parents=True)
-    models_dir.mkdir(parents=True)
-
-    (provider_dir / "provider.toml").write_text('api_family = "openai"\n', encoding="utf-8")
-    (routes_dir / "chat.json5").write_text(
-        """
-        {
-          endpoint: "/v1/chat/completions",
-          tests: [
-            { name: "baseline", baseline: true, params: { messages: [{ role: "user", content: "hi" }] } },
-          ],
-        }
-        """,
-        encoding="utf-8",
-    )
-    (models_dir / "demo-model.toml").write_text(
-        """
-        name = "demo-model"
-        routes = ["chat"]
-        skip_tests = ["temperature"]
-        """,
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ValueError, match="deprecated 'skip_tests'"):
-        load_registry_suites(providers_dir)
+    assert test_names == ["baseline", "top_p"]
