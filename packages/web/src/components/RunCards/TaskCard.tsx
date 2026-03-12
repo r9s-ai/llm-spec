@@ -5,7 +5,6 @@ import { CompletedRunCard } from "./CompletedRunCard";
 import { ProgressBar } from "./ProgressBar";
 import type { RunEvent, RunJob, RunSummary, TaskWithRuns } from "../../types";
 import * as api from "../../api";
-import { formatRelativeTime } from "../../utils/formatters";
 
 interface TaskCardProps {
   task: TaskWithRuns;
@@ -170,65 +169,66 @@ export function TaskCard({
     <div className="border border-slate-200 rounded-xl bg-white shadow-md overflow-hidden">
       {/* Header - More prominent */}
       <div
-        className="flex items-center justify-between gap-4 px-5 py-4 bg-gradient-to-r from-slate-50 to-slate-100 cursor-pointer hover:from-slate-100 hover:to-slate-150 transition-colors border-b border-slate-200"
+        className="grid grid-cols-[auto_1fr] gap-4 px-5 py-4 bg-gradient-to-r from-slate-50 to-slate-100 cursor-pointer hover:from-slate-100 hover:to-slate-150 transition-colors border-b border-slate-200"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div className="flex items-center gap-4">
-          {/* Status Icon */}
-          <div
-            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-              isRunning ? "bg-violet-100" : isCompleted && !isFailed ? "bg-green-100" : "bg-red-100"
-            }`}
-          >
-            {isRunning ? (
-              <svg className="w-5 h-5 text-violet-600 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-            ) : isCompleted && !isFailed ? (
-              <svg
-                className="w-5 h-5 text-green-600"
-                fill="none"
-                viewBox="0 0 24 24"
+        {/* Status Icon */}
+        <div
+          className={`w-10 h-10 rounded-full flex items-center justify-center ${
+            isRunning ? "bg-violet-100" : isCompleted && !isFailed ? "bg-green-100" : "bg-red-100"
+          }`}
+        >
+          {isRunning ? (
+            <svg className="w-5 h-5 text-violet-600 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
                 stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            ) : (
-              <svg
-                className="w-5 h-5 text-red-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            )}
-          </div>
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+          ) : isCompleted && !isFailed ? (
+            <svg
+              className="w-5 h-5 text-green-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          ) : (
+            <svg
+              className="w-5 h-5 text-red-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          )}
+        </div>
 
-          <div>
-            <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3">
+          {/* Block A: header row (left info + right stats/actions) */}
+          <div className="flex w-full items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               {/* Editable Name */}
               {isEditingName ? (
                 <input
@@ -264,86 +264,126 @@ export function TaskCard({
                   </svg>
                 </span>
               )}
-              <Badge
-                variant={isRunning ? "running" : isCompleted && !isFailed ? "success" : "error"}
-              >
-                {isRunning ? "Running" : isCompleted && !isFailed ? "Completed" : "Failed"}
-              </Badge>
+              {(isRunning || isFailed) && (
+                <Badge variant={isRunning ? "running" : "error"}>
+                  {isRunning ? "Running" : "Failed"}
+                </Badge>
+              )}
               <span className="text-xs text-slate-400 bg-slate-200 px-2 py-0.5 rounded">
                 {task.mode}
               </span>
-            </div>
-            <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
-              <span>
-                {task.runs.length} run{task.runs.length !== 1 ? "s" : ""} · {modelCount} model
-                {modelCount !== 1 ? "s" : ""} · {routeCount} route{routeCount !== 1 ? "s" : ""}
+              <span className="text-sm text-slate-500">
+                {modelCount} model{modelCount !== 1 ? "s" : ""} · {routeCount} route
+                {routeCount !== 1 ? "s" : ""}
               </span>
-              <span>·</span>
-              <span>
+              <span className="text-sm text-slate-500">
                 {formatDate(task.created_at)} {formatTime(task.started_at)}
               </span>
-              <span>·</span>
-              <span className="text-slate-400">{formatRelativeTime(task.created_at)}</span>
             </div>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-4">
-          {/* Stats Pills */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 rounded-full">
-              <span className="h-2 w-2 rounded-full bg-green-500" />
-              <span className="text-sm font-semibold text-green-700">{passedTests}</span>
-              <span className="text-xs text-green-600">passed</span>
-            </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 rounded-full">
-              <span className="h-2 w-2 rounded-full bg-red-500" />
-              <span className="text-sm font-semibold text-red-700">{failedTests}</span>
-              <span className="text-xs text-red-600">failed</span>
-            </div>
-          </div>
-
-          {/* Progress indicator for running tasks */}
-          {isRunning && (
-            <div className="w-24">
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="font-medium text-violet-600">{progress}%</span>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 rounded-full">
+                  <span className="h-2 w-2 rounded-full bg-green-500" />
+                  <span className="text-sm font-semibold text-green-700">{passedTests}</span>
+                  <span className="text-xs text-green-600">passed</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 rounded-full">
+                  <span className="h-2 w-2 rounded-full bg-red-500" />
+                  <span className="text-sm font-semibold text-red-700">{failedTests}</span>
+                  <span className="text-xs text-red-600">failed</span>
+                </div>
               </div>
-              <ProgressBar progress={progress} variant="running" />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleDelete();
+                }}
+                disabled={isDeleting || isRunning}
+                className="w-8 h-8 rounded-full bg-slate-200 hover:bg-red-100 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Delete task"
+              >
+                <svg
+                  className={`w-4 h-4 ${isDeleting ? "text-slate-400 animate-spin" : "text-slate-600 hover:text-red-600"}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  {isDeleting ? (
+                    <>
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </>
+                  ) : (
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  )}
+                </svg>
+              </button>
+              <div
+                className={`w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center transition-transform ${isExpanded ? "rotate-180" : ""}`}
+              >
+                <svg
+                  className="w-4 h-4 text-slate-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </div>
             </div>
-          )}
+          </div>
 
-          {/* Delete button (icon only) */}
-          {isRunning && onCancel && (
+          {/* Block B: progress + cancel (own row) */}
+          <div className="flex w-full items-center justify-end gap-3">
+            <div className="flex items-center gap-2">
+              <span
+                className={`text-[11px] font-medium ${isRunning ? "text-violet-600" : "text-slate-400"}`}
+              >
+                {progress}%
+              </span>
+              <div className="w-48">
+                <ProgressBar progress={progress} variant={isRunning ? "running" : "default"} />
+              </div>
+            </div>
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                void handleCancel();
+                if (isRunning && onCancel) {
+                  void handleCancel();
+                }
               }}
-              disabled={isCancelling}
-              className="h-8 rounded-full border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!isRunning || !onCancel || isCancelling}
+              className={`h-7 w-7 rounded-full border flex items-center justify-center transition-colors disabled:cursor-not-allowed ${
+                isRunning
+                  ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                  : "border-slate-200 bg-slate-100 text-slate-400"
+              }`}
               title="Cancel task"
             >
-              {isCancelling ? "Cancelling..." : "Cancel"}
-            </button>
-          )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              void handleDelete();
-            }}
-            disabled={isDeleting || isRunning}
-            className="w-8 h-8 rounded-full bg-slate-200 hover:bg-red-100 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Delete task"
-          >
-            <svg
-              className={`w-4 h-4 ${isDeleting ? "text-slate-400 animate-spin" : "text-slate-600 hover:text-red-600"}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              {isDeleting ? (
-                <>
+              {isCancelling ? (
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle
                     className="opacity-25"
                     cx="12"
@@ -357,39 +397,21 @@ export function TaskCard({
                     fill="currentColor"
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   />
-                </>
+                </svg>
               ) : (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                />
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
               )}
-            </svg>
-          </button>
-
-          {/* Expand/Collapse icon */}
-          <div
-            className={`w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center transition-transform ${isExpanded ? "rotate-180" : ""}`}
-          >
-            <svg
-              className="w-4 h-4 text-slate-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
+            </button>
           </div>
         </div>
       </div>
-
       {/* Expanded Content */}
       {isExpanded && (
         <div className="border-t border-slate-100">

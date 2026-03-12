@@ -5,7 +5,7 @@ import { TestingPage, SuitesPage, SettingsPage } from "./pages";
 import type { PageKey } from "./types";
 
 function AppContent(): JSX.Element {
-  const { page, setPage, notice, settings } = useAppContext();
+  const { page, setPage, settings } = useAppContext();
 
   const handleNavigate = useCallback(
     async (target: PageKey): Promise<void> => {
@@ -19,7 +19,7 @@ function AppContent(): JSX.Element {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Header page={page} notice={notice} onNavigate={(p) => void handleNavigate(p)} />
+      <Header page={page} onNavigate={(p) => void handleNavigate(p)} />
 
       <main className="flex flex-col">
         {page === "testing" && <TestingPage />}
