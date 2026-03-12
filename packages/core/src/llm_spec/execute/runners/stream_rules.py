@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from llm_spec.path_utils import get_value_at_path
+from llm_spec.utils import get_value_at_path
 
 Observation = dict[str, Any]
 

@@ -1,4 +1,4 @@
-from llm_spec.validation.schemas.openai.images import ImageResponse, ImageStreamEvent
+from llm_spec.schemas.openai.images import ImageResponse, ImageStreamEvent
 
 
 def test_openai_images_response_schema_accepts_official_shape():

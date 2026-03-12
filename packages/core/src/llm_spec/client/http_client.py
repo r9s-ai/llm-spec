@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 
 from llm_spec.client.base_client import BaseHTTPClient
-from llm_spec.json_types import Headers, JSONValue
+from llm_spec.types import Headers, JSONValue
 
 
 class HTTPClient(BaseHTTPClient):

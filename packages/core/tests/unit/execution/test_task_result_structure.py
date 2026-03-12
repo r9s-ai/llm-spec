@@ -1,5 +1,5 @@
-from llm_spec.results.result_types import TestVerdict
-from llm_spec.results.task_result import build_run_result
+from llm_spec.execute.executor import build_run_result
+from llm_spec.execute.types import TestVerdict
 from llm_spec.suites.types import FocusParam
 
 

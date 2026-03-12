@@ -13,13 +13,13 @@ if TYPE_CHECKING:
     from pydantic import BaseModel
 
 from llm_spec.adapters.base import ProviderAdapter
-from llm_spec.path_utils import get_value_at_path
-from llm_spec.results.result_types import FailureInfo, TestVerdict
-from llm_spec.runners.asset_resolver import AssetResolver
-from llm_spec.runners.parsers import ResponseParser, StreamResponseParser
-from llm_spec.runners.stream_rules import extract_observations, validate_stream
+from llm_spec.execute.runners.asset_resolver import AssetResolver
+from llm_spec.execute.runners.parsers import ResponseParser, StreamResponseParser
+from llm_spec.execute.runners.stream_rules import extract_observations, validate_stream
+from llm_spec.execute.runners.validator import ResponseValidator
+from llm_spec.execute.types import FailureInfo, TestVerdict
 from llm_spec.suites.types import ExecutableCase
-from llm_spec.validation.validator import ResponseValidator
+from llm_spec.utils import get_value_at_path
 
 from .schema_registry import get_schema
 

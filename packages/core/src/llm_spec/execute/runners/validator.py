@@ -5,21 +5,13 @@ The validator parses JSON from an httpx.Response and validates structure against
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Union, get_args, get_origin
 
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from llm_spec.json_types import JSONValue
-
-
-@dataclass(frozen=True, slots=True)
-class ValidationResult:
-    is_valid: bool
-    error_message: str | None
-    missing_fields: list[str]
-    expected_fields: list[str]
+from llm_spec.execute.runners.types import ValidationResult
+from llm_spec.types import JSONValue
 
 
 class ResponseValidator:

@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from llm_spec.runners.runner import TestRunner
+from llm_spec.execute.runners.runner import TestRunner
 from llm_spec.suites.types import ExecutableCase, FocusParam, HttpRequest, ValidationSpec
 
 

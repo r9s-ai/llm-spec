@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from llm_spec.executor import cancel_task_execution as cancel_core_task_execution
+from llm_spec.execute.executor import cancel_task_execution as cancel_core_task_execution
 from llm_spec_web.core.event_bus import event_bus
 from llm_spec_web.core.exceptions import NotFoundError
 from llm_spec_web.models.run import RunJob, Task

@@ -10,7 +10,7 @@ import httpx
 
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import ProviderConfig
-from llm_spec.json_types import Headers, JSONValue
+from llm_spec.types import Headers, JSONValue
 
 
 def _serialize_form_data(params: Any) -> dict[str, Any]:

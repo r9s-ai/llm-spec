@@ -1,6 +1,6 @@
 """Run execution service — async orchestration, retry, and provider client creation.
 
-Delegates all execution to ``llm_spec.executor.run_suites()`` (core),
+Delegates all execution to ``llm_spec.execute.executor.run_suites()`` (core),
 injecting web-layer side-effects (DB writes, SSE events) via callbacks.
 """
 
@@ -15,16 +15,16 @@ from sqlalchemy.orm import Session
 
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import AppConfig, ProviderConfig, load_config
-from llm_spec.executor import (
+from llm_spec.execute.executor import (
     ExecutionProgress,
     Executor,
-    SuiteContext,
+    SuiteCallbackContext,
     SuiteResult,
     create_provider_adapter,
     run_suites,
-    run_task_suites,
+    run_suites_with_cancellation,
 )
-from llm_spec.results.result_types import TestVerdict
+from llm_spec.execute.types import TestVerdict
 from llm_spec.suites import ExecutableCase
 from llm_spec_web.config import settings
 from llm_spec_web.core.event_bus import event_bus
@@ -208,18 +208,16 @@ class RunExecutionService:
         run_map: dict[str, RunJob] = {run_job.suite_id: run_job}
         case_id_maps: dict[str, dict[str, str]] = {}
         progress_counters: dict[str, list[int]] = {}
-        executors: dict[str, Executor] = {}
 
         mode = run_job.mode
 
         def _client_factory(provider: str, cfg: AppConfig) -> tuple[HTTPClient, Any]:
             return _create_client(provider, cfg, mode)
 
-        async def _on_suite_start(ctx: SuiteContext) -> None:
+        async def _on_suite_start(ctx: SuiteCallbackContext) -> None:
             sid = ctx.suite.suite_id
             job = run_map[sid]
             cases = ctx.cases
-            executors[sid] = ctx.executor
             rc = [test_case_to_run_case(job.id, c) for c in cases]
             persisted = run_repo.replace_run_cases(job.id, rc)
             case_id_maps[sid] = {row.case_id: row.id for row in persisted}
@@ -272,13 +270,9 @@ class RunExecutionService:
                         },
                     )
                     run_repo.refresh(job)
-                    if job.status == "cancelled":
-                        executor = executors.get(sid)
-                        if executor:
-                            executor.cancel()
                     return
 
-        async def _on_suite_done(ctx: SuiteContext, result: SuiteResult) -> None:
+        async def _on_suite_done(ctx: SuiteCallbackContext, result: SuiteResult) -> None:
             sid = ctx.suite.suite_id
             job = run_map[sid]
             cmap = case_id_maps.get(sid, {})
@@ -286,21 +280,6 @@ class RunExecutionService:
             verdicts = result.verdicts
 
             run_repo.refresh(job)
-            if job.status == "cancelled" or ctx.executor.cancelled:
-                done_count = counters[0] + counters[1]
-                event_bus.push(
-                    job.id,
-                    "run_cancelled",
-                    {"progress_done": done_count, "progress_total": len(verdicts)},
-                )
-                run_repo.append_event_and_commit(
-                    job.id,
-                    "run_cancelled",
-                    {"progress_done": done_count, "progress_total": len(verdicts)},
-                )
-                event_bus.end_run(job.id)
-                event_bus.cleanup(job.id)
-                return
 
             test_rows: list[RunTestResult] = []
             cid_to_rcid: dict[str, str] = {}
@@ -309,7 +288,7 @@ class RunExecutionService:
                 cid_to_rcid[v.case_id] = rcid
                 test_rows.append(verdict_to_test_result_row(job.id, rcid, v))
 
-            from llm_spec.results.task_result import build_run_result
+            from llm_spec.execute.executor import build_run_result
 
             run_result = build_run_result(
                 run_id=job.id,
@@ -342,7 +321,7 @@ class RunExecutionService:
             event_bus.end_run(job.id)
             event_bus.cleanup(job.id)
 
-        async def _on_suite_error(ctx: SuiteContext, exc: Exception) -> None:
+        async def _on_suite_error(ctx: SuiteCallbackContext, exc: Exception) -> None:
             sid = ctx.suite.suite_id
             job = run_map[sid]
             run_repo.fail_run_with_event(job, str(exc))
@@ -421,16 +400,14 @@ class RunExecutionService:
         # Per-suite mutable state closed over by callbacks
         case_id_maps: dict[str, dict[str, str]] = {}
         progress_counters: dict[str, list[int]] = {}  # [passed, failed]
-        executors: dict[str, Executor] = {}
 
         def _client_factory(provider: str, cfg: AppConfig) -> tuple[HTTPClient, Any]:
             return _create_client(provider, cfg, mode)
 
-        async def _on_suite_start(ctx: SuiteContext) -> None:
+        async def _on_suite_start(ctx: SuiteCallbackContext) -> None:
             sid = ctx.suite.suite_id
             job = run_map[sid]
             cases = ctx.cases
-            executors[sid] = ctx.executor
             rc = [test_case_to_run_case(job.id, c) for c in cases]
             persisted = run_repo.replace_run_cases(job.id, rc)
             case_id_maps[sid] = {row.case_id: row.id for row in persisted}
@@ -483,13 +460,9 @@ class RunExecutionService:
                         },
                     )
                     run_repo.refresh(job)
-                    if job.status == "cancelled":
-                        executor = executors.get(sid)
-                        if executor:
-                            executor.cancel()
                     return
 
-        async def _on_suite_done(ctx: SuiteContext, result: SuiteResult) -> None:
+        async def _on_suite_done(ctx: SuiteCallbackContext, result: SuiteResult) -> None:
             sid = ctx.suite.suite_id
             job = run_map[sid]
             cmap = case_id_maps.get(sid, {})
@@ -497,21 +470,6 @@ class RunExecutionService:
             verdicts = result.verdicts
 
             run_repo.refresh(job)
-            if job.status == "cancelled" or ctx.executor.cancelled:
-                done_count = counters[0] + counters[1]
-                event_bus.push(
-                    job.id,
-                    "run_cancelled",
-                    {"progress_done": done_count, "progress_total": len(verdicts)},
-                )
-                run_repo.append_event_and_commit(
-                    job.id,
-                    "run_cancelled",
-                    {"progress_done": done_count, "progress_total": len(verdicts)},
-                )
-                event_bus.end_run(job.id)
-                event_bus.cleanup(job.id)
-                return
 
             test_rows: list[RunTestResult] = []
             cid_to_rcid: dict[str, str] = {}
@@ -520,7 +478,7 @@ class RunExecutionService:
                 cid_to_rcid[v.case_id] = rcid
                 test_rows.append(verdict_to_test_result_row(job.id, rcid, v))
 
-            from llm_spec.results.task_result import build_run_result
+            from llm_spec.execute.executor import build_run_result
 
             run_result = build_run_result(
                 run_id=job.id,
@@ -556,7 +514,7 @@ class RunExecutionService:
             if job.task_id:
                 self._task_service.update_task_status(db, job.task_id)
 
-        async def _on_suite_error(ctx: SuiteContext, exc: Exception) -> None:
+        async def _on_suite_error(ctx: SuiteCallbackContext, exc: Exception) -> None:
             sid = ctx.suite.suite_id
             job = run_map[sid]
             run_repo.fail_run_with_event(job, str(exc))
@@ -566,7 +524,7 @@ class RunExecutionService:
 
         try:
             asyncio.run(
-                run_task_suites(
+                run_suites_with_cancellation(
                     task_id=task_id,
                     registry=suites_registry,
                     config=app_config,

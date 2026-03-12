@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from llm_spec.validation.schemas.openai.chat import (
+from llm_spec.schemas.openai.chat import (
     ChatCompletionChunkResponse,
     ChatCompletionResponse,
     FunctionCall,

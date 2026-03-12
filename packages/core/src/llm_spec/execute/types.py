@@ -1,14 +1,16 @@
-"""Result types — Layer 4 of the data model.
-
-FailureInfo → TestVerdict → RunResult
-"""
+"""Execution-layer data structures."""
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from llm_spec.suites.types import FocusParam
+from llm_spec.client.http_client import HTTPClient
+from llm_spec.suites.types import ExecutableCase, FocusParam, SuiteSpec
+
+if TYPE_CHECKING:
+    from llm_spec.execute.executor import Executor
 
 
 @dataclass
@@ -90,8 +92,61 @@ class RunResult:
         return sum(1 for v in self.verdicts if v.status != "pass")
 
 
+@dataclass
+class TaskHandle:
+    task_id: str
+    loop: asyncio.AbstractEventLoop
+    root_task: asyncio.Task[Any]
+
+
+@dataclass
+class ExecutionProgress:
+    """Payload delivered to progress callbacks."""
+
+    case: ExecutableCase
+    verdict: TestVerdict
+    index: int
+    done: int
+    total: int
+
+
+@dataclass
+class SuiteCallbackContext:
+    """Passed to suite-level callbacks, gives caller access to suite execution context."""
+
+    suite: SuiteSpec
+    cases: list[ExecutableCase]
+    executor: Executor
+
+
+@dataclass
+class SuiteResult:
+    """Aggregated result for one suite execution."""
+
+    suite: SuiteSpec
+    verdicts: list[TestVerdict]
+    run_result: RunResult
+    error: str | None = None
+
+
+@dataclass
+class _SuiteState:
+    suite: SuiteSpec
+    cases: list[ExecutableCase]
+    verdicts: list[TestVerdict | None]
+    executor: Executor
+    http_client: HTTPClient
+    started_at: str | None = None
+    finished_at: str | None = None
+    done_count: int = 0
+
+
 __all__ = [
     "FailureInfo",
     "TestVerdict",
     "RunResult",
+    "TaskHandle",
+    "ExecutionProgress",
+    "SuiteCallbackContext",
+    "SuiteResult",
 ]

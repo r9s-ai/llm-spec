@@ -19,33 +19,33 @@ def _init_registry() -> None:
         return
 
     # Import all schemas
-    from llm_spec.validation.schemas.anthropic import (
+    from llm_spec.schemas.anthropic import (
         AnthropicStreamChunk,
         MessagesResponse,
     )
-    from llm_spec.validation.schemas.gemini import (
+    from llm_spec.schemas.gemini import (
         BatchCreateResponse,
         CountTokensResponse,
         EmbedContentResponse,
         GeminiStreamChunk,
         GenerateContentResponse,
     )
-    from llm_spec.validation.schemas.openai.audio import (
+    from llm_spec.schemas.openai.audio import (
         AudioStreamEvent,
         AudioTranscriptionResponse,
         AudioTranslationResponse,
         TranscriptionStreamEvent,
     )
-    from llm_spec.validation.schemas.openai.chat import (
+    from llm_spec.schemas.openai.chat import (
         ChatCompletionChunkResponse,
         ChatCompletionResponse,
     )
-    from llm_spec.validation.schemas.openai.embeddings import (
+    from llm_spec.schemas.openai.embeddings import (
         EmbeddingResponse as OpenAIEmbeddingResponse,
     )
-    from llm_spec.validation.schemas.openai.images import ImageResponse, ImageStreamEvent
-    from llm_spec.validation.schemas.openai.responses import ResponseObject, ResponsesStreamEvent
-    from llm_spec.validation.schemas.xai import (
+    from llm_spec.schemas.openai.images import ImageResponse, ImageStreamEvent
+    from llm_spec.schemas.openai.responses import ResponseObject, ResponsesStreamEvent
+    from llm_spec.schemas.xai import (
         ChatCompletionResponse as XAIChatResponse,
     )
 

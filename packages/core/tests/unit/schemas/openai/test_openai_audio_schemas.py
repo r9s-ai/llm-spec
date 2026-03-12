@@ -1,6 +1,7 @@
 import httpx
 
-from llm_spec.validation.schemas.openai.audio import (
+from llm_spec.execute.runners.validator import ResponseValidator
+from llm_spec.schemas.openai.audio import (
     AudioStreamEvent,
     AudioTranscriptionResponse,
     AudioTranscriptJSON,
@@ -8,7 +9,6 @@ from llm_spec.validation.schemas.openai.audio import (
     TranscriptSegment,
     TranscriptWord,
 )
-from llm_spec.validation.validator import ResponseValidator
 
 # ---------------------------------------------------------------------------
 # AudioTranscriptionResponse

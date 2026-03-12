@@ -10,7 +10,7 @@ from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any
 
-from llm_spec.results.result_types import FailureInfo, RunResult, TestVerdict
+from llm_spec.execute.types import FailureInfo, RunResult, TestVerdict
 from llm_spec.suites.types import ExecutableCase, FocusParam, HttpRequest, ValidationSpec
 from llm_spec_web.models.run import RunCase, RunTestResult
 

@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     pass
 
 
-from llm_spec.json_types import JSONValue
+from llm_spec.types import JSONValue
 
 
 class StreamResponseParser:

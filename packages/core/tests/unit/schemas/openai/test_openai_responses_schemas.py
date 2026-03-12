@@ -1,4 +1,4 @@
-from llm_spec.validation.schemas.openai.responses import ResponsesStreamEvent
+from llm_spec.schemas.openai.responses import ResponsesStreamEvent
 
 
 def test_openai_responses_stream_event_accepts_response_queued_snapshot_shape():

@@ -1,4 +1,4 @@
-from llm_spec.runners.stream_rules import extract_observations, validate_stream
+from llm_spec.execute.runners.stream_rules import extract_observations, validate_stream
 
 
 def test_anthropic_defaults_missing_stop_events() -> None:

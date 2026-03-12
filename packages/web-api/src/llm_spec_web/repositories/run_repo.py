@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from llm_spec.results.result_types import TestVerdict
+from llm_spec.execute.types import TestVerdict
 from llm_spec_web.models.run import RunCase, RunEvent, RunJob, RunResultRecord, RunTestResult, Task
 
 

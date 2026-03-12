@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 # Import Content type (embedContent uses the same Content structure)
-from llm_spec.validation.schemas.gemini.generate_content import Content
+from llm_spec.schemas.gemini.generate_content import Content
 
 TaskType = Literal[
     "TASK_TYPE_UNSPECIFIED",

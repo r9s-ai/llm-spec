@@ -11,7 +11,7 @@ from collections.abc import Callable
 from llm_spec.adapters.base import ProviderAdapter
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import ProviderConfig
-from llm_spec.json_types import Headers
+from llm_spec.types import Headers
 
 HeaderBuilder = Callable[[str], dict[str, str]]
 
