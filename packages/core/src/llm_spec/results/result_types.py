@@ -24,7 +24,7 @@ class FailureInfo:
 
 @dataclass
 class TestVerdict:
-    """Execution verdict for a single TestCase."""
+    """Execution verdict for a single ExecutableCase."""
 
     case_id: str
     test_name: str

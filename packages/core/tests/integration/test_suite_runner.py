@@ -26,7 +26,7 @@ from mock_loader import MockDataLoader
 
 from llm_spec.adapters.base import ProviderAdapter
 from llm_spec.runners import TestRunner
-from llm_spec.suites import SuiteSpec, TestCase, build_execution_plan, load_registry_suites
+from llm_spec.suites import ExecutableCase, SuiteSpec, build_executable_cases, load_SuiteSpecs
 
 if TYPE_CHECKING:
     pass
@@ -40,7 +40,7 @@ SUITES_DIR = REPO_ROOT / "suites-registry" / "providers"
 
 # Cache loaded suites
 _SUITE_CACHE: dict[str, SuiteSpec] = {}
-_CASE_CACHE: dict[str, TestCase] = {}
+_CASE_CACHE: dict[str, ExecutableCase] = {}
 
 
 def discover_test_configs() -> list[tuple[str, str, str]]:
@@ -54,11 +54,11 @@ def discover_test_configs() -> list[tuple[str, str, str]]:
     if not SUITES_DIR.exists():
         return configs
 
-    for suite in load_registry_suites(SUITES_DIR):
+    for suite in load_SuiteSpecs(SUITES_DIR):
         suite_key = f"{suite.provider_id}/{suite.route_id}/{suite.model_id}"
         _SUITE_CACHE[suite_key] = suite
 
-        cases = build_execution_plan(suite)
+        cases = build_executable_cases(suite)
         for case in cases:
             case_key = f"{suite_key}::{case.test_name}"
             _CASE_CACHE[case_key] = case
@@ -119,7 +119,7 @@ def _setup_mock_route(
     respx_mock: respx.MockRouter,
     mock_loader: MockDataLoader,
     suite: SuiteSpec,
-    case: TestCase,
+    case: ExecutableCase,
     client: ProviderAdapter,
 ) -> None:
     """Setup respx mock route for a single test case."""

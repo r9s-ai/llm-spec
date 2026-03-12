@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
 from llm_spec.runners.runner import TestRunner
-from llm_spec.suites.types import FocusParam, HttpRequest, TestCase, ValidationSpec
+from llm_spec.suites.types import ExecutableCase, FocusParam, HttpRequest, ValidationSpec
 
 
 def test_runner_required_fields_validation():
@@ -21,7 +21,7 @@ def test_runner_required_fields_validation():
 
     runner = TestRunner(client)
 
-    case = TestCase(
+    case = ExecutableCase(
         case_id="test_missing_required",
         test_name="test_missing_required",
         focus=FocusParam(name="model", value="gpt-4"),
@@ -60,7 +60,7 @@ def test_runner_test_level_required_fields():
 
     runner = TestRunner(client)
 
-    case = TestCase(
+    case = ExecutableCase(
         case_id="test_extra_required",
         test_name="test_extra_required",
         focus=FocusParam(name="model", value="gpt-4"),

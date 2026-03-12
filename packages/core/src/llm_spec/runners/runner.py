@@ -1,4 +1,4 @@
-"""Test runner — executes TestCase objects and returns TestVerdict results."""
+"""Test runner — executes ExecutableCase objects and returns TestVerdict results."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from llm_spec.results.result_types import FailureInfo, TestVerdict
 from llm_spec.runners.asset_resolver import AssetResolver
 from llm_spec.runners.parsers import ResponseParser, StreamResponseParser
 from llm_spec.runners.stream_rules import extract_observations, validate_stream
-from llm_spec.suites.types import TestCase
+from llm_spec.suites.types import ExecutableCase
 from llm_spec.validation.validator import ResponseValidator
 
 from .schema_registry import get_schema
@@ -27,7 +27,7 @@ from .schema_registry import get_schema
 
 
 def error_verdict(
-    case: TestCase,
+    case: ExecutableCase,
     *,
     message: str,
     code: str | None = None,
@@ -58,7 +58,7 @@ def error_verdict(
 
 
 class TestRunner:
-    """Executes TestCase objects and produces TestVerdict results.
+    """Executes ExecutableCase objects and produces TestVerdict results.
 
     Responsibilities:
     1. Resolve asset placeholders in request params (via AssetResolver)
@@ -78,8 +78,8 @@ class TestRunner:
 
     # ── Public API ────────────────────────────────────────
 
-    def run(self, case: TestCase) -> TestVerdict:
-        """Execute a TestCase synchronously and return a TestVerdict."""
+    def run(self, case: ExecutableCase) -> TestVerdict:
+        """Execute a ExecutableCase synchronously and return a TestVerdict."""
         self.client.set_current_test_name(case.test_name)
         try:
             if case.request.stream:
@@ -88,8 +88,8 @@ class TestRunner:
         finally:
             self.client.set_current_test_name(None)
 
-    async def run_async(self, case: TestCase) -> TestVerdict:
-        """Execute a TestCase asynchronously and return a TestVerdict."""
+    async def run_async(self, case: ExecutableCase) -> TestVerdict:
+        """Execute a ExecutableCase asynchronously and return a TestVerdict."""
         self.client.set_current_test_name(case.test_name)
         try:
             if case.request.stream:
@@ -106,7 +106,9 @@ class TestRunner:
     def _resolve_file_path(self, file_path_str: str) -> Path:
         return self._asset_resolver.resolve_file_path(file_path_str)
 
-    def _prepare_upload_files(self, case: TestCase) -> tuple[dict[str, Any] | None, list[Any]]:
+    def _prepare_upload_files(
+        self, case: ExecutableCase
+    ) -> tuple[dict[str, Any] | None, list[Any]]:
         if not case.request.files:
             return None, []
         return self._asset_resolver.prepare_upload_files(case.request.files)
@@ -115,7 +117,7 @@ class TestRunner:
 
     def _build_verdict(
         self,
-        case: TestCase,
+        case: ExecutableCase,
         *,
         http_status: int,
         schema_ok: bool | None = None,
@@ -188,7 +190,7 @@ class TestRunner:
 
     def _validate_normal_response(
         self,
-        case: TestCase,
+        case: ExecutableCase,
         response: httpx.Response,
         started_at: str,
         start_mono: float,
@@ -245,7 +247,7 @@ class TestRunner:
 
     def _validate_stream_response(
         self,
-        case: TestCase,
+        case: ExecutableCase,
         http_status_code: int,
         all_raw_chunks: list[bytes],
         started_at: str,
@@ -368,7 +370,7 @@ class TestRunner:
 
     # ── Normal (non-streaming) test execution ─────────────
 
-    def _run_normal(self, case: TestCase) -> TestVerdict:
+    def _run_normal(self, case: ExecutableCase) -> TestVerdict:
         started_at = datetime.now(UTC).isoformat()
         start_mono = time.monotonic()
         params = self._resolve_asset_placeholders(case.request.params)
@@ -396,7 +398,7 @@ class TestRunner:
                 f.close()
         return self._validate_normal_response(case, response, started_at, start_mono)
 
-    async def _run_normal_async(self, case: TestCase) -> TestVerdict:
+    async def _run_normal_async(self, case: ExecutableCase) -> TestVerdict:
         started_at = datetime.now(UTC).isoformat()
         start_mono = time.monotonic()
         params = self._resolve_asset_placeholders(case.request.params)
@@ -426,7 +428,7 @@ class TestRunner:
 
     # ── Streaming test execution ──────────────────────────
 
-    def _run_stream(self, case: TestCase) -> TestVerdict:
+    def _run_stream(self, case: ExecutableCase) -> TestVerdict:
         started_at = datetime.now(UTC).isoformat()
         start_mono = time.monotonic()
         params = self._resolve_asset_placeholders(case.request.params)
@@ -494,7 +496,7 @@ class TestRunner:
             for f in opened:
                 f.close()
 
-    async def _run_stream_async(self, case: TestCase) -> TestVerdict:
+    async def _run_stream_async(self, case: ExecutableCase) -> TestVerdict:
         started_at = datetime.now(UTC).isoformat()
         start_mono = time.monotonic()
         params = self._resolve_asset_placeholders(case.request.params)

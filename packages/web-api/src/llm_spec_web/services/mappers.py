@@ -11,12 +11,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 from llm_spec.results.result_types import FailureInfo, RunResult, TestVerdict
-from llm_spec.suites.types import FocusParam, HttpRequest, TestCase, ValidationSpec
+from llm_spec.suites.types import ExecutableCase, FocusParam, HttpRequest, ValidationSpec
 from llm_spec_web.models.run import RunCase, RunTestResult
 
 
-def test_case_to_run_case(run_id: str, case: TestCase) -> RunCase:
-    """Persist a TestCase as a RunCase snapshot."""
+def test_case_to_run_case(run_id: str, case: ExecutableCase) -> RunCase:
+    """Persist a ExecutableCase as a RunCase snapshot."""
     return RunCase(
         run_id=run_id,
         case_id=case.case_id,
@@ -42,9 +42,9 @@ def test_case_to_run_case(run_id: str, case: TestCase) -> RunCase:
     )
 
 
-def run_case_to_test_case(run_case: RunCase) -> TestCase:
-    """Reconstruct a TestCase from a persisted RunCase snapshot."""
-    return TestCase(
+def run_case_to_test_case(run_case: RunCase) -> ExecutableCase:
+    """Reconstruct a ExecutableCase from a persisted RunCase snapshot."""
+    return ExecutableCase(
         case_id=run_case.case_id,
         test_name=run_case.test_name,
         description=run_case.description,
@@ -102,7 +102,7 @@ def verdict_to_test_result_row(
     )
 
 
-def error_verdict(case: TestCase, error: Exception) -> TestVerdict:
+def error_verdict(case: ExecutableCase, error: Exception) -> TestVerdict:
     """Build an error TestVerdict for a case that failed before execution."""
     now = datetime.now(UTC).isoformat()
     return TestVerdict(

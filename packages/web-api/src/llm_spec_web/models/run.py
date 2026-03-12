@@ -74,7 +74,7 @@ class RunJob(Base):
 
 
 class RunCase(Base):
-    """TestCase snapshot for retry support."""
+    """ExecutableCase snapshot for retry support."""
 
     __tablename__ = "run_case"
 

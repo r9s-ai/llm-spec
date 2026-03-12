@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from llm_spec.runners.runner import TestRunner
-from llm_spec.suites.types import HttpRequest, TestCase
+from llm_spec.suites.types import ExecutableCase, HttpRequest
 
 
 def test_file_resolution_prefers_registry_root_assets(tmp_path: Path) -> None:
@@ -44,7 +44,7 @@ def test_asset_placeholder_base64_and_data_uri(tmp_path: Path) -> None:
     image.parent.mkdir(parents=True, exist_ok=True)
     image.write_bytes(b"\x00\x01\x02")
 
-    case = TestCase(
+    case = ExecutableCase(
         case_id="test",
         test_name="asset_placeholders",
         request=HttpRequest(
@@ -64,7 +64,7 @@ def test_asset_placeholder_base64_and_data_uri(tmp_path: Path) -> None:
 
 def test_asset_placeholder_missing_file_raises(tmp_path: Path) -> None:
     runner, _ = _make_runner(tmp_path)
-    case = TestCase(
+    case = ExecutableCase(
         case_id="test",
         test_name="missing_asset",
         request=HttpRequest(

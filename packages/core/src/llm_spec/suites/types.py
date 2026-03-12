@@ -2,7 +2,7 @@
 
 Layer 1: Config Specs (ProviderSpec, RouteSpec, ModelSpec, TestDef)
 Layer 2: SuiteSpec (expanded provider × model × route)
-Layer 3: TestCase (self-contained executable test) with HttpRequest + ValidationSpec
+Layer 3: ExecutableCase (self-contained executable test) with HttpRequest + ValidationSpec
 Layer 4: Results (TestVerdict, RunResult) — see results/result_types.py
 """
 
@@ -79,13 +79,6 @@ class RouteSpec:
 
 
 @dataclass
-class ExtraTestDef(TestDef):
-    """Model-specific extra test definition (adds route field)."""
-
-    route: str = ""
-
-
-@dataclass
 class ModelSpec:
     """Loaded from models/*.toml."""
 
@@ -94,7 +87,6 @@ class ModelSpec:
     include_tests: list[str] | None = None
     exclude_tests: list[str] | None = None
     baseline_params_override: dict[str, Any] = field(default_factory=dict)
-    extra_tests: list[ExtraTestDef] = field(default_factory=list)
 
 
 # ── Layer 2: SuiteSpec ────────────────────────────────────
@@ -132,7 +124,7 @@ class SuiteSpec:
     source_path: Path | None = None
 
 
-# ── Layer 3: TestCase (execution-ready) ───────────────────
+# ── Layer 3: ExecutableCase (execution-ready) ───────────────────
 
 
 @dataclass
@@ -158,7 +150,7 @@ class ValidationSpec:
 
 
 @dataclass
-class TestCase:
+class ExecutableCase:
     """Self-contained executable test case."""
 
     case_id: str

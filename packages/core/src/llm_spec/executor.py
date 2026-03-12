@@ -30,8 +30,8 @@ from llm_spec.config.loader import AppConfig
 from llm_spec.results.result_types import FailureInfo, RunResult, TestVerdict
 from llm_spec.results.task_result import build_run_result
 from llm_spec.runners.runner import TestRunner, error_verdict
-from llm_spec.suites.registry import Registry, build_execution_plan
-from llm_spec.suites.types import SuiteSpec, TestCase
+from llm_spec.suites.registry import Registry, build_executable_cases
+from llm_spec.suites.types import ExecutableCase, SuiteSpec
 
 # ── Client factory type ───────────────────────────────────
 
@@ -40,14 +40,14 @@ from llm_spec.suites.types import SuiteSpec, TestCase
 class ExecutionProgress:
     """Payload delivered to progress callbacks."""
 
-    case: TestCase
+    case: ExecutableCase
     verdict: TestVerdict
     index: int
     done: int
     total: int
 
 
-OnTestStart = Callable[[TestCase, int, int], Awaitable[None]] | None
+OnTestStart = Callable[[ExecutableCase, int, int], Awaitable[None]] | None
 OnTestDone = Callable[[ExecutionProgress], Awaitable[None]] | None
 
 
@@ -56,7 +56,7 @@ class SuiteContext:
     """Passed to suite-level callbacks, gives caller access to executor for cancellation."""
 
     suite: SuiteSpec
-    cases: list[TestCase]
+    cases: list[ExecutableCase]
     executor: Executor
 
 
@@ -81,7 +81,7 @@ ClientFactory = Callable[[str, AppConfig], tuple[HTTPClient, ProviderAdapter]]
 # ── Suite-level callback types ────────────────────────────
 
 
-def _cancelled_verdict(case: TestCase) -> TestVerdict:
+def _cancelled_verdict(case: ExecutableCase) -> TestVerdict:
     now = datetime.now(UTC).isoformat()
     return TestVerdict(
         case_id=case.case_id,
@@ -172,7 +172,7 @@ class Executor:
         """Clear tracked tasks (used by external schedulers)."""
         self._inflight_tasks.clear()
 
-    async def run_all(self, cases: list[TestCase]) -> list[TestVerdict]:
+    async def run_all(self, cases: list[ExecutableCase]) -> list[TestVerdict]:
         """Execute *cases* concurrently and return ordered verdicts.
 
         Respects ``max_concurrent`` via an asyncio.Semaphore.
@@ -187,7 +187,7 @@ class Executor:
         results: dict[int, TestVerdict] = {}
         self._done_count = 0
 
-        async def _run_one(idx: int, case: TestCase) -> None:
+        async def _run_one(idx: int, case: ExecutableCase) -> None:
             if self._cancelled:
                 results[idx] = _cancelled_verdict(case)
                 return
@@ -222,7 +222,7 @@ class Executor:
         # Return ordered verdicts; fill gaps with cancelled placeholders
         return [results.get(i, _cancelled_verdict(cases[i])) for i in range(total)]
 
-    async def run_one(self, case: TestCase) -> TestVerdict:
+    async def run_one(self, case: ExecutableCase) -> TestVerdict:
         """Execute a single test case. No concurrency control.
 
         Used directly for retry, and internally by ``run_all``.
@@ -289,7 +289,7 @@ async def run_suites(
     @dataclass
     class _SuiteState:
         suite: SuiteSpec
-        cases: list[TestCase]
+        cases: list[ExecutableCase]
         verdicts: list[TestVerdict | None]
         executor: Executor
         http_client: HTTPClient
@@ -305,7 +305,7 @@ async def run_suites(
         executor: Executor | None = None
         ctx: SuiteContext | None = None
         try:
-            cases = build_execution_plan(
+            cases = build_executable_cases(
                 suite, selected_tests=selected_tests.get(suite.suite_id) if selected_tests else None
             )
             http_client, adapter = factory(suite.provider_id, config)

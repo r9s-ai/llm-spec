@@ -177,12 +177,10 @@ Gemini-style endpoint template:
 
 - File name is the model ID.
 - `routes = [...]` is required and lists supported route names.
-- Optional `include_tests = [...]` keeps only listed tests by name (applies after adding `extra_tests`).
+- Optional `include_tests = [...]` keeps only listed tests by name (applies after route expansion).
 - Optional `exclude_tests = [...]` removes listed tests by name (applies after `include_tests`).
 - `baseline` must remain after filtering (cannot be excluded; if `include_tests` is set it must contain `baseline`).
 - Optional `[baseline_params_override]` deep-merges into route baseline params.
-- Optional `[[extra_tests]]` appends model-specific tests (use `route = "<route_name>"` to target route).
-- `[[extra_tests]]` entries use the same test schema as `routes[].tests`; if an extra test includes `params`, those values also override baseline params when that test runs.
 
 Minimal template:
 
@@ -216,46 +214,7 @@ exclude_tests = [
 max_completion_tokens = 1024
 temperature = 0.2
 
-# Optional: append model-specific tests for a route
-[[extra_tests]]
-route = "chat_completions"
-name = "reasoning_effort[high]"
-description = "Model-specific reasoning_effort coverage"
-params = { reasoning_effort = "high", max_completion_tokens = 2048 }
-focus_param = { name = "reasoning_effort", value = "high" }
-tags = ["core", "reasoning"]
-
-# Variant values: declare one [[extra_tests]] block per value.
-[[extra_tests]]
-route = "chat_completions"
-name = "reasoning_effort[medium]"
-description = "Model-specific reasoning_effort=medium coverage"
-params = { reasoning_effort = "medium", max_completion_tokens = 2048 }
-focus_param = { name = "reasoning_effort", value = "medium" }
-tags = ["core", "reasoning"]
-
-[[extra_tests]]
-route = "chat_completions"
-name = "reasoning_effort[low]"
-description = "Model-specific reasoning_effort=low coverage"
-params = { reasoning_effort = "low", max_completion_tokens = 2048 }
-focus_param = { name = "reasoning_effort", value = "low" }
-tags = ["core", "reasoning"]
-
-[[extra_tests]]
-route = "responses"
-name = "text.verbosity[low]"
-description = "Model-specific verbosity check"
-params = { text = { verbosity = "low" } }
-focus_param = { name = "text.verbosity", value = "low" }
-tags = ["rare"]
 ```
-
-Notes for variants:
-
-- `[[extra_tests]]` does not support automatic cartesian expansion.
-- To test multiple values for one parameter, add multiple `[[extra_tests]]` blocks.
-- Keep `name` unique for each variant (for filtering/reporting).
 
 ### Asset and file references
 
@@ -275,9 +234,8 @@ Notes for variants:
   1. start from route template
   2. inject model (`baseline.params.model` for non-Gemini, endpoint placeholder replacement for Gemini)
   3. apply `baseline_params_override`
-  4. append `extra_tests`
-  5. apply `include_tests` (if configured)
-  6. apply `exclude_tests`
+  4. apply `include_tests` (if configured)
+  5. apply `exclude_tests`
 
 ## Validate by Running
 
