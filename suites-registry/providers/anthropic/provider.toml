@@ -1,6 +1,0 @@
-name = "Anthropic"
-api_family = "anthropic"
-doc = "https://docs.anthropic.com/en/api/messages"
-
-[headers]
-anthropic-version = "2023-06-01"

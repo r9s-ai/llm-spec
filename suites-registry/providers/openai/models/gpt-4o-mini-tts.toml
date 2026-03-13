@@ -1,2 +1,0 @@
-name = "gpt-4o-mini-tts"
-routes = ["audio_speech"]

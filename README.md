@@ -1,255 +1,119 @@
-<div align="center">
+# LLM Spec
 
-# llm-spec
+用于验证三类 SDK API 格式/参数/特性支持情况的测试工具：
 
-**A registry-first LLM API parameter compliance testing toolkit**
+- `openai`
+- `@anthropic-ai/sdk`
+- `@google/genai`
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Python](https://img.shields.io/badge/python-3.11+-blue)
-![TypeScript](https://img.shields.io/badge/typescript-5.6+-blue)
-![FastAPI](https://img.shields.io/badge/fastapi-0.115+-green)
+其中 OpenAI provider 会同时覆盖：
+- `chat.completions.create`
+- `responses.create`
 
-</div>
+支持统一配置 `API_BASE_URL` / `API_KEY`，也支持各 provider 的独立配置。
 
-`llm-spec` is a config-driven test system for validating whether LLM API parameters are truly supported and stable.
+## 快速开始
 
-It provides a complete evidence chain:
-
-`Request -> Response -> Validator/Rule -> Test Result`
-
----
-
-## What Changed (Current Architecture)
-
-This project now uses a **registry-first** design:
-
-- Test suites are loaded from `suites-registry/` files (not stored in DB).
-- Provider runtime config is stored in `llm-spec.toml` (not `provider_config` DB table).
-- Web backend DB (SQLite by default) stores only run/task data.
-- FastAPI auto-creates run tables on startup when `LLM_SPEC_WEB_AUTO_INIT_DB=true`.
-
----
-
-## Repository Layout
-
-- `packages/core`: test runner engine, adapters, validators
-- `packages/web-api`: FastAPI backend
-- `packages/web`: React + Vite frontend
-- `suites-registry`: community-maintained provider/route/model registry
-
-Registry structure:
-
-```text
-suites-registry/
-  providers/<provider>/
-    provider.toml
-    routes/*.json5
-    models/*.toml
-  assets/
-    audio/
-    images/
-```
-
----
-
-## Quick Start
-
-### 1) Install dependencies
+1. 安装依赖
 
 ```bash
-uv venv -p 3.11
-uv sync --extra dev --extra web
-```
-
-### 2) Create runtime config
-
-```bash
-cp llm-spec.example.toml llm-spec.toml
-# edit API keys/base_url/timeout as needed
-```
-
-### 3) (Optional) frontend deps
-
-```bash
-cd packages/web
 pnpm install
-cd ../..
 ```
 
----
-
-## Run Test Engine
-
-Run core unit tests:
+2. 复制并填写环境变量
 
 ```bash
-uv run pytest packages/core/tests/unit -v
+cp .env.example .env
 ```
 
-Run config-driven integration suites:
+3. 构建并运行
 
 ```bash
-uv run pytest packages/core/tests/integration/test_suite_runner.py -v
+pnpm build
+node dist/index.js
 ```
 
-Mock mode:
+## 运行方式
+
+- 运行全部 provider（默认）：`openai,anthropic,gemini`
+- 指定 provider：
 
 ```bash
-uv run pytest packages/core/tests/integration/test_suite_runner.py --mock -v
+TARGET_PROVIDERS=openai node dist/index.js
+TARGET_PROVIDERS=anthropic,gemini node dist/index.js
 ```
 
-Useful Make targets:
+- 失败即停：
 
 ```bash
-make test-core
-make test-integration
-make test-mock-all
+FAIL_FAST=true node dist/index.js
 ```
 
----
-
-## Run Web App
-
-### Backend
+- 输出报告（JSON + HTML + 纯文本）：
 
 ```bash
-cp packages/web-api/src/llm_spec_web/env.example .env
-uv run python -m llm_spec_web.main
+REPORT_FILE=./report.json node dist/index.js
 ```
 
-Or:
+会生成：
 
-```bash
-make web-backend
-```
+- `./report.json`
+- `./report.html`
+- `./report.txt`
 
-Backend URL: `http://localhost:8000`
+## 配置说明
 
-### Frontend
+### 通用配置
 
-```bash
-cd packages/web
-pnpm dev
-```
+- `API_KEY`
+- `API_BASE_URL`
+- `TARGET_PROVIDERS`
+- `FAIL_FAST`
+- `REPORT_FILE`
+- `SDK_TIMEOUT_MS`
 
-Or:
+### OpenAI
 
-```bash
-make web-frontend
-```
+- `OPENAI_API_KEY`
+- `OPENAI_API_BASE_URL`
+- `OPENAI_MODEL`
+- `OPENAI_AUDIO_MODEL`（启用音频模态测试）
+- `OPENAI_REASONING_MODEL`（启用 Responses API 的 reasoning 参数测试）
+- `OPENAI_RESPONSES_PROMPT_ID`（启用 Responses API 的 prompt 参数测试）
 
-Frontend URL: `http://localhost:5173`
+### Anthropic
 
----
+- `ANTHROPIC_API_KEY`
+- `ANTHROPIC_API_BASE_URL`
+- `ANTHROPIC_MODEL`
+- `ANTHROPIC_CONTAINER`（启用 container 参数测试）
+- `ANTHROPIC_INFERENCE_GEO`（启用 inference_geo 参数测试）
 
-## Web Backend Runtime (SQLite)
+### Gemini
 
-Default DB URL:
+- `GEMINI_API_KEY`
+- `GEMINI_API_BASE_URL`
+- `GEMINI_API_VERSION`
+- `GEMINI_MODEL`
+- `GEMINI_CACHED_CONTENT`（启用 cachedContent 测试）
+- `GEMINI_AUDIO_MODEL`（启用音频相关参数测试）
+- `GEMINI_IMAGE_MODEL`（启用 imageConfig 测试）
+- `GEMINI_ENABLE_VERTEX_ONLY_CASES`（启用 routing/modelSelection 等 Vertex 偏向特性）
+- `GEMINI_MODEL_ARMOR_PROMPT_TEMPLATE`
+- `GEMINI_MODEL_ARMOR_RESPONSE_TEMPLATE`
 
-`sqlite:///./packages/web-api/src/llm_spec_web/.data/llm_spec_web.db`
+## 输出结果
 
-The backend manages tables via SQLAlchemy metadata (run tables only):
+脚本会输出：
 
-- `task`
-- `run_job`
-- `run_event`
-- `task_result`
-- `run_test_result`
+- 每个测试用例的 `PASS / FAIL / SKIP`
+- 每个 provider 的参数覆盖统计（covered / untested，`covered` 仅统计 `PASS` 用例）
+- 最终汇总（总通过/失败/跳过）
 
-Task result payload (`/api/runs/{run_id}/task-result`) now uses a task-centric schema:
+当设置 `REPORT_FILE` 时，默认会同时生成三种格式：
 
-- `TaskResult` (`version = "task_result.v1"`)
-- flat `cases: CaseResult[]` list (instead of nested `providers[].endpoints[].tests[]`)
-- each `CaseResult` carries provider/model/route/endpoint/test-level execution + validation facts
+- `JSON`：机器可读，便于后处理
+- `HTML`：可视化查看，适合人工快速浏览
+- `TXT`：纯文本，适合终端、日志系统和 CI artifact 预览
 
-If you want a fresh DB:
-
-```bash
-rm -f packages/web-api/src/llm_spec_web/.data/llm_spec_web.db
-# restart backend, tables will be recreated automatically
-```
-
-Schema reference:
-
-- `packages/web-api/src/llm_spec_web/schema.sql`
-
----
-
-## Environment Variables
-
-Core web settings:
-
-- `LLM_SPEC_WEB_DATABASE_URL`
-- `LLM_SPEC_WEB_APP_TOML_PATH`
-- `LLM_SPEC_WEB_AUTO_INIT_DB`
-- `LLM_SPEC_WEB_MOCK_MODE`
-- `LLM_SPEC_WEB_MOCK_BASE_DIR`
-- `LLM_SPEC_WEB_CORS_ORIGINS`
-- `LLM_SPEC_WEB_SUITE_REGISTRY_CACHE_TTL_SECONDS`
-
-Default values can be found in:
-
-- `packages/web-api/src/llm_spec_web/config.py`
-- `packages/web-api/src/llm_spec_web/env.example`
-
----
-
-## Registry Model
-
-`llm-spec` expands suites as:
-
-`provider routes/*.json5 × models/*.toml`
-
-Key points:
-
-- `provider.toml` defines provider metadata, `api_family`, optional `routes_from` inheritance.
-- `routes/*.json5` defines endpoint/baseline params/tests template.
-- `models/*.toml` defines model route coverage and optional overrides.
-- Shared upload assets should be placed in `suites-registry/assets/`.
-
-See:
-
-- `suites-registry/DESIGN.md`
-- `suites-registry/README.md`
-- `suites-registry/CONTRIBUTING.md`
-
----
-
-## Web Suite Loading & Cache
-
-- `/api/suites` and `/api/suites/{id}/versions` are read-only views over registry files.
-- Backend keeps in-memory cache with TTL + file-signature invalidation.
-- Manual cache refresh endpoint: `POST /api/suites/cache/refresh`
-- Frontend Testing page provides a **Refresh Memory** button and loading animation.
-
----
-
-## Provider Config Source of Truth
-
-Provider config used by runtime and web API is read/written from:
-
-- `llm-spec.toml`
-
-Example:
-
-```toml
-[providers.openai]
-api_key = "sk-..."
-base_url = "https://api.openai.com"
-timeout = 30.0
-api_family = "openai"
-```
-
----
-
-## Development Notes
-
-- Python package manager: `uv`
-- Frontend package manager: `pnpm`
-- Lint/format/test are configured in `pyproject.toml` and frontend configs.
-
----
-
-## License
-
-MIT
+当存在失败用例时，进程退出码为 `1`。

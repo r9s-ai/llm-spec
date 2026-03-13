@@ -1,13 +1,31 @@
 {
-  "name": "llm-spec-monorepo",
-  "private": true,
-  "version": "0.1.0",
-  "workspaces": [
-    "packages/*"
-  ],
+  "name": "llm-spec",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "web:dev": "pnpm --dir packages/web dev",
-    "web:build": "pnpm --dir packages/web build"
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --format=cjs --sourcemap",
+    "build:watch": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --format=cjs --sourcemap --watch",
+    "build:scripts": "esbuild scripts/*.ts --bundle --platform=node --target=node20 --outdir=dist/scripts --format=cjs --sourcemap",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "dev": "node --watch dist/index.js",
+    "test:sdk": "node dist/index.js",
+    "fetch-docs": "node dist/scripts/fetch-docs.js"
   },
-  "packageManager": "pnpm@10.27.0+sha512.72d699da16b1179c14ba9e64dc71c9a40988cbdc65c264cb0e489db7de917f20dcf4d64d8723625f2969ba52d4b7e2a1170682d9ac2a5dcaeaab732b7e16f04a"
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "LLM specification testing and validation tool",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@google/genai": "^1.44.0",
+    "openai": "^6.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "esbuild": "^0.25.1",
+    "typescript": "^5.8.2",
+    "undici": "^7.22.0"
+  }
 }

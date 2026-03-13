@@ -1,2 +1,0 @@
-name = "grok-beta"
-routes = ["chat_completions"]

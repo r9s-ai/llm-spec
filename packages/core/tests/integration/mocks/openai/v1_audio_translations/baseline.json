@@ -1,9 +1,0 @@
-{
-    "status_code": 200,
-    "headers": {
-        "content-type": "application/json"
-    },
-    "body": {
-        "text": "Hello, how are you?"
-    }
-}
