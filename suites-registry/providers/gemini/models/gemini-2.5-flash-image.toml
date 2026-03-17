@@ -1,2 +1,4 @@
 name = "Gemini 3 Flash Image"
 routes = ["generate_content"]
+
+exclude_tests=["image tools"]

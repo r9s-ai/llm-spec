@@ -1,2 +1,6 @@
 name = "Gemini 3 Flash Preview"
 routes = ["generate_content", "stream_generate_content"]
+
+
+exclude_tests=["generationConfig.responseModalities[TEXT+IMAGE]",
+"image tools"]
