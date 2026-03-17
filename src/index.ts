@@ -21,6 +21,8 @@ import {
   renderTextReport,
   resolveRuntimeConfig,
   runAnthropicCases,
+  runClaudeAgentCases,
+  runCodexCases,
   runGeminiCases,
   runOpenAICases,
 } from './api-sdk-tester';
@@ -66,9 +68,11 @@ async function run(): Promise<RunSummary> {
 
   for (const provider of config.targetProviders) {
     if (provider === 'openai') {
-      const summary = await runOpenAICases(config.openai, config.failFast);
-      providers.push(summary);
-      printProviderSummary(summary);
+      const summaries = await runOpenAICases(config.openai, config.failFast);
+      for (const summary of summaries) {
+        providers.push(summary);
+        printProviderSummary(summary);
+      }
       continue;
     }
 
@@ -81,6 +85,20 @@ async function run(): Promise<RunSummary> {
 
     if (provider === 'gemini') {
       const summary = await runGeminiCases(config.gemini, config.failFast);
+      providers.push(summary);
+      printProviderSummary(summary);
+      continue;
+    }
+
+    if (provider === 'claude-agent') {
+      const summary = await runClaudeAgentCases(config.claudeAgent, config.failFast);
+      providers.push(summary);
+      printProviderSummary(summary);
+      continue;
+    }
+
+    if (provider === 'codex') {
+      const summary = await runCodexCases(config.codex, config.failFast);
       providers.push(summary);
       printProviderSummary(summary);
       continue;

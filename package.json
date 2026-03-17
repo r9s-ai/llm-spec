@@ -1,25 +1,28 @@
 {
   "name": "llm-spec",
   "version": "1.0.0",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --format=cjs --sourcemap",
-    "build:watch": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --format=cjs --sourcemap --watch",
-    "build:scripts": "esbuild scripts/*.ts --bundle --platform=node --target=node20 --outdir=dist/scripts --format=cjs --sourcemap",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --format=esm --sourcemap --packages=external",
+    "build:watch": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --format=esm --sourcemap --watch --packages=external",
+    "build:scripts": "esbuild scripts/*.ts --bundle --platform=node --target=node20 --outdir=dist/scripts --format=esm --sourcemap --out-extension:.js=.mjs",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist",
     "dev": "node --watch dist/index.js",
     "test:sdk": "node dist/index.js",
-    "fetch-docs": "node dist/scripts/fetch-docs.js"
+    "fetch-docs": "node dist/scripts/fetch-docs.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "LLM specification testing and validation tool",
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.76",
     "@anthropic-ai/sdk": "^0.78.0",
     "@google/genai": "^1.44.0",
+    "@openai/codex-sdk": "^0.114.0",
     "openai": "^6.27.0"
   },
   "devDependencies": {

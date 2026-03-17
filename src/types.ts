@@ -1,4 +1,4 @@
-export type ProviderName = 'openai' | 'anthropic' | 'gemini';
+export type ProviderName = 'openai' | 'anthropic' | 'gemini' | 'claude-agent' | 'codex';
 
 export type TestStatus = 'passed' | 'failed' | 'skipped';
 
@@ -18,10 +18,11 @@ export interface TestCaseResult {
   coveredParams: string[];
   detail?: string;
   error?: string;
+  apiType?: 'chatCompletions' | 'responses';
 }
 
 export interface ProviderSummary {
-  provider: ProviderName;
+  provider: string; // 可以是 'openai', 'openai(chatCompletions)', 'openai(responses)', 'anthropic', 'gemini' 等
   model: string;
   apiBaseUrl?: string;
   startedAt: string;

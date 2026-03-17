@@ -7,6 +7,20 @@ function printProviderHeader(name: string): void {
   console.log('============================================================');
 }
 
+function isAgentProvider(provider: string): boolean {
+  return provider.includes('claude-agent') || provider.includes('codex');
+}
+
+function formatProviderName(provider: string): string {
+  if (provider.includes('claude-agent')) {
+    return '🤖 [AGENT] claude-agent';
+  }
+  if (provider.includes('codex')) {
+    return '🤖 [AGENT] codex';
+  }
+  return provider;
+}
+
 function formatDuration(ms: number): string {
   if (ms < 1000) {
     return `${ms}ms`;
@@ -96,7 +110,17 @@ export function printRuntimeConfig(config: RuntimeConfig): void {
 }
 
 export function printProviderSummary(summary: ProviderSummary): void {
-  printProviderHeader(`Provider Summary: ${summary.provider}`);
+  const displayName = formatProviderName(summary.provider);
+  const isAgent = isAgentProvider(summary.provider);
+
+  if (isAgent) {
+    console.log('\n' + '='.repeat(60));
+    console.log('🤖 AGENT SDK TEST RESULTS');
+    console.log('='.repeat(60));
+  }
+
+  printProviderHeader(`Provider Summary: ${displayName}`);
+  console.log(`type: ${isAgent ? 'Agent SDK' : 'Standard API'}`);
   console.log(`model: ${summary.model}`);
   console.log(`baseUrl: ${summary.apiBaseUrl ?? '(default)'}`);
   console.log(`startedAt: ${summary.startedAt}`);
@@ -123,32 +147,80 @@ export function printRunSummary(summary: RunSummary): void {
 
 export function renderTextReport(summary: RunSummary): string {
   const lines: string[] = [];
+  lines.push('='.repeat(60));
   lines.push('LLM Spec Test Report');
+  lines.push('='.repeat(60));
   lines.push(`startedAt: ${summary.startedAt}`);
   lines.push(`finishedAt: ${summary.finishedAt}`);
   lines.push(`total: passed=${summary.totalPassed} failed=${summary.totalFailed} skipped=${summary.totalSkipped}`);
 
-  for (const provider of summary.providers) {
-    lines.push('');
-    lines.push(`Provider: ${provider.provider}`);
-    lines.push(`model: ${provider.model}`);
-    lines.push(`baseUrl: ${provider.apiBaseUrl ?? '(default)'}`);
-    lines.push(
-      `coverage: ${formatCoverage(provider.coveredParams.length, provider.allParams.length)} | passed=${provider.passed} failed=${provider.failed} skipped=${provider.skipped}`,
-    );
-    lines.push(`coveredParams: ${provider.coveredParams.length > 0 ? provider.coveredParams.join(', ') : '(none)'}`);
-    lines.push(
-      `untestedParams: ${provider.untestedParams.length > 0 ? provider.untestedParams.join(', ') : '(none)'}`,
-    );
-    lines.push('cases:');
+  // 分别统计Agent和Standard providers
+  const agentProviders = summary.providers.filter(p => isAgentProvider(p.provider));
+  const standardProviders = summary.providers.filter(p => !isAgentProvider(p.provider));
 
-    for (const result of provider.caseResults) {
-      lines.push(`- [${formatStatus(result.status)}] ${result.id} (${formatDuration(result.durationMs)})`);
-      lines.push(`  description: ${result.description}`);
-      lines.push(`  covered: ${result.coveredParams.length > 0 ? result.coveredParams.join(', ') : '(none)'}`);
-      const note = formatCaseNote(result);
-      if (note) {
-        lines.push(`  note: ${note}`);
+  // 先显示Standard API providers
+  if (standardProviders.length > 0) {
+    lines.push('');
+    lines.push('='.repeat(60));
+    lines.push('📊 STANDARD API PROVIDERS');
+    lines.push('='.repeat(60));
+
+    for (const provider of standardProviders) {
+      lines.push('');
+      lines.push(`Provider: ${provider.provider}`);
+      lines.push(`model: ${provider.model}`);
+      lines.push(`baseUrl: ${provider.apiBaseUrl ?? '(default)'}`);
+      lines.push(
+        `coverage: ${formatCoverage(provider.coveredParams.length, provider.allParams.length)} | passed=${provider.passed} failed=${provider.failed} skipped=${provider.skipped}`,
+      );
+      lines.push(`coveredParams: ${provider.coveredParams.length > 0 ? provider.coveredParams.join(', ') : '(none)'}`);
+      lines.push(
+        `untestedParams: ${provider.untestedParams.length > 0 ? provider.untestedParams.join(', ') : '(none)'}`,
+      );
+      lines.push('cases:');
+
+      for (const result of provider.caseResults) {
+        lines.push(`- [${formatStatus(result.status)}] ${result.id} (${formatDuration(result.durationMs)})`);
+        lines.push(`  description: ${result.description}`);
+        lines.push(`  covered: ${result.coveredParams.length > 0 ? result.coveredParams.join(', ') : '(none)'}`);
+        const note = formatCaseNote(result);
+        if (note) {
+          lines.push(`  note: ${note}`);
+        }
+      }
+    }
+  }
+
+  // 再显示Agent SDK providers (突出显示)
+  if (agentProviders.length > 0) {
+    lines.push('');
+    lines.push('='.repeat(60));
+    lines.push('🤖 AGENT SDK PROVIDERS (NEW!)');
+    lines.push('='.repeat(60));
+
+    for (const provider of agentProviders) {
+      lines.push('');
+      lines.push(`🤖 Agent: ${formatProviderName(provider.provider)}`);
+      lines.push(`type: Agent SDK`);
+      lines.push(`model: ${provider.model}`);
+      lines.push(`baseUrl: ${provider.apiBaseUrl ?? '(default)'}`);
+      lines.push(
+        `coverage: ${formatCoverage(provider.coveredParams.length, provider.allParams.length)} | passed=${provider.passed} failed=${provider.failed} skipped=${provider.skipped}`,
+      );
+      lines.push(`coveredParams: ${provider.coveredParams.length > 0 ? provider.coveredParams.join(', ') : '(none)'}`);
+      lines.push(
+        `untestedParams: ${provider.untestedParams.length > 0 ? provider.untestedParams.join(', ') : '(none)'}`,
+      );
+      lines.push('cases:');
+
+      for (const result of provider.caseResults) {
+        lines.push(`- [${formatStatus(result.status)}] ${result.id} (${formatDuration(result.durationMs)})`);
+        lines.push(`  description: ${result.description}`);
+        lines.push(`  covered: ${result.coveredParams.length > 0 ? result.coveredParams.join(', ') : '(none)'}`);
+        const note = formatCaseNote(result);
+        if (note) {
+          lines.push(`  note: ${note}`);
+        }
       }
     }
   }
@@ -159,6 +231,9 @@ export function renderTextReport(summary: RunSummary): string {
 export function renderHtmlReport(summary: RunSummary): string {
   const providerSections = summary.providers
     .map((provider) => {
+      const isAgent = isAgentProvider(provider.provider);
+      const displayName = formatProviderName(provider.provider);
+
       const caseRows = provider.caseResults
         .map((result) => {
           const note = formatCaseNote(result);
@@ -172,9 +247,21 @@ export function renderHtmlReport(summary: RunSummary): string {
         })
         .join('\n');
 
-      return `<section class="provider">
-<h2>${escapeHtml(provider.provider)}</h2>
-<p class="meta">model=${escapeHtml(provider.model)} | baseUrl=${escapeHtml(provider.apiBaseUrl ?? '(default)')} | coverage=${escapeHtml(formatCoverage(provider.coveredParams.length, provider.allParams.length))} | passed=${provider.passed} failed=${provider.failed} skipped=${provider.skipped}</p>
+      const agentBadge = isAgent
+        ? '<span class="agent-badge">🤖 AGENT SDK</span>'
+        : '';
+
+      const providerClass = isAgent ? 'provider agent-provider' : 'provider';
+
+      return `<section class="${providerClass}">
+<h2>${agentBadge}${escapeHtml(displayName)}</h2>
+<p class="meta">
+  <span class="provider-type">${isAgent ? 'Agent SDK' : 'Standard API'}</span> |
+  model=${escapeHtml(provider.model)} |
+  baseUrl=${escapeHtml(provider.apiBaseUrl ?? '(default)')} |
+  coverage=${escapeHtml(formatCoverage(provider.coveredParams.length, provider.allParams.length))} |
+  passed=${provider.passed} failed=${provider.failed} skipped=${provider.skipped}
+</p>
 <details>
 <summary>covered params (${provider.coveredParams.length})</summary>
 <pre class="params">${escapeHtml(provider.coveredParams.length > 0 ? provider.coveredParams.join(', ') : '(none)')}</pre>
@@ -291,6 +378,36 @@ ${caseRows}
     border-top: none;
     margin-top: 0;
     padding-top: 0;
+  }
+  .agent-provider {
+    background: linear-gradient(135deg, #fff9e6 0%, #fff 100%);
+    border: 2px solid #ffc107;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 24px;
+    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.2);
+  }
+  .agent-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-right: 8px;
+    box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+    vertical-align: middle;
+  }
+  .provider-type {
+    display: inline-block;
+    background: #e3f2fd;
+    color: #1976d2;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 8px;
   }
   details {
     margin-top: 8px;

@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 
 import type { ProviderSummary } from '../types';
-import { buildOpenAICases, OPENAI_PARAMS } from './cases/openai';
+import { buildOpenAICases, OPENAI_CHAT_PARAMS, OPENAI_RESPONSES_PARAMS } from './cases/openai';
 import type { OpenAIProviderConfig } from './runtime-config';
 import {
   createLoggingFetch,
@@ -13,17 +13,13 @@ import {
 export async function runOpenAICases(
   config: OpenAIProviderConfig,
   failFast: boolean,
-): Promise<ProviderSummary> {
-  setCurrentProvider('openai');
-
+): Promise<ProviderSummary[]> {
   if (!config.apiKey) {
-    return createSetupSkippedSummary(
-      'openai',
-      config.model,
-      config.apiBaseUrl,
-      OPENAI_PARAMS,
-      'missing API key (set OPENAI_API_KEY or API_KEY)',
-    );
+    const skipReason = 'missing API key (set OPENAI_API_KEY or API_KEY)';
+    return [
+      createSetupSkippedSummary('openai(chatCompletions)', config.model, config.apiBaseUrl, OPENAI_CHAT_PARAMS, skipReason),
+      createSetupSkippedSummary('openai(responses)', config.model, config.apiBaseUrl, OPENAI_RESPONSES_PARAMS, skipReason),
+    ];
   }
 
   const client = new OpenAI({
@@ -34,14 +30,29 @@ export async function runOpenAICases(
     fetch: createLoggingFetch('openai'),
   });
 
-  const cases = buildOpenAICases({ client, config });
-
-  return executeProviderCases(
-    'openai',
+  // 运行 chatCompletions 测试
+  setCurrentProvider('openai(chatCompletions)');
+  const chatCompletionsCases = buildOpenAICases({ client, config }, 'chatCompletions');
+  const chatCompletionsSummary = await executeProviderCases(
+    'openai(chatCompletions)',
     config.model,
     config.apiBaseUrl,
-    OPENAI_PARAMS,
-    cases,
+    OPENAI_CHAT_PARAMS,
+    chatCompletionsCases,
     failFast,
   );
+
+  // 运行 responses 测试
+  setCurrentProvider('openai(responses)');
+  const responsesCases = buildOpenAICases({ client, config }, 'responses');
+  const responsesSummary = await executeProviderCases(
+    'openai(responses)',
+    config.model,
+    config.apiBaseUrl,
+    OPENAI_RESPONSES_PARAMS,
+    responsesCases,
+    failFast,
+  );
+
+  return [chatCompletionsSummary, responsesSummary];
 }

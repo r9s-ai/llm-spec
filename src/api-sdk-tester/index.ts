@@ -1,6 +1,8 @@
 export { runOpenAICases } from './openai-provider';
 export { runAnthropicCases } from './anthropic-provider';
 export { runGeminiCases } from './gemini-provider';
+export { runClaudeAgentCases } from './claude-agent-provider';
+export { runCodexCases } from './codex-provider';
 
 export { resolveRuntimeConfig } from './runtime-config';
 export type {
@@ -8,6 +10,8 @@ export type {
   OpenAIProviderConfig,
   AnthropicProviderConfig,
   GeminiProviderConfig,
+  ClaudeAgentProviderConfig,
+  CodexProviderConfig,
 } from './runtime-config';
 
 export {

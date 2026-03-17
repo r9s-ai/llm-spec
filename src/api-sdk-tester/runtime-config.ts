@@ -22,6 +22,7 @@ export interface AnthropicProviderConfig {
   timeoutMs: number;
   container?: string;
   inferenceGeo?: string;
+  betas?: string[];
 }
 
 export interface GeminiProviderConfig {
@@ -39,6 +40,26 @@ export interface GeminiProviderConfig {
   modelArmorResponseTemplate?: string;
 }
 
+export interface ClaudeAgentProviderConfig {
+  provider: 'claude-agent';
+  apiKey?: string;
+  apiBaseUrl?: string;
+  workingDirectory: string;
+  skipGitRepoCheck: boolean;
+  testImagePath?: string;
+  timeoutMs: number;
+}
+
+export interface CodexProviderConfig {
+  provider: 'codex';
+  apiKey?: string;
+  apiBaseUrl?: string;
+  workingDirectory: string;
+  skipGitRepoCheck: boolean;
+  testImagePath?: string;
+  timeoutMs: number;
+}
+
 export interface RuntimeConfig {
   targetProviders: ProviderName[];
   failFast: boolean;
@@ -46,6 +67,8 @@ export interface RuntimeConfig {
   openai: OpenAIProviderConfig;
   anthropic: AnthropicProviderConfig;
   gemini: GeminiProviderConfig;
+  claudeAgent: ClaudeAgentProviderConfig;
+  codex: CodexProviderConfig;
 }
 
 function loadDotEnvIfPresent(path = '.env'): void {
@@ -131,6 +154,12 @@ function normalizeProviderName(raw: string): ProviderName | undefined {
   if (normalized === 'gemini' || normalized === 'google' || normalized === 'genai') {
     return 'gemini';
   }
+  if (normalized === 'claude-agent' || normalized === 'claudeagent') {
+    return 'claude-agent';
+  }
+  if (normalized === 'codex') {
+    return 'codex';
+  }
   return undefined;
 }
 
@@ -152,6 +181,15 @@ function resolveTargetProviders(raw: string | undefined): ProviderName[] {
     return fallback;
   }
   return Array.from(set);
+}
+
+function resolveWorkingDirectory(envKey: string): string {
+  const dir = firstNonEmptyEnv(envKey);
+  if (dir) {
+    return dir;
+  }
+  // 默认使用当前工作目录
+  return process.cwd();
 }
 
 export function resolveRuntimeConfig(): RuntimeConfig {
@@ -184,6 +222,7 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     timeoutMs: parseNumber(firstNonEmptyEnv('ANTHROPIC_TIMEOUT_MS'), defaultTimeoutMs),
     container: firstNonEmptyEnv('ANTHROPIC_CONTAINER'),
     inferenceGeo: firstNonEmptyEnv('ANTHROPIC_INFERENCE_GEO'),
+    betas: firstNonEmptyEnv('ANTHROPIC_BETAS')?.split(',').map((b) => b.trim()).filter(Boolean),
   };
 
   const gemini: GeminiProviderConfig = {
@@ -201,6 +240,36 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     modelArmorResponseTemplate: firstNonEmptyEnv('GEMINI_MODEL_ARMOR_RESPONSE_TEMPLATE'),
   };
 
+  const claudeAgent: ClaudeAgentProviderConfig = {
+    provider: 'claude-agent',
+    apiKey: firstNonEmptyEnv('CLAUDE_AGENT_API_KEY', 'ANTHROPIC_API_KEY', 'API_KEY'),
+    apiBaseUrl: firstNonEmptyEnv(
+      'CLAUDE_AGENT_API_BASE_URL',
+      'ANTHROPIC_API_BASE_URL',
+      'ANTHROPIC_BASE_URL',
+      'API_BASE_URL',
+    ),
+    workingDirectory: resolveWorkingDirectory('CLAUDE_AGENT_WORKING_DIRECTORY'),
+    skipGitRepoCheck: parseBoolean(firstNonEmptyEnv('CLAUDE_AGENT_SKIP_GIT_REPO_CHECK'), true),
+    testImagePath: firstNonEmptyEnv('CLAUDE_AGENT_TEST_IMAGE_PATH'),
+    timeoutMs: parseNumber(firstNonEmptyEnv('CLAUDE_AGENT_TIMEOUT_MS'), defaultTimeoutMs),
+  };
+
+  const codex: CodexProviderConfig = {
+    provider: 'codex',
+    apiKey: firstNonEmptyEnv('CODEX_API_KEY', 'OPENAI_API_KEY', 'API_KEY'),
+    apiBaseUrl: firstNonEmptyEnv(
+      'CODEX_API_BASE_URL',
+      'OPENAI_API_BASE_URL',
+      'OPENAI_BASE_URL',
+      'API_BASE_URL',
+    ),
+    workingDirectory: resolveWorkingDirectory('CODEX_WORKING_DIRECTORY'),
+    skipGitRepoCheck: parseBoolean(firstNonEmptyEnv('CODEX_SKIP_GIT_REPO_CHECK'), true),
+    testImagePath: firstNonEmptyEnv('CODEX_TEST_IMAGE_PATH'),
+    timeoutMs: parseNumber(firstNonEmptyEnv('CODEX_TIMEOUT_MS'), defaultTimeoutMs),
+  };
+
   return {
     targetProviders,
     failFast,
@@ -208,5 +277,7 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     openai,
     anthropic,
     gemini,
+    claudeAgent,
+    codex,
   };
 }
