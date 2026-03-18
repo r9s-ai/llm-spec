@@ -85,18 +85,8 @@ def _inject_provider_snapshot_for_runs(
 def _create_client(
     provider: str,
     app_config: AppConfig,
-    mode: str,
 ) -> tuple[HTTPClient, Any]:
-    """Create (HTTPClient, ProviderAdapter) — delegates to core for real mode."""
-    if mode == "mock":
-        from llm_spec_web.adapters.mock_adapter import MockProviderAdapter
-
-        config = ProviderConfig(api_key="", base_url="", timeout=30.0)
-        return HTTPClient(), MockProviderAdapter(
-            config=config,
-            base_dir=settings.mock_base_dir,
-            provider_name=provider,
-        )
+    """Create (HTTPClient, ProviderAdapter) from provider config."""
     return create_provider_adapter(provider, app_config)
 
 
@@ -134,11 +124,10 @@ class RunExecutionService:
                     base_url=task.provider_base_url,
                     timeout=task.provider_timeout,
                 )
-        if run_job.mode != "mock":
-            try:
-                app_config.get_provider_config(run_job.provider)
-            except KeyError as err:
-                raise ConfigurationError(f"provider config missing: {run_job.provider}") from err
+        try:
+            app_config.get_provider_config(run_job.provider)
+        except KeyError as err:
+            raise ConfigurationError(f"provider config missing: {run_job.provider}") from err
 
         asyncio.run(
             self._retry_test_in_run_async(
@@ -167,7 +156,7 @@ class RunExecutionService:
     ) -> None:
         http_client = None
         try:
-            http_client, client = _create_client(run_job.provider, app_config, run_job.mode)
+            http_client, client = _create_client(run_job.provider, app_config)
 
             executor = Executor(client=client)
             verdict = await executor.run_one(target_case)
@@ -248,19 +237,16 @@ class RunExecutionService:
                     base_url=task.provider_base_url,
                     timeout=task.provider_timeout,
                 )
-        if run_job.mode != "mock":
-            try:
-                app_config.get_provider_config(run_job.provider)
-            except KeyError:
-                run_repo.fail_run_with_event(
-                    run_job, f"provider config missing: {run_job.provider}"
-                )
-                event_bus.push(
-                    run_id, "run_failed", {"error": f"provider config missing: {run_job.provider}"}
-                )
-                event_bus.end_run(run_id)
-                event_bus.cleanup(run_id)
-                return
+        try:
+            app_config.get_provider_config(run_job.provider)
+        except KeyError:
+            run_repo.fail_run_with_event(run_job, f"provider config missing: {run_job.provider}")
+            event_bus.push(
+                run_id, "run_failed", {"error": f"provider config missing: {run_job.provider}"}
+            )
+            event_bus.end_run(run_id)
+            event_bus.cleanup(run_id)
+            return
 
         suite_service = SuiteService()
         suite_service.get_suite(run_job.suite_id)
@@ -270,10 +256,8 @@ class RunExecutionService:
         case_id_maps: dict[str, dict[str, str]] = {}
         progress_counters: dict[str, list[int]] = {}
 
-        mode = run_job.mode
-
         def _client_factory(provider: str, cfg: AppConfig) -> tuple[HTTPClient, Any]:
-            return _create_client(provider, cfg, mode)
+            return _create_client(provider, cfg)
 
         async def _on_suite_start(ctx: SuiteCallbackContext) -> None:
             sid = ctx.suite.suite_id
@@ -289,7 +273,6 @@ class RunExecutionService:
                 job.id,
                 "run_started",
                 {
-                    "mode": job.mode,
                     "progress_total": job.progress_total,
                     "test_order": [c.test_name for c in cases],
                     "max_concurrent": max_concurrent,
@@ -439,7 +422,6 @@ class RunExecutionService:
         run_map: dict[str, RunJob] = {}
         suite_ids: list[str] = []
         selected_tests: dict[str, set[str]] = {}
-        mode = active_runs[0].mode  # all runs in a task share the same mode
 
         for run_job in active_runs:
             if run_job.suite_id is None:
@@ -470,7 +452,7 @@ class RunExecutionService:
         progress_counters: dict[str, list[int]] = {}  # [passed, failed]
 
         def _client_factory(provider: str, cfg: AppConfig) -> tuple[HTTPClient, Any]:
-            return _create_client(provider, cfg, mode)
+            return _create_client(provider, cfg)
 
         async def _on_suite_start(ctx: SuiteCallbackContext) -> None:
             sid = ctx.suite.suite_id
@@ -486,7 +468,6 @@ class RunExecutionService:
                 job.id,
                 "run_started",
                 {
-                    "mode": job.mode,
                     "progress_total": job.progress_total,
                     "test_order": [c.test_name for c in cases],
                     "max_concurrent": max_concurrent,

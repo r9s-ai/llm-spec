@@ -5,7 +5,7 @@ import * as api from "../api";
 import type { ProviderConfig, RunJob } from "../types";
 
 export function TestingPage() {
-  const { runMode, setRunMode, setNotice, suites, tasks } = useAppContext();
+  const { setNotice, suites, tasks } = useAppContext();
   const [runtimeProviders, setRuntimeProviders] = useState<ProviderConfig[]>([]);
   const [selectedRuntimeProvider, setSelectedRuntimeProvider] = useState("");
   const {
@@ -98,7 +98,6 @@ export function TestingPage() {
 
     await startTaskRun(
       selectedSuiteIds,
-      runMode,
       selectedTestsBySuite,
       selectedRuntimeProvider,
       setNotice
@@ -106,7 +105,6 @@ export function TestingPage() {
   }, [
     suiteList,
     selectedTestsBySuite,
-    runMode,
     startTaskRun,
     selectedRuntimeProvider,
     setNotice,
@@ -221,7 +219,6 @@ export function TestingPage() {
             expandedSuites={expandedSuites}
             selectedTestCount={selectedTestCount}
             selectedRuntimeProvider={selectedRuntimeProvider}
-            runMode={runMode}
             isRunning={isRunning}
             isLoading={isLoading}
             isRefreshingCache={isRefreshingRegistryCache}
@@ -232,7 +229,6 @@ export function TestingPage() {
             onClearAll={handleClearAll}
             onSelectProvider={handleSelectProvider}
             onSelectedRuntimeProviderChange={setSelectedRuntimeProvider}
-            onRunModeChange={setRunMode}
             onRefreshCache={() => void handleRefreshMemory()}
             onRun={() => void handleStartTaskRun()}
           />

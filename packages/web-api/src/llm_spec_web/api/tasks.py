@@ -54,7 +54,6 @@ def create_task(
     task, runs = service.create_task(
         db,
         suite_ids=payload.suite_ids,
-        mode=payload.mode,
         selected_tests_by_suite=payload.selected_tests_by_suite,
         name=payload.name,
         selected_provider=payload.selected_provider,
@@ -68,7 +67,6 @@ def create_task(
         id=task.id,
         name=task.name,
         status=task.status,
-        mode=task.mode,
         selected_provider=task.selected_provider,
         provider_api_key=task.provider_api_key,
         provider_base_url=task.provider_base_url,
@@ -109,7 +107,6 @@ def get_task(
         id=task.id,
         name=task.name,
         status=task.status,
-        mode=task.mode,
         selected_provider=task.selected_provider,
         provider_api_key=task.provider_api_key,
         provider_base_url=task.provider_base_url,

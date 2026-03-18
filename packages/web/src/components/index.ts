@@ -11,11 +11,6 @@ export { ModelNode } from "./TestSelector/ModelNode";
 export { SuiteNode } from "./TestSelector/SuiteNode";
 export { TestNode } from "./TestSelector/TestNode";
 
-// RunControl components
-export { RunControlPanel } from "./RunControl";
-export { ModeSelector } from "./RunControl";
-export { RunButton } from "./RunControl";
-
 // RunCards components
 export { ProgressBar } from "./RunCards";
 export { ActiveRunCard } from "./RunCards";

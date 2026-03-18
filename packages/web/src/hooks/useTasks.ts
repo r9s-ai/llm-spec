@@ -11,7 +11,7 @@ import {
   streamRunEvents,
   updateTask,
 } from "../api";
-import type { RunEvent, RunJob, RunMode, TaskWithRuns, TestSelectionMap } from "../types";
+import type { RunEvent, RunJob, TaskWithRuns, TestSelectionMap } from "../types";
 
 export function useTasks() {
   const [tasks, setTasks] = useState<TaskWithRuns[]>([]);
@@ -239,7 +239,6 @@ export function useTasks() {
   const startTaskRun = useCallback(
     async (
       modelSuiteIds: string[],
-      mode: RunMode,
       selectedTestsBySuite: TestSelectionMap,
       selectedProvider: string,
       onNotice: (msg: string) => void
@@ -264,7 +263,6 @@ export function useTasks() {
 
       const task = await createTask({
         suite_ids: modelSuiteIds,
-        mode,
         selected_tests_by_suite: selectedTestsBySuiteStr,
         selected_provider: selectedProvider,
       });

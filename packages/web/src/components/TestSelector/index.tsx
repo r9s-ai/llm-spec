@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { SearchInput } from "./SearchInput";
 import { ModelNode } from "./ModelNode";
-import type { ProviderConfig, Suite, TestSelectionMap, RunMode } from "../../types";
+import type { ProviderConfig, Suite, TestSelectionMap } from "../../types";
 import { getTestRows } from "../../utils";
 
 interface TestSelectorProps {
@@ -13,7 +13,6 @@ interface TestSelectorProps {
   expandedSuites: Set<string>;
   selectedTestCount: number;
   selectedRuntimeProvider: string;
-  runMode: RunMode;
   isRunning: boolean;
   isLoading: boolean;
   isRefreshingCache: boolean;
@@ -24,7 +23,6 @@ interface TestSelectorProps {
   onClearAll: () => void;
   onSelectProvider: (providerId: string) => void;
   onSelectedRuntimeProviderChange: (providerName: string) => void;
-  onRunModeChange: (mode: RunMode) => void;
   onRefreshCache: () => void;
   onRun: () => void;
 }
@@ -37,7 +35,6 @@ export function TestSelector({
   expandedSuites,
   selectedTestCount,
   selectedRuntimeProvider,
-  runMode,
   isRunning,
   isLoading,
   isRefreshingCache,
@@ -48,7 +45,6 @@ export function TestSelector({
   onClearAll,
   onSelectProvider,
   onSelectedRuntimeProviderChange,
-  onRunModeChange,
   onRefreshCache,
   onRun,
 }: TestSelectorProps) {
@@ -168,82 +164,53 @@ export function TestSelector({
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex-shrink-0 space-y-1 pb-2">
-        <div className="flex items-center gap-2">
-          {/* Block C: stacked A + B */}
-          <div className="flex-1 space-y-1">
-            {/* Block A: mode + concurrent */}
+      <div className="flex-shrink-0 space-y-2 pb-2">
+        <div className="flex items-stretch justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+          <div className="min-w-0 flex-1 space-y-2">
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5 flex-1">
-                <button
-                  onClick={() => onRunModeChange("real")}
-                  disabled={isRunning}
-                  className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
-                    runMode === "real"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"
-                  } ${isRunning ? "cursor-not-allowed opacity-50" : ""}`}
-                >
-                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                  Real
-                </button>
-                <button
-                  onClick={() => onRunModeChange("mock")}
-                  disabled={isRunning}
-                  className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
-                    runMode === "mock"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"
-                  } ${isRunning ? "cursor-not-allowed opacity-50" : ""}`}
-                >
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                  Mock
-                </button>
-              </div>
-
-              <div className="ml-auto flex items-center gap-1">
-                <span className="text-xs text-slate-500">Provider:</span>
-                <select
-                  value={selectedRuntimeProvider}
-                  onChange={(e) => onSelectedRuntimeProviderChange(e.target.value)}
-                  disabled={isRunning || runtimeProviders.length === 0}
-                  className={`h-7 max-w-[140px] rounded-md border border-slate-200 bg-white px-1.5 text-xs font-medium text-slate-700 ${
-                    isRunning || runtimeProviders.length === 0
-                      ? "cursor-not-allowed opacity-50"
-                      : ""
-                  }`}
-                >
-                  {runtimeProviders.length === 0 ? (
-                    <option value="">No providers</option>
-                  ) : (
-                    runtimeProviders.map((provider) => (
-                      <option key={provider.provider} value={provider.provider}>
-                        {provider.provider}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
+              <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Provider
+              </span>
+              <select
+                value={selectedRuntimeProvider}
+                onChange={(e) => onSelectedRuntimeProviderChange(e.target.value)}
+                disabled={isRunning || runtimeProviders.length === 0}
+                className={`h-9 min-w-[180px] max-w-[240px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm ${
+                  isRunning || runtimeProviders.length === 0
+                    ? "cursor-not-allowed opacity-50"
+                    : ""
+                }`}
+              >
+                {runtimeProviders.length === 0 ? (
+                  <option value="">No providers</option>
+                ) : (
+                  runtimeProviders.map((provider) => (
+                    <option key={provider.provider} value={provider.provider}>
+                      {provider.provider}
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
 
-            {/* Block B: stats */}
-            <div className="text-center text-xs font-mono tracking-wide text-slate-600">
-              <span className="inline-block min-w-[3ch] text-right font-semibold text-slate-900 tabular-nums">
-                {modelCount}
-              </span>{" "}
-              models ·{" "}
-              <span className="inline-block min-w-[3ch] text-right font-semibold text-slate-900 tabular-nums">
-                {selectedTestCount}
-              </span>{" "}
-              selected
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-mono text-slate-600 shadow-sm">
+                <span className="font-semibold text-slate-900 tabular-nums">{modelCount}</span>
+                <span>models</span>
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-mono text-slate-600 shadow-sm">
+                <span className="font-semibold text-slate-900 tabular-nums">
+                  {selectedTestCount}
+                </span>
+                <span>selected</span>
+              </div>
             </div>
           </div>
 
-          {/* Block D: Run button */}
           <button
             onClick={onRun}
             disabled={selectedTestCount === 0 || isRunning || runtimeProviders.length === 0}
-            className={`flex items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold transition-all h-12 w-32 ${
+            className={`flex h-auto min-h-[72px] w-28 shrink-0 items-center justify-center rounded-xl px-4 text-sm font-bold transition-all ${
               selectedTestCount > 0 && !isRunning && runtimeProviders.length > 0
                 ? "bg-violet-600 text-white shadow-lg shadow-violet-200 hover:bg-violet-700 active:scale-[0.98]"
                 : "cursor-not-allowed bg-slate-200 text-slate-400"

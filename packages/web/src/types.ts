@@ -1,9 +1,6 @@
 // Page types
 export type PageKey = "testing" | "suites" | "settings";
 
-// Run mode
-export type RunMode = "real" | "mock";
-
 // Suite types
 export type SuiteTestDef = {
   name: string;
@@ -32,7 +29,6 @@ export type Task = {
   id: string;
   name: string;
   status: string;
-  mode: string;
   selected_provider: string | null;
   provider_api_key: string | null;
   provider_base_url: string | null;
@@ -54,7 +50,6 @@ export type TaskWithRuns = Task & {
 export type RunJob = {
   id: string;
   status: string;
-  mode: string;
   provider: string;
   route: string | null;
   model: string | null;

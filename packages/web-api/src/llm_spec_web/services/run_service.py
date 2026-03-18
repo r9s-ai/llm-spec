@@ -37,13 +37,12 @@ class RunService:
         self,
         db: Session,
         suite_ids: list[str],
-        mode: str | None = None,
         selected_tests_by_suite: dict[str, list[str]] | None = None,
         name: str | None = None,
         selected_provider: str | None = None,
     ) -> tuple[Task, list[RunJob]]:
         return self._task.create_task(
-            db, suite_ids, mode, selected_tests_by_suite, name, selected_provider
+            db, suite_ids, selected_tests_by_suite, name, selected_provider
         )
 
     def get_task(self, db: Session, task_id: str) -> Task:

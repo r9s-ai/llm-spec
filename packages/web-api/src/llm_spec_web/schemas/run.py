@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -12,7 +12,6 @@ class TaskCreateRequest(BaseModel):
     """Request body for creating a new task."""
 
     suite_ids: list[str] = Field(..., min_length=1)
-    mode: Literal["real", "mock"] | None = None
     selected_tests_by_suite: dict[str, list[str]] | None = Field(
         default=None, description="Map of suite_id to list of test names"
     )
@@ -41,7 +40,6 @@ class RunJobResponse(BaseModel):
 
     id: str
     status: str
-    mode: str
     provider: str
     model: str | None = None
     route: str | None = None
@@ -66,7 +64,6 @@ class TaskResponse(BaseModel):
     id: str
     name: str
     status: str
-    mode: str
     selected_provider: str | None = None
     provider_api_key: str | None = None
     provider_base_url: str | None = None

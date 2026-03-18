@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState } from "react";
 import { useSettings, useSuites, useTasks } from "../hooks";
-import type { PageKey, RunMode } from "../types";
+import type { PageKey } from "../types";
 
 interface AppContextValue {
   // Page state
@@ -8,8 +8,6 @@ interface AppContextValue {
   setPage: (page: PageKey) => void;
   notice: string;
   setNotice: (notice: string) => void;
-  runMode: RunMode;
-  setRunMode: (mode: RunMode) => void;
 
   // Suites
   suites: ReturnType<typeof useSuites>;
@@ -26,7 +24,6 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [page, setPage] = useState<PageKey>("testing");
   const [notice, setNotice] = useState<string>("");
-  const [runMode, setRunMode] = useState<RunMode>("real");
 
   const suites = useSuites();
   const tasks = useTasks();
@@ -37,8 +34,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setPage,
     notice,
     setNotice,
-    runMode,
-    setRunMode,
     suites,
     tasks,
     settings,

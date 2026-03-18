@@ -277,9 +277,6 @@ export function TaskCard({
                 </Badge>
               )}
               <span className="text-xs text-slate-400 bg-slate-200 px-2 py-0.5 rounded">
-                {task.mode}
-              </span>
-              <span className="text-sm text-slate-500">
                 {modelCount} model{modelCount !== 1 ? "s" : ""} · {routeCount} route
                 {routeCount !== 1 ? "s" : ""}
               </span>

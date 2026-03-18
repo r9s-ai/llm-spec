@@ -8,7 +8,6 @@ create table if not exists task (
     id text primary key,
     name text not null default 'Task',
     status text not null default 'running',
-    mode text not null default 'real',
     selected_provider text null,
     provider_api_key text null,
     provider_base_url text null,
@@ -28,7 +27,6 @@ create index if not exists ix_task_created_at on task(created_at desc);
 create table if not exists run_job (
     id text primary key,
     status text not null default 'queued',
-    mode text not null default 'real',
     provider text not null,
     route text null,
     model text null,

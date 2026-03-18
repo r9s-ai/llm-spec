@@ -78,7 +78,6 @@ export function ActiveRunCard({ run, events }: ActiveRunCardProps) {
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
               Running
             </span>
-            <span className="text-xs text-slate-500">{run.mode}</span>
           </div>
           <h4 className="mt-1 truncate text-xs font-semibold text-slate-900">
             {run.route ?? run.endpoint}

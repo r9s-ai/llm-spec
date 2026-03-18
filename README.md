@@ -26,7 +26,7 @@ This project now uses a **registry-first** design:
 - Test suites are loaded from `suites-registry/` files (not stored in DB).
 - Provider runtime config is stored in `llm-spec.toml` (not `provider_config` DB table).
 - Web backend DB (SQLite by default) stores only run/task data.
-- FastAPI auto-creates run tables on startup when `LLM_SPEC_WEB_AUTO_INIT_DB=true`.
+- FastAPI auto-creates run/task tables on startup using the built-in default config.
 
 ---
 
@@ -92,7 +92,7 @@ Run config-driven integration suites:
 uv run pytest packages/core/tests/integration/test_suite_runner.py -v
 ```
 
-Mock mode:
+Mock-backed integration run:
 
 ```bash
 uv run pytest packages/core/tests/integration/test_suite_runner.py --mock -v
@@ -146,7 +146,7 @@ Frontend URL: `http://localhost:5173`
 
 Default DB URL:
 
-`sqlite:///./packages/web-api/src/llm_spec_web/.data/llm_spec_web.db`
+`sqlite:///./packages/web-api/src/llm_spec_web/llm_spec_web.db`
 
 The backend manages tables via SQLAlchemy metadata (run tables only):
 
@@ -165,7 +165,7 @@ Task result payload (`/api/runs/{run_id}/task-result`) now uses a task-centric s
 If you want a fresh DB:
 
 ```bash
-rm -f packages/web-api/src/llm_spec_web/.data/llm_spec_web.db
+rm -f packages/web-api/src/llm_spec_web/llm_spec_web.db
 # restart backend, tables will be recreated automatically
 ```
 
@@ -175,22 +175,17 @@ Schema reference:
 
 ---
 
-## Environment Variables
+## Web Runtime Defaults
 
-Core web settings:
+The web backend now runs with built-in defaults:
 
-- `LLM_SPEC_WEB_DATABASE_URL`
-- `LLM_SPEC_WEB_APP_TOML_PATH`
-- `LLM_SPEC_WEB_AUTO_INIT_DB`
-- `LLM_SPEC_WEB_MOCK_MODE`
-- `LLM_SPEC_WEB_MOCK_BASE_DIR`
-- `LLM_SPEC_WEB_CORS_ORIGINS`
-- `LLM_SPEC_WEB_SUITE_REGISTRY_CACHE_TTL_SECONDS`
+- SQLite DB: `packages/web-api/src/llm_spec_web/llm_spec_web.db`
+- Runtime config file: `llm-spec.toml`
+- Auto-init DB: `true`
 
-Default values can be found in:
+If you need to override them, see:
 
 - `packages/web-api/src/llm_spec_web/config.py`
-- `packages/web-api/src/llm_spec_web/env.example`
 
 ---
 
@@ -237,7 +232,6 @@ Example:
 api_key = "sk-..."
 base_url = "https://api.openai.com"
 timeout = 30.0
-api_family = "openai"
 ```
 
 ---

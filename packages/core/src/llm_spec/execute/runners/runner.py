@@ -113,6 +113,13 @@ class TestRunner:
             return None, []
         return self._asset_resolver.prepare_upload_files(case.request.files)
 
+    def _request_headers(self, case: ExecutableCase) -> dict[str, str] | None:
+        headers = dict(case.request.headers or {})
+        # Mock-server providers are detected by credential convention.
+        if self.client.config.api_key.startswith("mock"):
+            headers["X-LLM-Spec-Case-Id"] = case.case_id
+        return headers or None
+
     # ── Verdict builder ───────────────────────────────────
 
     def _build_verdict(
@@ -381,7 +388,7 @@ class TestRunner:
                 params=params,
                 files=files,
                 method=case.request.method,
-                additional_headers=case.request.headers or None,
+                additional_headers=self._request_headers(case),
             )
         except Exception as e:
             finished_at = datetime.now(UTC).isoformat()
@@ -409,7 +416,7 @@ class TestRunner:
                 params=params,
                 files=files,
                 method=case.request.method,
-                additional_headers=case.request.headers or None,
+                additional_headers=self._request_headers(case),
             )
         except Exception as e:
             finished_at = datetime.now(UTC).isoformat()
@@ -440,6 +447,7 @@ class TestRunner:
                     params=params,
                     method=case.request.method,
                     files=files,
+                    additional_headers=self._request_headers(case),
                 )
             except httpx.HTTPStatusError as e:
                 finished_at = datetime.now(UTC).isoformat()
@@ -508,6 +516,7 @@ class TestRunner:
                     params=params,
                     method=case.request.method,
                     files=files,
+                    additional_headers=self._request_headers(case),
                 )
             except httpx.HTTPStatusError as e:
                 finished_at = datetime.now(UTC).isoformat()

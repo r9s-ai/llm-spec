@@ -25,7 +25,6 @@ class TaskService:
         self,
         db: Session,
         suite_ids: list[str],
-        mode: str | None = None,
         selected_tests_by_suite: dict[str, list[str]] | None = None,
         name: str | None = None,
         selected_provider: str | None = None,
@@ -35,7 +34,6 @@ class TaskService:
         registry = suite_service.get_registry()
         app_config = load_config(settings.app_toml_path)
 
-        resolved_mode = mode or ("mock" if settings.mock_mode else "real")
         provider_name = (selected_provider or "").strip()
         if not provider_name:
             raise ConfigurationError("selected_provider is required")
@@ -53,7 +51,6 @@ class TaskService:
         task = Task(
             name=name or "Task",
             status="running",
-            mode=resolved_mode,
             selected_provider=provider_name,
             provider_api_key=provider_config.api_key,
             provider_base_url=provider_config.base_url,
@@ -75,7 +72,6 @@ class TaskService:
 
             run_job = RunJob(
                 status="queued",
-                mode=resolved_mode,
                 provider=suite.provider_id,
                 route=suite.route_id,
                 model=suite.model_id,

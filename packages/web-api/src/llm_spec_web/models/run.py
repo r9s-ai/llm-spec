@@ -18,7 +18,6 @@ class Task(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(255), nullable=False, default="Task")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="running", index=True)
-    mode: Mapped[str] = mapped_column(String(16), nullable=False, default="real")
     selected_provider: Mapped[str | None] = mapped_column(String(128), nullable=True)
     provider_api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     provider_base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -48,7 +47,6 @@ class RunJob(Base):
         index=True,
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued", index=True)
-    mode: Mapped[str] = mapped_column(String(16), nullable=False, default="real")
 
     # Suite identity
     provider: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
