@@ -85,6 +85,22 @@ class ProviderService:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("\n".join(lines), encoding="utf-8")
 
+    def _provider_sections(self, data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        providers: dict[str, dict[str, Any]] = {}
+        known_sections = {"log", "providers", "channels", "run"}
+
+        raw_providers = data.get("providers", {})
+        if isinstance(raw_providers, dict):
+            for provider, value in raw_providers.items():
+                if isinstance(value, dict):
+                    providers[str(provider)] = value
+
+        for key, value in data.items():
+            if key not in known_sections and isinstance(value, dict):
+                providers[str(key)] = value
+
+        return providers
+
     def _row(self, provider: str, payload: dict[str, Any]) -> dict[str, Any]:
         return {
             "provider": provider,
@@ -101,17 +117,15 @@ class ProviderService:
 
     def list_providers(self) -> list[dict[str, Any]]:
         data = self._read()
-        providers = data.get("providers", {})
-        if not isinstance(providers, dict):
-            providers = {}
+        providers = self._provider_sections(data)
         return [
             self._row(p, v if isinstance(v, dict) else {}) for p, v in sorted(providers.items())
         ]
 
     def get_provider(self, provider: str) -> dict[str, Any]:
         data = self._read()
-        providers = data.get("providers", {})
-        if not isinstance(providers, dict) or provider not in providers:
+        providers = self._provider_sections(data)
+        if provider not in providers:
             raise NotFoundError("ProviderConfig", provider)
         value = providers[provider]
         return self._row(provider, value if isinstance(value, dict) else {})

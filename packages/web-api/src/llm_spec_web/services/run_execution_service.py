@@ -42,6 +42,46 @@ from llm_spec_web.services.suite_service import SuiteService
 from llm_spec_web.services.task_service import TaskService
 
 
+def _inject_provider_snapshot(
+    app_config: AppConfig,
+    *,
+    provider_name: str,
+    api_key: str | None,
+    base_url: str | None,
+    timeout: float | None,
+) -> AppConfig:
+    """Clone config and override one provider entry with persisted task credentials."""
+    injected = app_config.model_copy(deep=True)
+    if api_key and base_url:
+        injected.provider_configs[provider_name] = ProviderConfig(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout or 30.0,
+        )
+    return injected
+
+
+def _inject_provider_snapshot_for_runs(
+    app_config: AppConfig,
+    runs: list[RunJob],
+    *,
+    api_key: str | None,
+    base_url: str | None,
+    timeout: float | None,
+) -> AppConfig:
+    """Override every suite provider participating in one task with the same credentials."""
+    injected = app_config.model_copy(deep=True)
+    if not api_key or not base_url:
+        return injected
+    for provider_name in {run.provider for run in runs}:
+        injected.provider_configs[provider_name] = ProviderConfig(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout or 30.0,
+        )
+    return injected
+
+
 def _create_client(
     provider: str,
     app_config: AppConfig,
@@ -83,6 +123,17 @@ class RunExecutionService:
         target_case = run_case_to_test_case(run_case)
 
         app_config = load_config(settings.app_toml_path)
+        task = None
+        if run_job.task_id:
+            task = run_repo.get_task_by_id(run_job.task_id)
+            if task is not None:
+                app_config = _inject_provider_snapshot(
+                    app_config,
+                    provider_name=run_job.provider,
+                    api_key=task.provider_api_key,
+                    base_url=task.provider_base_url,
+                    timeout=task.provider_timeout,
+                )
         if run_job.mode != "mock":
             try:
                 app_config.get_provider_config(run_job.provider)
@@ -187,6 +238,16 @@ class RunExecutionService:
             return
 
         app_config = load_config(settings.app_toml_path)
+        if run_job.task_id:
+            task = run_repo.get_task_by_id(run_job.task_id)
+            if task is not None:
+                app_config = _inject_provider_snapshot(
+                    app_config,
+                    provider_name=run_job.provider,
+                    api_key=task.provider_api_key,
+                    base_url=task.provider_base_url,
+                    timeout=task.provider_timeout,
+                )
         if run_job.mode != "mock":
             try:
                 app_config.get_provider_config(run_job.provider)
@@ -394,6 +455,13 @@ class RunExecutionService:
             return
 
         app_config = load_config(settings.app_toml_path)
+        app_config = _inject_provider_snapshot_for_runs(
+            app_config,
+            active_runs,
+            api_key=task.provider_api_key,
+            base_url=task.provider_base_url,
+            timeout=task.provider_timeout,
+        )
         suite_service = SuiteService()
         suites_registry = suite_service.get_registry()
 

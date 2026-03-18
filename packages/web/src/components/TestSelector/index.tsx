@@ -1,18 +1,19 @@
 import { useState, useMemo, useCallback } from "react";
 import { SearchInput } from "./SearchInput";
 import { ModelNode } from "./ModelNode";
-import type { Suite, TestSelectionMap, RunMode } from "../../types";
+import type { ProviderConfig, Suite, TestSelectionMap, RunMode } from "../../types";
 import { getTestRows } from "../../utils";
 
 interface TestSelectorProps {
   providers: string[];
+  runtimeProviders: ProviderConfig[];
   suites: Suite[];
   selectedTestsBySuite: TestSelectionMap;
   selectedProviders: Set<string>;
   expandedSuites: Set<string>;
   selectedTestCount: number;
+  selectedRuntimeProvider: string;
   runMode: RunMode;
-  maxConcurrent: number;
   isRunning: boolean;
   isLoading: boolean;
   isRefreshingCache: boolean;
@@ -22,20 +23,21 @@ interface TestSelectorProps {
   onSelectAll: () => void;
   onClearAll: () => void;
   onSelectProvider: (providerId: string) => void;
+  onSelectedRuntimeProviderChange: (providerName: string) => void;
   onRunModeChange: (mode: RunMode) => void;
-  onMaxConcurrentChange: (max: number) => void;
   onRefreshCache: () => void;
   onRun: () => void;
 }
 
 export function TestSelector({
   providers,
+  runtimeProviders,
   suites,
   selectedTestsBySuite,
   expandedSuites,
   selectedTestCount,
+  selectedRuntimeProvider,
   runMode,
-  maxConcurrent,
   isRunning,
   isLoading,
   isRefreshingCache,
@@ -45,8 +47,8 @@ export function TestSelector({
   onSelectAll,
   onClearAll,
   onSelectProvider,
+  onSelectedRuntimeProviderChange,
   onRunModeChange,
-  onMaxConcurrentChange,
   onRefreshCache,
   onRun,
 }: TestSelectorProps) {
@@ -200,20 +202,26 @@ export function TestSelector({
               </div>
 
               <div className="ml-auto flex items-center gap-1">
-                <span className="text-xs text-slate-500">Concurrent:</span>
+                <span className="text-xs text-slate-500">Provider:</span>
                 <select
-                  value={maxConcurrent}
-                  onChange={(e) => onMaxConcurrentChange(Number(e.target.value))}
-                  disabled={isRunning}
-                  className={`h-7 rounded-md border border-slate-200 bg-white px-1.5 text-xs font-medium text-slate-700 ${
-                    isRunning ? "cursor-not-allowed opacity-50" : ""
+                  value={selectedRuntimeProvider}
+                  onChange={(e) => onSelectedRuntimeProviderChange(e.target.value)}
+                  disabled={isRunning || runtimeProviders.length === 0}
+                  className={`h-7 max-w-[140px] rounded-md border border-slate-200 bg-white px-1.5 text-xs font-medium text-slate-700 ${
+                    isRunning || runtimeProviders.length === 0
+                      ? "cursor-not-allowed opacity-50"
+                      : ""
                   }`}
                 >
-                  <option value={1}>1</option>
-                  <option value={3}>3</option>
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
+                  {runtimeProviders.length === 0 ? (
+                    <option value="">No providers</option>
+                  ) : (
+                    runtimeProviders.map((provider) => (
+                      <option key={provider.provider} value={provider.provider}>
+                        {provider.provider}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
             </div>
@@ -234,9 +242,9 @@ export function TestSelector({
           {/* Block D: Run button */}
           <button
             onClick={onRun}
-            disabled={selectedTestCount === 0 || isRunning}
+            disabled={selectedTestCount === 0 || isRunning || runtimeProviders.length === 0}
             className={`flex items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold transition-all h-12 w-32 ${
-              selectedTestCount > 0 && !isRunning
+              selectedTestCount > 0 && !isRunning && runtimeProviders.length > 0
                 ? "bg-violet-600 text-white shadow-lg shadow-violet-200 hover:bg-violet-700 active:scale-[0.98]"
                 : "cursor-not-allowed bg-slate-200 text-slate-400"
             }`}

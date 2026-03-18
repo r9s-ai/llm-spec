@@ -19,8 +19,8 @@ class TaskCreateRequest(BaseModel):
     name: str | None = Field(
         default=None, max_length=255, description="User-defined name for the task"
     )
-    max_concurrent: int | None = Field(
-        default=None, ge=1, le=50, description="Maximum concurrent tests per run (1-50)"
+    selected_provider: str = Field(
+        ..., min_length=1, description="Selected runtime provider config name"
     )
 
 
@@ -67,6 +67,10 @@ class TaskResponse(BaseModel):
     name: str
     status: str
     mode: str
+    selected_provider: str | None = None
+    provider_api_key: str | None = None
+    provider_base_url: str | None = None
+    provider_timeout: float | None = None
     total_runs: int
     completed_runs: int
     passed_runs: int

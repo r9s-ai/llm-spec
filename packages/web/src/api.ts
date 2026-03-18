@@ -1,4 +1,4 @@
-import type { Task, TaskWithRuns, RunJob, Suite, TomlSettings } from "./types";
+import type { ProviderConfig, Task, TaskWithRuns, RunJob, Suite, TomlSettings } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -33,7 +33,7 @@ export function createTask(input: {
   mode?: "real" | "mock";
   selected_tests_by_suite?: Record<string, string[]>;
   name?: string;
-  max_concurrent?: number;
+  selected_provider: string;
 }): Promise<TaskWithRuns> {
   return request<TaskWithRuns>("/api/tasks", {
     method: "POST",
@@ -95,6 +95,10 @@ export function streamRunEvents(runId: string, afterSeq = 0): EventSource {
 
 export function getTomlSettings(): Promise<TomlSettings> {
   return request<TomlSettings>("/api/settings/toml");
+}
+
+export function getProviderConfigs(): Promise<ProviderConfig[]> {
+  return request<ProviderConfig[]>("/api/provider-configs");
 }
 
 export function updateTomlSettings(content: string): Promise<TomlSettings> {

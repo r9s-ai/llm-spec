@@ -44,6 +44,7 @@ class AppConfig(BaseModel):
     # Dynamically loaded provider configs (Pydantic v2 disallows leading-underscore field names)
     provider_configs: dict[str, ProviderConfig] = Field(default_factory=dict, exclude=True)
     channels: list[ChannelConfig] = Field(default_factory=list, exclude=True)
+    run_max_concurrent: int = 5
 
     @classmethod
     def from_toml(cls, config_path: Path | str = "llm-spec.toml") -> AppConfig:
@@ -64,7 +65,7 @@ class AppConfig(BaseModel):
 
         # Parse provider sections (old style: [openai], [anthropic], ...)
         provider_configs = {}
-        known_sections = {"log", "providers", "channels"}
+        known_sections = {"log", "providers", "channels", "run"}
 
         # New style: [providers.<name>]
         providers_section = data.get("providers", {})
@@ -89,7 +90,14 @@ class AppConfig(BaseModel):
                     continue
                 channels.append(ChannelConfig(**item))
 
-        config = cls(channels=channels)
+        run_max_concurrent = 5
+        raw_run = data.get("run", {})
+        if isinstance(raw_run, dict):
+            raw_max_concurrent = raw_run.get("max_concurrent")
+            if isinstance(raw_max_concurrent, int) and raw_max_concurrent > 0:
+                run_max_concurrent = raw_max_concurrent
+
+        config = cls(channels=channels, run_max_concurrent=run_max_concurrent)
         config.provider_configs = provider_configs
 
         return config

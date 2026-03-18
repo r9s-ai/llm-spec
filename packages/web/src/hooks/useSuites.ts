@@ -54,7 +54,7 @@ export function useSuites() {
 
       setExpandedProviders((prev) => {
         if (prev.size > 0) return prev;
-        const first = nextSuites[0]?.provider;
+        const first = nextSuites[0]?.provider_id;
         return first ? new Set([first]) : prev;
       });
 

@@ -33,6 +33,10 @@ export type Task = {
   name: string;
   status: string;
   mode: string;
+  selected_provider: string | null;
+  provider_api_key: string | null;
+  provider_base_url: string | null;
+  provider_timeout: number | null;
   total_runs: number;
   completed_runs: number;
   passed_runs: number;
@@ -87,10 +91,10 @@ export type ApiType = "openai" | "anthropic" | "gemini" | "xai";
 
 export type ProviderConfig = {
   provider: string;
-  api_type: ApiType;
+  api_type: string;
   base_url: string;
   timeout: number;
-  api_key: string;
+  api_key?: string;
   extra_config: Record<string, unknown>;
   updated_at: string;
 };

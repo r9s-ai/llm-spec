@@ -125,7 +125,7 @@
           {
             variant_id: "jpeg",
             media_type: "image/jpeg",
-            data: "$asset_base64(assets/images/1x1.jpg)",
+            data: "$asset_base64(assets/images/test_base.jpeg)",
           },
           {
             variant_id: "png",
@@ -304,6 +304,7 @@
         value: true,
       },
     },
+
     // {
     //   name: "test_streaming_tool_use",
     //   description: "Streaming tool use test",

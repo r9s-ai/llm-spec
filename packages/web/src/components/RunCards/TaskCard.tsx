@@ -108,6 +108,13 @@ export function TaskCard({
       );
   }, [task]);
 
+  const maskedProviderKey = useMemo(() => {
+    const key = task.provider_api_key;
+    if (!key) return null;
+    if (key.length <= 8) return key;
+    return `${key.slice(0, 4)}...${key.slice(-4)}`;
+  }, [task.provider_api_key]);
+
   const handleDelete = async () => {
     if (isDeleting) return;
     setIsDeleting(true);
@@ -355,60 +362,85 @@ export function TaskCard({
             </div>
           </div>
 
-          {/* Block B: progress + cancel (own row) */}
-          <div className="flex w-full items-center justify-end gap-3">
-            <div className="flex items-center gap-2">
-              <span
-                className={`text-[11px] font-medium ${isRunning ? "text-violet-600" : "text-slate-400"}`}
-              >
-                {progress}%
-              </span>
-              <div className="w-48">
-                <ProgressBar progress={progress} variant={isRunning ? "running" : "default"} />
-              </div>
-            </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isRunning && onCancel) {
-                  void handleCancel();
-                }
-              }}
-              disabled={!isRunning || !onCancel || isCancelling}
-              className={`h-7 w-7 rounded-full border flex items-center justify-center transition-colors disabled:cursor-not-allowed ${
-                isRunning
-                  ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                  : "border-slate-200 bg-slate-100 text-slate-400"
-              }`}
-              title="Cancel task"
-            >
-              {isCancelling ? (
-                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-              ) : (
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+          {/* Block B: provider + progress + cancel */}
+          <div className="flex w-full flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-1 flex-wrap items-center gap-2 text-xs text-slate-500">
+              {task.selected_provider && (
+                <span className="rounded bg-slate-100 px-2 py-1 text-slate-700">
+                  Provider: {task.selected_provider}
+                </span>
               )}
-            </button>
+              {task.provider_base_url && (
+                <span className="rounded bg-slate-100 px-2 py-1 text-slate-700">
+                  {task.provider_base_url}
+                </span>
+              )}
+              {maskedProviderKey && (
+                <span className="rounded bg-slate-100 px-2 py-1 text-slate-700">
+                  Key: {maskedProviderKey}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`text-[11px] font-medium ${isRunning ? "text-violet-600" : "text-slate-400"}`}
+                >
+                  {progress}%
+                </span>
+                <div className="w-48">
+                  <ProgressBar progress={progress} variant={isRunning ? "running" : "default"} />
+                </div>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isRunning && onCancel) {
+                    void handleCancel();
+                  }
+                }}
+                disabled={!isRunning || !onCancel || isCancelling}
+                className={`h-7 w-7 rounded-full border flex items-center justify-center transition-colors disabled:cursor-not-allowed ${
+                  isRunning
+                    ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                    : "border-slate-200 bg-slate-100 text-slate-400"
+                }`}
+                title="Cancel task"
+              >
+                {isCancelling ? (
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>

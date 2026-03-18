@@ -12,7 +12,9 @@ from __future__ import annotations
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from llm_spec.config.loader import load_config
 from llm_spec_web.api.deps import get_db, get_run_service
+from llm_spec_web.config import settings
 from llm_spec_web.core.db import SessionLocal
 from llm_spec_web.schemas.run import (
     RunJobResponse,
@@ -55,9 +57,11 @@ def create_task(
         mode=payload.mode,
         selected_tests_by_suite=payload.selected_tests_by_suite,
         name=payload.name,
+        selected_provider=payload.selected_provider,
     )
 
-    max_concurrent = payload.max_concurrent or 5
+    app_config = load_config(settings.app_toml_path)
+    max_concurrent = app_config.run_max_concurrent
     background_tasks.add_task(_execute_task_in_background, task.id, max_concurrent)
 
     return TaskWithRunsResponse(
@@ -65,6 +69,10 @@ def create_task(
         name=task.name,
         status=task.status,
         mode=task.mode,
+        selected_provider=task.selected_provider,
+        provider_api_key=task.provider_api_key,
+        provider_base_url=task.provider_base_url,
+        provider_timeout=task.provider_timeout,
         total_runs=task.total_runs,
         completed_runs=task.completed_runs,
         passed_runs=task.passed_runs,
@@ -102,6 +110,10 @@ def get_task(
         name=task.name,
         status=task.status,
         mode=task.mode,
+        selected_provider=task.selected_provider,
+        provider_api_key=task.provider_api_key,
+        provider_base_url=task.provider_base_url,
+        provider_timeout=task.provider_timeout,
         total_runs=task.total_runs,
         completed_runs=task.completed_runs,
         passed_runs=task.passed_runs,

@@ -70,6 +70,60 @@
       },
     },
     {
+      name: "input_text_image",
+      description: "Test input with text + image (data URI)",
+      variants: {
+        image_data_uri: [
+          {
+            variant_id: "png",
+            format: "png",
+            image_url: "$asset_data_uri(assets/images/test_base.png,image/png)",
+          },
+          {
+            variant_id: "jpeg",
+            format: "jpeg",
+            image_url: "$asset_data_uri(assets/images/test_base.jpeg,image/jpeg)",
+          },
+          {
+            variant_id: "jpg",
+            format: "jpg",
+            image_url: "$asset_data_uri(assets/images/test_base.jpg,image/jpeg)",
+          },
+          {
+            variant_id: "webp",
+            format: "webp",
+            image_url: "$asset_data_uri(assets/images/test_base.webp,image/webp)",
+          },
+          {
+            variant_id: "gif",
+            format: "gif",
+            image_url: "$asset_data_uri(assets/images/test_base.gif,image/gif)",
+          },
+        ],
+      },
+      params: {
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: "Describe this image in one sentence.",
+              },
+              {
+                type: "input_image",
+                image_url: "$image_data_uri.image_url",
+              },
+            ],
+          },
+        ],
+      },
+      focus_param: {
+        name: "input_image.format",
+        value: "$image_data_uri.format",
+      },
+    },
+    {
       name: "instructions",
       description: "Test instructions parameter",
       params: {

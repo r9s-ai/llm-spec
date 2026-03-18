@@ -241,11 +241,15 @@ export function useTasks() {
       modelSuiteIds: string[],
       mode: RunMode,
       selectedTestsBySuite: TestSelectionMap,
-      onNotice: (msg: string) => void,
-      maxConcurrent?: number
+      selectedProvider: string,
+      onNotice: (msg: string) => void
     ): Promise<void> => {
       if (modelSuiteIds.length === 0) {
         onNotice("Pick at least one model/route to run.");
+        return;
+      }
+      if (!selectedProvider) {
+        onNotice("Select a provider before running.");
         return;
       }
 
@@ -262,7 +266,7 @@ export function useTasks() {
         suite_ids: modelSuiteIds,
         mode,
         selected_tests_by_suite: selectedTestsBySuiteStr,
-        max_concurrent: maxConcurrent,
+        selected_provider: selectedProvider,
       });
 
       upsertTask(task);

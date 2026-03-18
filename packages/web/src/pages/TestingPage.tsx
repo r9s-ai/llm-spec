@@ -1,11 +1,13 @@
 import { useMemo, useCallback, useEffect, useState } from "react";
 import { TestSelector, TaskCard } from "../components";
 import { useAppContext } from "../context";
-import type { RunJob } from "../types";
+import * as api from "../api";
+import type { ProviderConfig, RunJob } from "../types";
 
 export function TestingPage() {
   const { runMode, setRunMode, setNotice, suites, tasks } = useAppContext();
-  const [maxConcurrent, setMaxConcurrent] = useState(5);
+  const [runtimeProviders, setRuntimeProviders] = useState<ProviderConfig[]>([]);
+  const [selectedRuntimeProvider, setSelectedRuntimeProvider] = useState("");
   const {
     providers,
     suites: suiteList,
@@ -37,6 +39,31 @@ export function TestingPage() {
   useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRuntimeProviders = async () => {
+      try {
+        const configs = await api.getProviderConfigs();
+        if (cancelled) return;
+        setRuntimeProviders(configs);
+        setSelectedRuntimeProvider((prev) => {
+          if (prev && configs.some((item) => item.provider === prev)) return prev;
+          return configs[0]?.provider ?? "";
+        });
+      } catch (error) {
+        if (cancelled) return;
+        console.error("Failed to load provider configs:", error);
+        setNotice("Failed to load provider list.");
+      }
+    };
+
+    void loadRuntimeProviders();
+    return () => {
+      cancelled = true;
+    };
+  }, [setNotice]);
 
   // Check if any task is currently running
   const isRunning = useMemo(
@@ -73,16 +100,16 @@ export function TestingPage() {
       selectedSuiteIds,
       runMode,
       selectedTestsBySuite,
-      setNotice,
-      maxConcurrent
+      selectedRuntimeProvider,
+      setNotice
     );
   }, [
     suiteList,
     selectedTestsBySuite,
     runMode,
     startTaskRun,
+    selectedRuntimeProvider,
     setNotice,
-    maxConcurrent,
   ]);
 
   // Toggle tests for a suite
@@ -187,24 +214,25 @@ export function TestingPage() {
         <div className="h-full overflow-auto p-1.5">
           <TestSelector
             providers={providers}
+            runtimeProviders={runtimeProviders}
             suites={suiteList}
             selectedTestsBySuite={selectedTestsBySuite}
             selectedProviders={selectedProviders}
             expandedSuites={expandedSuites}
             selectedTestCount={selectedTestCount}
+            selectedRuntimeProvider={selectedRuntimeProvider}
             runMode={runMode}
             isRunning={isRunning}
             isLoading={isLoading}
             isRefreshingCache={isRefreshingRegistryCache}
-            maxConcurrent={maxConcurrent}
             onToggleSuiteExpanded={toggleSuitePanel}
             onToggleTests={handleToggleTests}
             onToggleTest={toggleTest}
             onSelectAll={handleSelectAll}
             onClearAll={handleClearAll}
             onSelectProvider={handleSelectProvider}
+            onSelectedRuntimeProviderChange={setSelectedRuntimeProvider}
             onRunModeChange={setRunMode}
-            onMaxConcurrentChange={setMaxConcurrent}
             onRefreshCache={() => void handleRefreshMemory()}
             onRun={() => void handleStartTaskRun()}
           />

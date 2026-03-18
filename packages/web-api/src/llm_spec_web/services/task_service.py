@@ -7,9 +7,10 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
+from llm_spec.config.loader import load_config
 from llm_spec.execute.executor import cancel_task_execution as cancel_core_task_execution
 from llm_spec_web.core.event_bus import event_bus
-from llm_spec_web.core.exceptions import NotFoundError
+from llm_spec_web.core.exceptions import ConfigurationError, NotFoundError
 from llm_spec_web.models.run import RunJob, Task
 from llm_spec_web.repositories.run_repo import RunRepository
 from llm_spec_web.services.suite_service import SuiteService
@@ -27,17 +28,36 @@ class TaskService:
         mode: str | None = None,
         selected_tests_by_suite: dict[str, list[str]] | None = None,
         name: str | None = None,
+        selected_provider: str | None = None,
     ) -> tuple[Task, list[RunJob]]:
         run_repo = RunRepository(db)
         suite_service = SuiteService()
         registry = suite_service.get_registry()
+        app_config = load_config(settings.app_toml_path)
 
         resolved_mode = mode or ("mock" if settings.mock_mode else "real")
+        provider_name = (selected_provider or "").strip()
+        if not provider_name:
+            raise ConfigurationError("selected_provider is required")
+        try:
+            provider_config = app_config.get_provider_config(provider_name)
+        except KeyError as err:
+            raise ConfigurationError(
+                f"provider config missing for selected_provider: {provider_name}"
+            ) from err
+        if not provider_config.base_url:
+            raise ConfigurationError(f"base_url missing for selected_provider: {provider_name}")
+        if not provider_config.api_key:
+            raise ConfigurationError(f"api_key missing for selected_provider: {provider_name}")
 
         task = Task(
             name=name or "Task",
             status="running",
             mode=resolved_mode,
+            selected_provider=provider_name,
+            provider_api_key=provider_config.api_key,
+            provider_base_url=provider_config.base_url,
+            provider_timeout=provider_config.timeout,
             total_runs=len(suite_ids),
             started_at=datetime.now(UTC),
         )
