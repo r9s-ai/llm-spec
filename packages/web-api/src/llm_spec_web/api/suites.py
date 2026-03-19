@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from llm_spec_web.api.deps import get_suite_service
-from llm_spec_web.schemas.suite import SuiteSpecResponse, TestDefResponse
+from llm_spec_web.schemas.suite import CoverParamResponse, SuiteSpecResponse, TestDefResponse
 from llm_spec_web.services.suite_service import SuiteService
 
 router = APIRouter(prefix="/api/suites", tags=["suites"])
@@ -53,8 +53,9 @@ def list_suites(
                     description=t.description,
                     baseline=t.baseline,
                     check_stream=t.check_stream,
-                    cover_params_name=t.cover_params.name if t.cover_params else None,
-                    cover_params_value=t.cover_params.value if t.cover_params else None,
+                    cover_params=[
+                        CoverParamResponse(name=cp.name, value=cp.value) for cp in t.cover_params
+                    ],
                     tags=t.tags,
                 )
                 for t in s.tests
@@ -85,8 +86,9 @@ def get_suite(
                 description=t.description,
                 baseline=t.baseline,
                 check_stream=t.check_stream,
-                cover_params_name=t.cover_params.name if t.cover_params else None,
-                cover_params_value=t.cover_params.value if t.cover_params else None,
+                cover_params=[
+                    CoverParamResponse(name=cp.name, value=cp.value) for cp in t.cover_params
+                ],
                 tags=t.tags,
             )
             for t in s.tests

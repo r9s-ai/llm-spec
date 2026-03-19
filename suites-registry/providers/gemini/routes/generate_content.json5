@@ -26,49 +26,63 @@
       name: "generationConfig.temperature",
       description: "Test generationConfig.temperature",
       params: { generationConfig: { temperature: 0.7 } },
-      cover_params: { name: "generationConfig.temperature", value: 0.7 },
+      cover_params: [
+{ name: "generationConfig.temperature", value: 0.7 },
+      ],
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
       name: "generationConfig.maxOutputTokens",
       description: "Test generationConfig.maxOutputTokens",
       params: { generationConfig: { maxOutputTokens: 64 } },
-      cover_params: { name: "generationConfig.maxOutputTokens", value: 64 },
+      cover_params: [
+{ name: "generationConfig.maxOutputTokens", value: 64 },
+      ],
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
       name: "generationConfig.topP",
       description: "Test generationConfig.topP",
       params: { generationConfig: { topP: 0.9 } },
-      cover_params: { name: "generationConfig.topP", value: 0.9 },
+      cover_params: [
+{ name: "generationConfig.topP", value: 0.9 },
+      ],
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
       name: "generationConfig.topK",
       description: "Test generationConfig.topK",
       params: { generationConfig: { topK: 20 } },
-      cover_params: { name: "generationConfig.topK", value: 20 },
+      cover_params: [
+{ name: "generationConfig.topK", value: 20 },
+      ],
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
       name: "generationConfig.candidateCount",
       description: "Test generationConfig.candidateCount",
       params: { generationConfig: { candidateCount: 2 } },
-      cover_params: { name: "generationConfig.candidateCount", value: 2 },
+      cover_params: [
+{ name: "generationConfig.candidateCount", value: 2 },
+      ],
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
       name: "generationConfig.stopSequences",
       description: "Test generationConfig.stopSequences",
       params: { generationConfig: { stopSequences: ["END"] } },
-      cover_params: { name: "generationConfig.stopSequences", value: ["END"] },
+      cover_params: [
+{ name: "generationConfig.stopSequences", value: ["END"] },
+      ],
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
       name: "generationConfig.responseMimeType",
       description: "Test generationConfig.responseMimeType (JSON output)",
       params: { generationConfig: { responseMimeType: "application/json" } },
-      cover_params: { name: "generationConfig.responseMimeType", value: "application/json" },
+      cover_params: [
+{ name: "generationConfig.responseMimeType", value: "application/json" },
+      ],
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
@@ -84,7 +98,9 @@
           },
         },
       },
-      cover_params: { name: "generationConfig.responseSchema", value: { type: "object" } },
+      cover_params: [
+{ name: "generationConfig.responseSchema", value: { type: "object" } },
+      ],
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
@@ -94,7 +110,9 @@
         systemInstruction: { parts: [{ text: "You are a concise assistant." }] },
         generationConfig: { maxOutputTokens: 64 },
       },
-      cover_params: { name: "systemInstruction", value: { parts: [{ text: "You are a concise assistant." }] } },
+      cover_params: [
+{ name: "systemInstruction", value: { parts: [{ text: "You are a concise assistant." }] } },
+      ],
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
@@ -119,7 +137,9 @@
         toolConfig: { functionCallingConfig: { mode: "AUTO" } },
         generationConfig: { maxOutputTokens: 64 },
       },
-      cover_params: { name: "tools.functionDeclarations", value: [{ name: "get_weather" }] },
+      cover_params: [
+{ name: "tools.functionDeclarations", value: [{ name: "get_weather" }] },
+      ],
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
@@ -171,7 +191,9 @@
         toolConfig: "$tool_call_variant.tool_config",
         generationConfig: { maxOutputTokens: 64 },
       },
-      cover_params: { name: "toolConfig.functionCallingConfig.mode", value: "$tool_call_variant.mode" },
+      cover_params: [
+{ name: "toolConfig.functionCallingConfig.mode", value: "$tool_call_variant.mode" },
+      ],
       required_fields: ["candidates[0].content.parts[0]"],
     },
     {
@@ -223,7 +245,9 @@
         safetySettings: ["$setting"],
         generationConfig: { maxOutputTokens: 64 },
       },
-      cover_params: { name: "safetySettings", value: ["$setting"] },
+      cover_params: [
+{ name: "safetySettings", value: ["$setting"] },
+      ],
       required_fields: ["candidates[0].content.parts[0].text"],
     },
     {
@@ -235,7 +259,9 @@
             parts: [{ text: "give me a picture of pig" }],
           }],
         generationConfig: { responseModalities: ["TEXT", "IMAGE"] } },
-      cover_params: { name: "generationConfig.responseModalities", value: ["TEXT", "IMAGE"] },
+      cover_params: [
+{ name: "generationConfig.responseModalities", value: ["TEXT", "IMAGE"] },
+      ],
       required_fields: [
         "candidates[0].content.parts[*].inlineData.data",
         "candidates[0].content.parts[*].inlineData.mimeType",
@@ -252,7 +278,9 @@
         generationConfig: { responseModalities: ["IMAGE","TEXT"] } ,
         tools:[{"google_search":{}}]
         },
-      cover_params: { name: "tools", value: [{"google_search": {}}] },
+      cover_params: [
+{ name: "tools", value: [{"google_search": {}}] },
+      ],
       required_fields: [
         // "candidates[0].content.parts[*].groundingMetadata.searchEntryPoint.renderedContent",
         // "candidates[0].content.parts[*].groundingChunks[*].text",

@@ -15,6 +15,33 @@ from llm_spec.suites.types import CoverParams, ExecutableCase, HttpRequest, Vali
 from llm_spec_web.models.run import RunCase, RunTestResult
 
 
+def _cover_params_name(cover_params: list[CoverParams]) -> str | None:
+    if not cover_params:
+        return None
+    if len(cover_params) == 1:
+        return cover_params[0].name
+    return ", ".join(param.name for param in cover_params)
+
+
+def _cover_params_value(cover_params: list[CoverParams]) -> Any:
+    if not cover_params:
+        return None
+    return [{"name": param.name, "value": deepcopy(param.value)} for param in cover_params]
+
+
+def _cover_params_from_row(name: str | None, value: Any) -> list[CoverParams]:
+    if isinstance(value, list):
+        out: list[CoverParams] = []
+        for item in value:
+            if isinstance(item, dict) and "name" in item:
+                out.append(CoverParams(name=str(item["name"]), value=item.get("value")))
+        if out:
+            return out
+    if name:
+        return [CoverParams(name=name, value=value)]
+    return []
+
+
 def test_case_to_run_case(run_id: str, case: ExecutableCase) -> RunCase:
     """Persist a ExecutableCase as a RunCase snapshot."""
     return RunCase(
@@ -24,8 +51,8 @@ def test_case_to_run_case(run_id: str, case: ExecutableCase) -> RunCase:
         description=case.description,
         is_baseline=case.is_baseline,
         tags=list(case.tags),
-        cover_params_name=case.cover_params.name if case.cover_params else None,
-        cover_params_value=case.cover_params.value if case.cover_params else None,
+        cover_params_name=_cover_params_name(case.cover_params),
+        cover_params_value=_cover_params_value(case.cover_params),
         request_method=case.request.method,
         request_endpoint=case.request.endpoint,
         request_params=deepcopy(case.request.params),
@@ -50,10 +77,8 @@ def run_case_to_test_case(run_case: RunCase) -> ExecutableCase:
         description=run_case.description,
         is_baseline=bool(run_case.is_baseline),
         tags=list(run_case.tags),
-        cover_params=(
-            CoverParams(name=run_case.cover_params_name, value=run_case.cover_params_value)
-            if run_case.cover_params_name
-            else None
+        cover_params=_cover_params_from_row(
+            run_case.cover_params_name, run_case.cover_params_value
         ),
         request=HttpRequest(
             method=run_case.request_method,
@@ -84,8 +109,8 @@ def verdict_to_test_result_row(
         run_case_id=run_case_id,
         case_id=verdict.case_id,
         test_name=verdict.test_name,
-        cover_params_name=verdict.cover_params.name if verdict.cover_params else None,
-        cover_params_value=verdict.cover_params.value if verdict.cover_params else None,
+        cover_params_name=_cover_params_name(verdict.cover_params),
+        cover_params_value=_cover_params_value(verdict.cover_params),
         status=verdict.status,
         latency_ms=verdict.latency_ms,
         http_status=verdict.http_status,
@@ -133,13 +158,20 @@ def verdict_to_case_row(verdict: TestVerdict, run_case_id: str | None = None) ->
     if run_case_id:
         row["run_case_id"] = run_case_id
     if verdict.cover_params:
+        primary = verdict.cover_params[0]
         row["parameter"] = {
-            "name": verdict.cover_params.name,
-            "value": verdict.cover_params.value,
-            "value_type": type(verdict.cover_params.value).__name__
-            if verdict.cover_params.value is not None
-            else "str",
+            "name": primary.name,
+            "value": primary.value,
+            "value_type": type(primary.value).__name__ if primary.value is not None else "str",
         }
+        row["parameters"] = [
+            {
+                "name": param.name,
+                "value": param.value,
+                "value_type": type(param.value).__name__ if param.value is not None else "str",
+            }
+            for param in verdict.cover_params
+        ]
     if verdict.http_status is not None or verdict.latency_ms is not None:
         row["request"] = {
             "http_status": verdict.http_status or 0,

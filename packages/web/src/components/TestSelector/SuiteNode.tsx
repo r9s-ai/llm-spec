@@ -107,7 +107,7 @@ export function SuiteNode({
 
       {/* Tests List - Very compact */}
       {isExpanded && filteredTests.length > 0 && (
-        <div className="border-t border-slate-100 py-1">
+        <div className="border-t border-slate-100 px-1 py-1.5">
           {filteredTests.map((test) => (
             <TestNode
               key={test.name}

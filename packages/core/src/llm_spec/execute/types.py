@@ -32,7 +32,7 @@ class TestVerdict:
     test_name: str
 
     # Covered parameters
-    cover_params: CoverParams | None = None
+    cover_params: list[CoverParams] = field(default_factory=list)
 
     # Verdict
     status: Literal["pass", "fail", "error"] = "error"

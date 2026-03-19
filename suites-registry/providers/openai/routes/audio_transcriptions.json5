@@ -23,10 +23,12 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "language",
         value: "en",
       },
+      ],
     },
     {
       name: "temperature",
@@ -37,10 +39,12 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "temperature",
         value: 0.0,
       },
+      ],
     },
     {
       name: "response_format",
@@ -60,10 +64,12 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "response_format",
         value: "$response_format",
       },
+      ],
     },
     {
       name: "prompt",
@@ -74,10 +80,12 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "prompt",
         value: "Please transcribe in a friendly style.",
       },
+      ],
     },
     {
       name: "chunking_strategy",
@@ -102,10 +110,12 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "chunking_strategy",
         value: "$chunking_variant.value",
       },
+      ],
     },
     {
       name: "include",
@@ -119,12 +129,14 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "include",
         value: [
           "logprobs",
         ],
       },
+      ],
       required_fields: ["logprobs"],
     },
     {
@@ -143,13 +155,15 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "known_speaker_names",
         value: [
           "speaker_a",
           "speaker_b",
         ],
       },
+      ],
     },
     {
       name: "timestamp_granularities",
@@ -164,13 +178,15 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "timestamp_granularities",
         value: [
           "word",
           "segment",
         ],
       },
+      ],
       required_fields: ["duration", "language", "segments", "words"],
     },
     {
@@ -183,10 +199,12 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "stream",
         value: true,
       },
+      ],
     },
   ],
 }

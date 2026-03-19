@@ -7,6 +7,13 @@ from typing import Any
 from pydantic import BaseModel
 
 
+class CoverParamResponse(BaseModel):
+    """One covered parameter marker."""
+
+    name: str
+    value: Any = None
+
+
 class TestDefResponse(BaseModel):
     """One test definition within a suite."""
 
@@ -14,8 +21,7 @@ class TestDefResponse(BaseModel):
     description: str = ""
     baseline: bool = False
     check_stream: bool = False
-    cover_params_name: str | None = None
-    cover_params_value: Any = None
+    cover_params: list[CoverParamResponse] = []
     tags: list[str] = []
 
 

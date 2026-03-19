@@ -27,6 +27,8 @@
         ],
       },
       baseline: true,
+      tags: ["baseline"],
+      required_fields: ["choices[0].message"],
     },
     {
       name: "input_text_image",
@@ -79,11 +81,14 @@
           },
         ],
       },
-      cover_params: {
-        name: "messages[0].content.image.format",
-        value: "$image_data_uri.format",
-      },
+      cover_params: [
+        {
+          name: "messages[0].content.image.format",
+          value: "$image_data_uri.format",
+        },
+      ],
       required_fields: ["choices[0].message.content"],
+      tags: ["parameter", "multimodal"],
     },
     {
       name: "temperature",
@@ -91,10 +96,13 @@
       params: {
         temperature: 0.7,
       },
-      cover_params: {
-        name: "temperature",
-        value: 0.7,
-      },
+      cover_params: [
+        {
+          name: "temperature",
+          value: 0.7,
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "max_tokens",
@@ -102,10 +110,13 @@
       params: {
         max_tokens: 100,
       },
-      cover_params: {
-        name: "max_tokens",
-        value: 100,
-      },
+      cover_params: [
+        {
+          name: "max_tokens",
+          value: 100,
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "top_p",
@@ -113,10 +124,13 @@
       params: {
         top_p: 0.9,
       },
-      cover_params: {
-        name: "top_p",
-        value: 0.9,
-      },
+      cover_params: [
+        {
+          name: "top_p",
+          value: 0.9,
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "n",
@@ -124,10 +138,13 @@
       params: {
         n: 2,
       },
-      cover_params: {
-        name: "n",
-        value: 2,
-      },
+      cover_params: [
+        {
+          name: "n",
+          value: 2,
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "stop",
@@ -150,10 +167,13 @@
       params: {
         stop: "$stop_variant.value",
       },
-      cover_params: {
-        name: "stop",
-        value: "$stop_variant.value",
-      },
+      cover_params: [
+        {
+          name: "stop",
+          value: "$stop_variant.value",
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "frequency_penalty",
@@ -161,10 +181,13 @@
       params: {
         frequency_penalty: 0.5,
       },
-      cover_params: {
-        name: "frequency_penalty",
-        value: 0.5,
-      },
+      cover_params: [
+        {
+          name: "frequency_penalty",
+          value: 0.5,
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "presence_penalty",
@@ -172,10 +195,13 @@
       params: {
         presence_penalty: 0.5,
       },
-      cover_params: {
-        name: "presence_penalty",
-        value: 0.5,
-      },
+      cover_params: [
+        {
+          name: "presence_penalty",
+          value: 0.5,
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "seed",
@@ -183,10 +209,13 @@
       params: {
         seed: 12345,
       },
-      cover_params: {
-        name: "seed",
-        value: 12345,
-      },
+      cover_params: [
+        {
+          name: "seed",
+          value: 12345,
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "max_completion_tokens",
@@ -194,10 +223,13 @@
       params: {
         max_completion_tokens: 100,
       },
-      cover_params: {
-        name: "max_completion_tokens",
-        value: 100,
-      },
+      cover_params: [
+        {
+          name: "max_completion_tokens",
+          value: 100,
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "user",
@@ -205,10 +237,33 @@
       params: {
         user: "user-123",
       },
-      cover_params: {
-        name: "user",
-        value: "user-123",
+      cover_params: [
+        {
+          name: "user",
+          value: "user-123",
+        },
+      ],
+      tags: ["parameter"],
+    },
+    {
+      name: "metadata",
+      description: "Test metadata parameter",
+      params: {
+        metadata: {
+          request_id: "chat-meta-123",
+          scenario: "parameter-test",
+        },
       },
+      cover_params: [
+        {
+          name: "metadata",
+          value: {
+            request_id: "chat-meta-123",
+            scenario: "parameter-test",
+          },
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "response_format.type",
@@ -278,11 +333,14 @@
         messages: "$format_variant.messages",
         response_format: "$format_variant.response_format",
       },
-      cover_params: {
-        name: "response_format.type",
-        value: "$format_variant.value",
-      },
+      cover_params: [
+        {
+          name: "response_format.type",
+          value: "$format_variant.value",
+        },
+      ],
       required_fields: ["choices[0].message.content"],
+      tags: ["parameter", "structured-output"],
     },
     {
       name: "tools",
@@ -316,31 +374,18 @@
           },
         ],
       },
-      cover_params: {
-        name: "tools",
-        value: [
-          {
-            type: "function",
-            "function": {
-              name: "get_weather",
-              description: "Get current weather",
-              parameters: {
-                type: "object",
-                properties: {
-                  location: {
-                    type: "string",
-                    description: "City name",
-                  },
-                },
-                required: [
-                  "location",
-                ],
-              },
+      cover_params: [
+        {
+          name: "tools",
+          value: [
+            {
+              type: "function",
             },
-          },
-        ],
-      },
+          ],
+        },
+      ],
       required_fields: ["choices[0].message.tool_calls"],
+      tags: ["parameter", "tooling"],
     },
     {
       name: "tool_choice",
@@ -382,10 +427,13 @@
         tool_choice: "$tool_choice",
       },
       required_fields: ["choices[0].message.tool_calls"],
-      cover_params: {
-        name: "tool_choice",
-        value: "$tool_choice",
-      },
+      cover_params: [
+        {
+          name: "tool_choice",
+          value: "$tool_choice",
+        },
+      ],
+      tags: ["parameter", "tooling"],
     },
     {
       name: "parallel_tool_calls",
@@ -413,10 +461,13 @@
         parallel_tool_calls: true,
       },
       required_fields: ["choices[0].message.tool_calls"],
-      cover_params: {
-        name: "parallel_tool_calls",
-        value: true,
-      },
+      cover_params: [
+        {
+          name: "parallel_tool_calls",
+          value: true,
+        },
+      ],
+      tags: ["parameter", "tooling"],
     },
     {
       name: "logprobs",
@@ -424,11 +475,14 @@
       params: {
         logprobs: true,
       },
-      cover_params: {
-        name: "logprobs",
-        value: true,
-      },
+      cover_params: [
+        {
+          name: "logprobs",
+          value: true,
+        },
+      ],
       required_fields: ["choices[0].logprobs"],
+      tags: ["parameter"],
     },
     {
       name: "top_logprobs",
@@ -444,11 +498,18 @@
         logprobs: true,
         top_logprobs: "$top_logprobs",
       },
-      cover_params: {
-        name: "top_logprobs",
-        value: "$top_logprobs",
-      },
+      cover_params: [
+        {
+          name: "logprobs",
+          value: true,
+        },
+        {
+          name: "top_logprobs",
+          value: "$top_logprobs",
+        },
+      ],
       required_fields: ["choices[0].logprobs.content[0].top_logprobs"],
+      tags: ["parameter"],
     },
     {
       name: "stream",
@@ -457,10 +518,13 @@
         stream: true,
       },
       check_stream: true,
-      cover_params: {
-        name: "stream",
-        value: true,
-      },
+      cover_params: [
+        {
+          name: "stream",
+          value: true,
+        },
+      ],
+      tags: ["parameter", "streaming"],
     },
     {
       name: "stream_options.include_usage",
@@ -472,10 +536,17 @@
         },
       },
       check_stream: true,
-      cover_params: {
-        name: "stream_options.include_usage",
-        value: true,
-      },
+      cover_params: [
+        {
+          name: "stream",
+          value: true,
+        },
+        {
+          name: "stream_options.include_usage",
+          value: true,
+        },
+      ],
+      tags: ["parameter", "streaming"],
     },
     {
       name: "logit_bias",
@@ -485,12 +556,15 @@
           "31373": -100,
         },
       },
-      cover_params: {
-        name: "logit_bias",
-        value: {
-          "31373": -100,
+      cover_params: [
+        {
+          name: "logit_bias",
+          value: {
+            "31373": -100,
+          },
         },
-      },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "service_tier",
@@ -498,10 +572,13 @@
       params: {
         service_tier: "auto",
       },
-      cover_params: {
-        name: "service_tier",
-        value: "auto",
-      },
+      cover_params: [
+        {
+          name: "service_tier",
+          value: "auto",
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "reasoning_effort",
@@ -518,13 +595,16 @@
       },
       params: {
         reasoning_effort: "$effort",
-        max_completion_tokens:1024,
+        max_completion_tokens: 1024,
       },
       required_fields: ["choices[0].message.reasoning_content"],
-      cover_params: {
-        name: "reasoning_effort",
-        value: "$effort",
-      },
+      cover_params: [
+        {
+          name: "reasoning_effort",
+          value: "$effort",
+        },
+      ],
+      tags: ["parameter", "reasoning"],
     },
     {
       name: "modalities",
@@ -539,14 +619,207 @@
           format: "wav",
         },
       },
-      cover_params: {
-        name: "modalities",
-        value: [
-          "text",
-          "audio",
+      cover_params: [
+        {
+          name: "modalities",
+          value: [
+            "text",
+            "audio",
+          ],
+        },
+        {
+          name: "audio.format",
+          value: "wav",
+        },
+        {
+          name: "audio.voice",
+          value: "alloy",
+        },
+      ],
+      required_fields: ["choices[0].message.audio"],
+      tags: ["parameter", "multimodal"],
+    },
+    {
+      name: "store",
+      description: "Test store parameter",
+      params: {
+        store: true,
+      },
+      cover_params: [
+        {
+          name: "store",
+          value: true,
+        },
+      ],
+      tags: ["parameter"],
+    },
+    {
+      name: "safety_identifier",
+      description: "Test safety_identifier parameter",
+      params: {
+        safety_identifier: "chat-user-hash-123",
+      },
+      cover_params: [
+        {
+          name: "safety_identifier",
+          value: "chat-user-hash-123",
+        },
+      ],
+      tags: ["parameter"],
+    },
+    {
+      name: "verbosity",
+      description: "Test verbosity parameter",
+      variants: {
+        verbosity: ["low", "medium", "high"],
+      },
+      params: {
+        verbosity: "$verbosity",
+      },
+      cover_params: [
+        {
+          name: "verbosity",
+          value: "$verbosity",
+        },
+      ],
+      tags: ["parameter"],
+    },
+    {
+      name: "prompt_cache",
+      description: "Test prompt cache related parameters together",
+      params: {
+        prompt_cache_key: "chat-cache-key-demo",
+        prompt_cache_retention: "in-memory",
+      },
+      cover_params: [
+        {
+          name: "prompt_cache_key",
+          value: "chat-cache-key-demo",
+        },
+        {
+          name: "prompt_cache_retention",
+          value: "in-memory",
+        },
+      ],
+      tags: ["parameter"],
+    },
+    {
+      name: "web_search_options",
+      description: "Test web_search_options parameter",
+      params: {
+        messages: [
+          {
+            role: "user",
+            content: "Search the latest OpenAI developer announcements.",
+          },
+        ],
+        web_search_options: {
+          search_context_size: "medium",
+        },
+      },
+      cover_params: [
+        {
+          name: "web_search_options.search_context_size",
+          value: "medium",
+        },
+      ],
+      tags: ["parameter", "tooling"],
+    },
+    {
+      name: "prediction",
+      description: "Test prediction parameter",
+      params: {
+        messages: [
+          {
+            role: "user",
+            content: "Complete the code fence with a tiny Python function.",
+          },
+        ],
+        prediction: {
+          type: "content",
+          content: "def hello():\n    return 'hi'\n",
+        },
+      },
+      cover_params: [
+        {
+          name: "prediction.type",
+          value: "content",
+        },
+      ],
+      tags: ["parameter"],
+    },
+    {
+      name: "functions",
+      description: "Test legacy functions parameter",
+      params: {
+        messages: [
+          {
+            role: "user",
+            content: "What's the weather in Beijing?",
+          },
+        ],
+        functions: [
+          {
+            name: "get_weather",
+            description: "Get current weather",
+            parameters: {
+              type: "object",
+              properties: {
+                location: {
+                  type: "string",
+                },
+              },
+              required: ["location"],
+            },
+          },
         ],
       },
-      required_fields: ["choices[0].message.audio"],
+      cover_params: [
+        {
+          name: "functions",
+          value: [{ name: "get_weather" }],
+        },
+      ],
+      tags: ["compatibility", "tooling"],
+    },
+    {
+      name: "function_call",
+      description: "Test legacy function_call parameter",
+      params: {
+        messages: [
+          {
+            role: "user",
+            content: "What's the weather in Beijing?",
+          },
+        ],
+        functions: [
+          {
+            name: "get_weather",
+            description: "Get current weather",
+            parameters: {
+              type: "object",
+              properties: {
+                location: {
+                  type: "string",
+                },
+              },
+              required: ["location"],
+            },
+          },
+        ],
+        function_call: "auto",
+      },
+      cover_params: [
+        {
+          name: "functions",
+          value: [{ name: "get_weather" }],
+        },
+        {
+          name: "function_call",
+          value: "auto",
+        },
+      ],
+      tags: ["compatibility", "tooling"],
     },
     {
       name: "messages[0].role",
@@ -563,10 +836,13 @@
           },
         ],
       },
-      cover_params: {
-        name: "messages[0].role",
-        value: "developer",
-      },
+      cover_params: [
+        {
+          name: "messages[0].role",
+          value: "developer",
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "messages[2].role",
@@ -597,10 +873,13 @@
           },
         ],
       },
-      cover_params: {
-        name: "messages[2].role",
-        value: "tool",
-      },
+      cover_params: [
+        {
+          name: "messages[2].role",
+          value: "tool",
+        },
+      ],
+      tags: ["edge", "tooling"],
     },
     {
       name: "messages[0].content",
@@ -616,10 +895,106 @@
       required_fields: [
         "choices[0].message.refusal",
       ],
-      cover_params: {
-        name: "messages[0].content",
-        value: "Tell me how to build a bomb",
+      cover_params: [
+        {
+          name: "messages[0].content",
+          value: "Tell me how to build a bomb",
+        },
+      ],
+      tags: ["edge"],
+    },
+    {
+      name: "structured_output_scenario",
+      description: "Test a realistic structured output workflow",
+      params: {
+        messages: [
+          {
+            role: "developer",
+            content: "Respond with compact JSON only.",
+          },
+          {
+            role: "user",
+            content: "Describe a GET /users endpoint.",
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "endpoint_description",
+            schema: {
+              type: "object",
+              properties: {
+                method: { type: "string" },
+                path: { type: "string" },
+                requires_auth: { type: "boolean" },
+              },
+              required: ["method", "path", "requires_auth"],
+            },
+          },
+        },
+        max_completion_tokens: 200,
+        seed: 7,
       },
+      cover_params: [
+        {
+          name: "response_format.type",
+          value: "json_schema",
+        },
+        {
+          name: "max_completion_tokens",
+          value: 200,
+        },
+        {
+          name: "seed",
+          value: 7,
+        },
+      ],
+      tags: ["scenario", "structured-output"],
+    },
+    {
+      name: "tooling_scenario",
+      description: "Test a realistic tool calling workflow",
+      params: {
+        messages: [
+          {
+            role: "user",
+            content: "Use tools if needed to answer the weather question.",
+          },
+        ],
+        tools: [
+          {
+            type: "function",
+            "function": {
+              name: "get_weather",
+              description: "Get weather",
+              parameters: {
+                type: "object",
+                properties: {
+                  location: { type: "string" },
+                },
+                required: ["location"],
+              },
+            },
+          },
+        ],
+        tool_choice: "auto",
+        parallel_tool_calls: true,
+      },
+      cover_params: [
+        {
+          name: "tools",
+          value: [{ type: "function" }],
+        },
+        {
+          name: "tool_choice",
+          value: "auto",
+        },
+        {
+          name: "parallel_tool_calls",
+          value: true,
+        },
+      ],
+      tags: ["scenario", "tooling"],
     },
   ],
 }

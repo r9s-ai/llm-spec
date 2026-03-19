@@ -25,10 +25,12 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "response_format",
         value: "url",
       },
+      ],
     },
     {
       name: "background",
@@ -39,10 +41,12 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "background",
         value: "transparent",
       },
+      ],
     },
     {
       name: "output_format",
@@ -53,10 +57,12 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "output_format",
         value: "webp",
       },
+      ],
     },
     {
       name: "output_compression",
@@ -68,10 +74,12 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "output_compression",
         value: 80,
       },
+      ],
     },
     {
       name: "size",
@@ -82,10 +90,12 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "size",
         value: "1536x1024",
       },
+      ],
     },
     {
       name: "n",
@@ -96,10 +106,12 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "n",
         value: 2,
       },
+      ],
     },
     {
       name: "input_fidelity",
@@ -110,10 +122,12 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "input_fidelity",
         value: "high",
       },
+      ],
     },
     {
       name: "mask",
@@ -123,10 +137,12 @@
         image: "assets/images/test_base.png",
         mask: "assets/images/test_base.png",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "mask",
         value: null,
       },
+      ],
     },
     {
       name: "user",
@@ -137,10 +153,12 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "user",
         value: "user-123",
       },
+      ],
     },
   ],
 }

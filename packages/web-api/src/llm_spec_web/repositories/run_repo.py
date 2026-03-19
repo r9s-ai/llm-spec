@@ -361,8 +361,18 @@ class RunRepository:
 
         row.case_id = verdict.case_id
         row.test_name = verdict.test_name
-        row.cover_params_name = verdict.cover_params.name if verdict.cover_params else None
-        row.cover_params_value = verdict.cover_params.value if verdict.cover_params else None
+        if verdict.cover_params:
+            row.cover_params_name = (
+                verdict.cover_params[0].name
+                if len(verdict.cover_params) == 1
+                else ", ".join(param.name for param in verdict.cover_params)
+            )
+            row.cover_params_value = [
+                {"name": param.name, "value": param.value} for param in verdict.cover_params
+            ]
+        else:
+            row.cover_params_name = None
+            row.cover_params_value = None
         row.status = verdict.status
         row.latency_ms = verdict.latency_ms
         row.http_status = verdict.http_status

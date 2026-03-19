@@ -7,8 +7,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from pydantic import AliasChoices, ConfigDict, Field, model_validator
 from pydantic import BaseModel as PydanticBaseModel
+from pydantic import ConfigDict, Field, model_validator
 
 from .types import CoverParams, RouteSpec, SchemaRef, TestDef
 
@@ -21,10 +21,7 @@ class _RawTestCase(PydanticBaseModel):
     name: str
     description: str = ""
     params: dict[str, Any] = Field(default_factory=dict)
-    cover_params: dict[str, Any] | None = Field(
-        default=None,
-        validation_alias=AliasChoices("cover_params", "focus_param"),
-    )
+    cover_params: list[dict[str, Any]] | None = Field(default=None)
     baseline: bool = False
     check_stream: Any = False
     stream_rules: dict[str, Any] | None = None
@@ -46,10 +43,11 @@ class _RawTestCase(PydanticBaseModel):
                     f"Invalid check_stream value for baseline test '{self.name}': {self.check_stream}"
                 )
             return self
-        if self.cover_params is None:
+        if not self.cover_params:
             raise ValueError(f"Missing 'cover_params' for non-baseline test '{self.name}'")
-        if "name" not in self.cover_params:
-            raise ValueError(f"Missing cover_params.name for test '{self.name}'")
+        for item in self.cover_params:
+            if "name" not in item:
+                raise ValueError(f"Missing cover_params.name for test '{self.name}'")
         if isinstance(self.check_stream, str) and not self.variants:
             raise ValueError(
                 f"Invalid check_stream value for test '{self.name}': {self.check_stream}"
@@ -92,10 +90,13 @@ class _RawSuite(PydanticBaseModel):
 # ── Conversion helpers ────────────────────────────────────
 
 
-def _raw_cover_params(raw: dict[str, Any] | None) -> CoverParams | None:
-    if not raw or "name" not in raw:
-        return None
-    return CoverParams(name=raw["name"], value=raw.get("value"))
+def _raw_cover_params(raw: list[dict[str, Any]] | None) -> list[CoverParams]:
+    params: list[CoverParams] = []
+    for item in raw or []:
+        if "name" not in item:
+            continue
+        params.append(CoverParams(name=item["name"], value=item.get("value")))
+    return params
 
 
 def _raw_schemas_to_schema_ref(raw: dict[str, str] | None) -> SchemaRef | None:
@@ -133,9 +134,7 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[TestDef]
         params = copy.deepcopy(test_config.get("params", {}))
         replace_parameter_references(params, param_name, value)
 
-        raw_cover_params = copy.deepcopy(
-            test_config.get("cover_params") or test_config.get("focus_param")
-        )
+        raw_cover_params = copy.deepcopy(test_config.get("cover_params"))
         if raw_cover_params:
             replace_parameter_references(raw_cover_params, param_name, value)
 

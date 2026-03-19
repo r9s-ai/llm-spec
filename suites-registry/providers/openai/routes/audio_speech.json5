@@ -36,10 +36,12 @@
       params: {
         voice: "$voice",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "voice",
         value: "$voice",
       },
+      ],
     },
     {
       name: "response_format",
@@ -57,10 +59,12 @@
       params: {
         response_format: "$response_format",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "response_format",
         value: "$response_format",
       },
+      ],
     },
     {
       name: "speed",
@@ -78,10 +82,12 @@
       params: {
         speed: "$speed",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "speed",
         value: "$speed",
       },
+      ],
     },
     {
       name: "instructions",
@@ -89,10 +95,12 @@
       params: {
         instructions: "Speak in a cheerful and energetic tone.",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "instructions",
         value: "Speak in a cheerful and energetic tone.",
       },
+      ],
     },
     {
       name: "stream_format",
@@ -115,10 +123,12 @@
         stream_format: "$variant.value",
       },
       check_stream: "$variant.check_stream",
-      cover_params: {
+      cover_params: [
+{
         name: "stream_format",
         value: "$variant.value",
       },
+      ],
     },
   ],
 }

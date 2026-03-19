@@ -1,4 +1,5 @@
 import { Checkbox } from "../UI";
+import { getTagClassName } from "../../utils";
 
 interface TestNodeProps {
   testName: string;
@@ -15,41 +16,39 @@ export function TestNode({
   isHighlighted = false,
   onToggle,
 }: TestNodeProps) {
-  const visibleTags = tags.slice(0, 2);
-  const overflowTagCount = tags.length - visibleTags.length;
-
   return (
     <div
-      className={`group flex items-center gap-1 px-1.5 py-0.5 hover:bg-slate-50 ${
-        isHighlighted ? "bg-yellow-50" : ""
+      className={`group flex items-start gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-slate-50 ${
+        isHighlighted ? "bg-amber-50/80" : ""
       }`}
-      style={{ paddingLeft: "24px" }}
+      style={{ paddingLeft: "28px" }}
     >
-      <Checkbox checked={isSelected} onChange={(e) => onToggle(e.target.checked)} />
+      <div className="pt-0.5">
+        <Checkbox checked={isSelected} onChange={(e) => onToggle(e.target.checked)} />
+      </div>
 
-      {/* Render expanded test identifier (e.g. name[variant_id]) */}
-      <span
-        className="min-w-0 flex-1 truncate text-xs text-slate-600"
-        title={testName}
-      >
-        {testName}
-      </span>
-
-      {visibleTags.map((tag) => (
-        <span
-          key={`${testName}:${tag}`}
-          className="max-w-[90px] shrink-0 truncate rounded bg-emerald-50 px-1 py-0.5 text-[10px] text-emerald-700"
-          title={tag}
+      <div className="min-w-0 flex-1 space-y-1">
+        <div
+          className="text-sm font-medium leading-snug text-slate-700 break-words"
+          title={testName}
         >
-          {tag}
-        </span>
-      ))}
+          {testName}
+        </div>
 
-      {overflowTagCount > 0 && (
-        <span className="shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[10px] text-slate-500">
-          +{overflowTagCount}
-        </span>
-      )}
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((tag) => (
+              <span
+                key={`${testName}:${tag}`}
+                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium leading-none ${getTagClassName(tag)}`}
+                title={tag}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

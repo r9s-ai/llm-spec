@@ -51,7 +51,7 @@ class TestDef:
     name: str
     description: str = ""
     params: dict[str, Any] = field(default_factory=dict)
-    cover_params: CoverParams | None = None
+    cover_params: list[CoverParams] = field(default_factory=list)
     baseline: bool = False
     check_stream: bool = False
     stream_rules: dict[str, Any] | None = None
@@ -162,7 +162,7 @@ class ExecutableCase:
     tags: list[str] = field(default_factory=list)
 
     # Covered parameters
-    cover_params: CoverParams | None = None
+    cover_params: list[CoverParams] = field(default_factory=list)
 
     # Full request
     request: HttpRequest = field(default_factory=lambda: HttpRequest(method="POST", endpoint=""))

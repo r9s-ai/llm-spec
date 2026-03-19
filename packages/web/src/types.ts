@@ -7,8 +7,10 @@ export type SuiteTestDef = {
   description: string;
   baseline: boolean;
   check_stream: boolean;
-  cover_params_name: string | null;
-  cover_params_value: unknown;
+  cover_params: Array<{
+    name: string;
+    value: unknown;
+  }>;
   tags: string[];
 };
 

@@ -38,7 +38,8 @@
         input: [{ role: "user", content: "hi" }],
       },
       baseline: true,
-
+      tags: ["baseline"],
+      required_fields: ["output[0]"],
     },
     {
       name: "input",
@@ -64,10 +65,13 @@
       params: {
         input: "$input_variant.value",
       },
-      cover_params: {
-        name: "input",
-        value: "$input_variant.value",
-      },
+      cover_params: [
+        {
+          name: "input",
+          value: "$input_variant.value",
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "input_text_image",
@@ -118,23 +122,27 @@
           },
         ],
       },
-      cover_params: {
-        name: "input_image.format",
-        value: "$image_data_uri.format",
-      },
+      cover_params: [
+        {
+          name: "input_image.format",
+          value: "$image_data_uri.format",
+        },
+      ],
+      tags: ["parameter", "multimodal"],
     },
     {
       name: "instructions",
       description: "Test instructions parameter",
       params: {
         instructions: "You are a helpful assistant.",
-          stream:true
       },
-      check_stream:true,
-      cover_params: {
-        name: "instructions",
-        value: "You are a helpful assistant.",
-      },
+      cover_params: [
+        {
+          name: "instructions",
+          value: "You are a helpful assistant.",
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "temperature",
@@ -142,10 +150,13 @@
       params: {
         temperature: 0.7,
       },
-      cover_params: {
-        name: "temperature",
-        value: 0.7,
-      },
+      cover_params: [
+        {
+          name: "temperature",
+          value: 0.7,
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "top_p",
@@ -153,10 +164,13 @@
       params: {
         top_p: 0.9,
       },
-      cover_params: {
-        name: "top_p",
-        value: 0.9,
-      },
+      cover_params: [
+        {
+          name: "top_p",
+          value: 0.9,
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "max_output_tokens",
@@ -164,10 +178,13 @@
       params: {
         max_output_tokens: 100,
       },
-      cover_params: {
-        name: "max_output_tokens",
-        value: 100,
-      },
+      cover_params: [
+        {
+          name: "max_output_tokens",
+          value: 100,
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "metadata",
@@ -178,13 +195,16 @@
           session: "abc",
         },
       },
-      cover_params: {
-        name: "metadata",
-        value: {
-          user_id: "123",
-          session: "abc",
+      cover_params: [
+        {
+          name: "metadata",
+          value: {
+            user_id: "123",
+            session: "abc",
+          },
         },
-      },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "text.format.type",
@@ -238,10 +258,33 @@
           format: "$format_variant.format",
         },
       },
-      cover_params: {
-        name: "text.format.type",
-        value: "$format_variant.value",
+      cover_params: [
+        {
+          name: "text.format.type",
+          value: "$format_variant.value",
+        },
+      ],
+      tags: ["parameter", "structured-output"],
+    },
+    {
+      name: "text.verbosity",
+      description: "Test text.verbosity parameter",
+      variants: {
+        verbosity: ["low", "medium", "high"],
       },
+      params: {
+        input: "Explain HTTP in one paragraph.",
+        text: {
+          verbosity: "$verbosity",
+        },
+      },
+      cover_params: [
+        {
+          name: "text.verbosity",
+          value: "$verbosity",
+        },
+      ],
+      tags: ["parameter", "structured-output"],
     },
     {
       name: "tools",
@@ -306,10 +349,13 @@
         input: "$tool_variant.input",
         tools: "$tool_variant.value",
       },
-      cover_params: {
-        name: "tools",
-        value: "$tool_variant.value",
-      },
+      cover_params: [
+        {
+          name: "tools",
+          value: "$tool_variant.value",
+        },
+      ],
+      tags: ["parameter", "tooling"],
     },
     {
       name: "tool_choice",
@@ -345,16 +391,19 @@
         ],
         tool_choice: "$tool_choice",
       },
-      cover_params: {
-        name: "tool_choice",
-        value: "$tool_choice",
-      },
+      cover_params: [
+        {
+          name: "tool_choice",
+          value: "$tool_choice",
+        },
+      ],
+      tags: ["parameter", "tooling"],
     },
     {
       name: "parallel_tool_calls",
       description: "Test parallel_tool_calls parameter",
       params: {
-        input: "Call functions",
+        input: "Call available tools.",
         tools: [
           {
             type: "function",
@@ -370,10 +419,13 @@
         ],
         parallel_tool_calls: true,
       },
-      cover_params: {
-        name: "parallel_tool_calls",
-        value: true,
-      },
+      cover_params: [
+        {
+          name: "parallel_tool_calls",
+          value: true,
+        },
+      ],
+      tags: ["parameter", "tooling"],
     },
     {
       name: "store",
@@ -381,10 +433,13 @@
       params: {
         store: false,
       },
-      cover_params: {
-        name: "store",
-        value: false,
-      },
+      cover_params: [
+        {
+          name: "store",
+          value: false,
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "service_tier",
@@ -392,10 +447,13 @@
       params: {
         service_tier: "auto",
       },
-      cover_params: {
-        name: "service_tier",
-        value: "auto",
-      },
+      cover_params: [
+        {
+          name: "service_tier",
+          value: "auto",
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "reasoning_effort",
@@ -416,10 +474,13 @@
         },
         max_output_tokens: 1024,
       },
-      cover_params: {
-        name: "reasoning.effort",
-        value: "$effort",
-      },
+      cover_params: [
+        {
+          name: "reasoning.effort",
+          value: "$effort",
+        },
+      ],
+      tags: ["parameter", "reasoning"],
     },
     {
       name: "safety_identifier",
@@ -427,10 +488,13 @@
       params: {
         safety_identifier: "user_hash_123",
       },
-      cover_params: {
-        name: "safety_identifier",
-        value: "user_hash_123",
-      },
+      cover_params: [
+        {
+          name: "safety_identifier",
+          value: "user_hash_123",
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "max_tool_calls",
@@ -444,10 +508,13 @@
         ],
         max_tool_calls: 5,
       },
-      cover_params: {
-        name: "max_tool_calls",
-        value: 5,
-      },
+      cover_params: [
+        {
+          name: "max_tool_calls",
+          value: 5,
+        },
+      ],
+      tags: ["parameter", "tooling"],
     },
     {
       name: "truncation",
@@ -455,10 +522,67 @@
       params: {
         truncation: "auto",
       },
-      cover_params: {
-        name: "truncation",
-        value: "auto",
+      cover_params: [
+        {
+          name: "truncation",
+          value: "auto",
+        },
+      ],
+      tags: ["parameter"],
+    },
+    {
+      name: "user",
+      description: "Test user parameter",
+      params: {
+        user: "user-123",
       },
+      cover_params: [
+        {
+          name: "user",
+          value: "user-123",
+        },
+      ],
+      tags: ["parameter"],
+    },
+    {
+      name: "prompt_cache",
+      description: "Test prompt cache related parameters together",
+      params: {
+        input: "Summarize the importance of idempotency in APIs.",
+        prompt_cache_key: "responses-cache-key-demo",
+        prompt_cache_retention: "in-memory",
+      },
+      cover_params: [
+        {
+          name: "prompt_cache_key",
+          value: "responses-cache-key-demo",
+        },
+        {
+          name: "prompt_cache_retention",
+          value: "in-memory",
+        },
+      ],
+      tags: ["parameter"],
+    },
+    {
+      name: "output_logprobs",
+      description: "Test include + top_logprobs together for output token probabilities",
+      params: {
+        input: "Say hello in exactly two words.",
+        include: ["message.output_text.logprobs"],
+        top_logprobs: 3,
+      },
+      cover_params: [
+        {
+          name: "include",
+          value: ["message.output_text.logprobs"],
+        },
+        {
+          name: "top_logprobs",
+          value: 3,
+        },
+      ],
+      tags: ["parameter"],
     },
     {
       name: "stream",
@@ -467,10 +591,128 @@
         stream: true,
       },
       check_stream: true,
-      cover_params: {
-        name: "stream",
-        value: true,
+      cover_params: [
+        {
+          name: "stream",
+          value: true,
+        },
+      ],
+      tags: ["parameter", "streaming"],
+    },
+    {
+      name: "stream_options.include_obfuscation",
+      description: "Test stream_options.include_obfuscation parameter",
+      params: {
+        stream: true,
+        stream_options: {
+          include_obfuscation: true,
+        },
       },
+      check_stream: true,
+      cover_params: [
+        {
+          name: "stream",
+          value: true,
+        },
+        {
+          name: "stream_options.include_obfuscation",
+          value: true,
+        },
+      ],
+      tags: ["parameter", "streaming"],
+    },
+    {
+      name: "structured_output_scenario",
+      description: "Test a realistic structured output workflow",
+      params: {
+        input: "Return a compact JSON object describing an HTTP request.",
+        instructions: "Respond as strict JSON with concise values.",
+        text: {
+          format: {
+            type: "json_schema",
+            schema: {
+              type: "object",
+              properties: {
+                method: { type: "string" },
+                path: { type: "string" },
+                auth_required: { type: "boolean" },
+              },
+              required: ["method", "path", "auth_required"],
+            },
+          },
+          verbosity: "low",
+        },
+        max_output_tokens: 200,
+        metadata: {
+          scenario: "structured-output",
+        },
+      },
+      cover_params: [
+        {
+          name: "instructions",
+          value: "Respond as strict JSON with concise values.",
+        },
+        {
+          name: "text.format.type",
+          value: "json_schema",
+        },
+        {
+          name: "text.verbosity",
+          value: "low",
+        },
+        {
+          name: "max_output_tokens",
+          value: 200,
+        },
+      ],
+      tags: ["scenario", "structured-output"],
+    },
+    {
+      name: "tooling_scenario",
+      description: "Test a realistic tool use workflow with multiple tool controls",
+      params: {
+        input: "Look up the weather and use tools if needed.",
+        tools: [
+          {
+            type: "function",
+            "function": {
+              name: "get_weather",
+              description: "Get current weather",
+              parameters: {
+                type: "object",
+                properties: {
+                  location: {
+                    type: "string",
+                  },
+                },
+                required: ["location"],
+              },
+            },
+          },
+        ],
+        tool_choice: "auto",
+        parallel_tool_calls: true,
+        max_tool_calls: 2,
+      },
+      cover_params: [
+        {
+          name: "tools",
+          value: [{ type: "function" }],
+        },
+        {
+          name: "tool_choice",
+          value: "auto",
+        },
+        {
+          name: "parallel_tool_calls",
+          value: true,
+        },
+        {
+          name: "max_tool_calls",
+          value: 2,
+        },
+      ],
+      tags: ["scenario", "tooling"],
     },
   ],
 }

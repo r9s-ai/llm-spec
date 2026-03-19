@@ -10,8 +10,11 @@ export function getTestRows(suite: Suite | undefined): TestRow[] {
 
   return tests.map((t) => {
     const name = t.name;
-    const paramName = t.cover_params_name ?? "baseline";
-    const valueText = t.cover_params_value === undefined || t.cover_params_value === null ? "-" : JSON.stringify(t.cover_params_value);
+    const paramName = t.cover_params.length > 0 ? t.cover_params.map((param) => param.name).join(", ") : "baseline";
+    const valueText =
+      t.cover_params.length > 0
+        ? JSON.stringify(t.cover_params.map((param) => param.value))
+        : "-";
     const tags = t.tags ?? [];
     return { name, paramName, valueText, tags };
   });

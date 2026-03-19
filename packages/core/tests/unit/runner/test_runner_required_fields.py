@@ -24,7 +24,7 @@ def test_runner_required_fields_validation():
     case = ExecutableCase(
         case_id="test_missing_required",
         test_name="test_missing_required",
-        cover_params=CoverParams(name="model", value="gpt-4"),
+        cover_params=[CoverParams(name="model", value="gpt-4")],
         request=HttpRequest(
             method="POST",
             endpoint="/v1/chat/completions",
@@ -63,7 +63,7 @@ def test_runner_test_level_required_fields():
     case = ExecutableCase(
         case_id="test_extra_required",
         test_name="test_extra_required",
-        cover_params=CoverParams(name="model", value="gpt-4"),
+        cover_params=[CoverParams(name="model", value="gpt-4")],
         request=HttpRequest(
             method="POST",
             endpoint="/v1/chat/completions",

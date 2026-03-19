@@ -40,10 +40,12 @@
       params: {
         input: "$input_variant.value",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "input",
         value: "$input_variant.value",
       },
+      ],
     },
     {
       name: "encoding_format",
@@ -51,10 +53,12 @@
       params: {
         encoding_format: "base64",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "encoding_format",
         value: "base64",
       },
+      ],
     },
     {
       name: "user",
@@ -62,10 +66,12 @@
       params: {
         user: "user-123",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "user",
         value: "user-123",
       },
+      ],
     },
     {
       name: "dimensions",
@@ -73,10 +79,12 @@
       params: {
         dimensions: 512,
       },
-      cover_params: {
+      cover_params: [
+{
         name: "dimensions",
         value: 512,
       },
+      ],
     },
   ],
 }

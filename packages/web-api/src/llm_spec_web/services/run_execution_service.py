@@ -597,9 +597,9 @@ def _verdict_to_sse_payload(verdict: TestVerdict) -> dict[str, Any]:
     return {
         "test_name": verdict.test_name,
         "cover_params": (
-            {"name": verdict.cover_params.name, "value": verdict.cover_params.value}
+            [{"name": param.name, "value": param.value} for param in verdict.cover_params]
             if verdict.cover_params
-            else None
+            else []
         ),
         "status": verdict.status,
         "latency_ms": verdict.latency_ms,

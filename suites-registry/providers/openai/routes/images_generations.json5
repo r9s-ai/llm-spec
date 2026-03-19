@@ -28,10 +28,12 @@
       params: {
         size: "$size.value",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "size",
         value: "$size.value",
       },
+      ],
     },
     {
       name: "size",
@@ -45,10 +47,12 @@
       params: {
         size: "$size",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "size",
         value: "$size",
       },
+      ],
     },
     {
       name: "size",
@@ -62,10 +66,12 @@
       params: {
         size: "$size",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "size",
         value: "$size",
       },
+      ],
     },
     {
       name: "quality",
@@ -79,10 +85,12 @@
       params: {
         quality: "$quality",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "quality",
         value: "$quality",
       },
+      ],
     },
     {
       name: "response_format",
@@ -96,10 +104,12 @@
       params: {
         response_format: "$response_format",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "response_format",
         value: "$response_format",
       },
+      ],
     },
     {
       name: "style",
@@ -113,10 +123,12 @@
       params: {
         style: "$style",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "style",
         value: "$style",
       },
+      ],
     },
     // {
     //   name: "n",
@@ -150,10 +162,12 @@
       params: {
         user: "user-123",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "user",
         value: "user-123",
       },
+      ],
     },
     {
       name: "output_format",
@@ -169,10 +183,12 @@
         prompt: "A minimal illustration of a rocket",
         output_format: "$output_format",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "output_format",
         value: "$output_format",
       },
+      ],
     },
     {
       name: "output_compression",
@@ -198,10 +214,12 @@
         output_format: "$compression_variant.output_format",
         output_compression: "$compression_variant.value",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "output_compression",
         value: "$compression_variant.value",
       },
+      ],
     },
     {
       name: "background",
@@ -217,10 +235,12 @@
         prompt: "A product icon with specified background",
         background: "$background",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "background",
         value: "$background",
       },
+      ],
     },
     {
       name: "moderation",
@@ -243,10 +263,12 @@
         prompt: "$moderation_variant.prompt",
         moderation: "$moderation_variant.value",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "moderation",
         value: "$moderation_variant.value",
       },
+      ],
     },
     {
       name: "quality",
@@ -263,10 +285,12 @@
         prompt: "A detailed illustration of a spaceship cockpit",
         quality: "$quality.value",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "quality",
         value: "$quality.value",
       },
+      ],
     },
     {
       name: "quality",
@@ -282,10 +306,12 @@
         prompt: "A clean line-art illustration",
         quality: "$quality",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "quality",
         value: "$quality",
       },
+      ],
     },
     {
       name: "size",
@@ -301,10 +327,12 @@
         prompt: "A landscape or portrait illustration",
         size: "$size",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "size",
         value: "$size",
       },
+      ],
     },
     {
       name: "stream",
@@ -315,10 +343,12 @@
         stream: true,
       },
       check_stream: true,
-      cover_params: {
+      cover_params: [
+{
         name: "stream",
         value: true,
       },
+      ],
     },
   ],
 }

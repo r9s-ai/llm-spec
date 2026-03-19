@@ -31,10 +31,12 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "response_format",
         value: "$response_format",
       },
+      ],
     },
     {
       name: "prompt",
@@ -45,10 +47,12 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "prompt",
         value: "Translate this into French.",
       },
+      ],
     },
     {
       name: "temperature",
@@ -59,10 +63,12 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "temperature",
         value: 0.0,
       },
+      ],
     },
   ],
 }

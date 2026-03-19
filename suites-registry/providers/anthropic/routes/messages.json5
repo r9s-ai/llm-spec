@@ -47,10 +47,12 @@
       params: {
         temperature: 0.7,
       },
-      cover_params: {
+      cover_params: [
+{
         name: "temperature",
         value: 0.7,
       },
+      ],
     },
     {
       name: "top_p",
@@ -58,10 +60,12 @@
       params: {
         top_p: 0.9,
       },
-      cover_params: {
+      cover_params: [
+{
         name: "top_p",
         value: 0.9,
       },
+      ],
     },
     {
       name: "top_k",
@@ -69,10 +73,12 @@
       params: {
         top_k: 40,
       },
-      cover_params: {
+      cover_params: [
+{
         name: "top_k",
         value: 40,
       },
+      ],
     },
     {
       name: "stop_sequences",
@@ -83,13 +89,15 @@
           "EndProcess",
         ],
       },
-      cover_params: {
+      cover_params: [
+{
         name: "stop_sequences",
         value: [
           "StopHere",
           "EndProcess",
         ],
       },
+      ],
     },
     {
       name: "system",
@@ -97,10 +105,12 @@
       params: {
         system: "You are a helpful assistant.",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "system",
         value: "You are a helpful assistant.",
       },
+      ],
     },
     {
       name: "metadata",
@@ -110,12 +120,14 @@
           user_id: "test-user-123",
         },
       },
-      cover_params: {
+      cover_params: [
+{
         name: "metadata",
         value: {
           user_id: "test-user-123",
         },
       },
+      ],
     },
     {
       name: "image.source.media_type",
@@ -166,10 +178,12 @@
           },
         ],
       },
-      cover_params: {
+      cover_params: [
+{
         name: "image.source.media_type",
         value: "$image_data.media_type",
       },
+      ],
     },
     {
       name: "image.source.type-url",
@@ -195,10 +209,12 @@
           },
         ],
       },
-      cover_params: {
+      cover_params: [
+{
         name: "image.source.type",
         value: "url",
       },
+      ],
     },
     {
       name: "tools",
@@ -228,7 +244,8 @@
           },
         ],
       },
-      cover_params: {
+      cover_params: [
+{
         name: "tools",
         value: [
           {
@@ -248,6 +265,7 @@
           },
         ],
       },
+      ],
     },
     {
       name: "tool_choice",
@@ -299,10 +317,12 @@
           },
         ],
       },
-      cover_params: {
+      cover_params: [
+{
         name: "tool_choice",
         value: "$choice",
       },
+      ],
     },
     {
       name: "thinking.type",
@@ -320,10 +340,12 @@
           },
         ],
       },
-      cover_params: {
+      cover_params: [
+{
         name: "thinking.type",
         value: "enabled",
       },
+      ],
     },
 
     {
@@ -338,10 +360,12 @@
       params: {
         service_tier: "$service_tier",
       },
-      cover_params: {
+      cover_params: [
+{
         name: "service_tier",
         value: "$service_tier",
       },
+      ],
     },
     {
       name: "stream",
@@ -350,10 +374,12 @@
       params: {
         stream: true,
       },
-      cover_params: {
+      cover_params: [
+{
         name: "stream",
         value: true,
       },
+      ],
     },
     {
       name: "stream_tool_use",
@@ -410,10 +436,12 @@
           },
         ],
       },
-      cover_params: {
+      cover_params: [
+{
         name: "stream",
         value: true,
       },
+      ],
     },
     // {
     //   name: "test_streaming_extended_thinking",
