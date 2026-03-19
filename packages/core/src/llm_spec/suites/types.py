@@ -36,7 +36,7 @@ class SchemaRef:
 
 @dataclass(frozen=True)
 class ProviderSpec:
-    """Loaded from provider.toml."""
+    """Loaded from provider registry metadata."""
 
     provider_id: str
     api_family: str | None = None
@@ -80,7 +80,7 @@ class RouteSpec:
 
 @dataclass
 class ModelSpec:
-    """Loaded from models/*.toml."""
+    """Loaded from models/*.json5."""
 
     model_id: str
     routes: list[str] = field(default_factory=list)

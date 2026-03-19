@@ -22,11 +22,11 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 import respx
-from mock_loader import MockDataLoader
 
 from llm_spec.adapters.base import ProviderAdapter
 from llm_spec.execute.runners import TestRunner
 from llm_spec.suites import ExecutableCase, SuiteSpec, build_executable_cases, load_SuiteSpecs
+from llm_spec_mock_server.mock_loader import MockDataLoader
 
 if TYPE_CHECKING:
     pass

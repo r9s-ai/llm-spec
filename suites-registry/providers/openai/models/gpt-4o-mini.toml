@@ -1,2 +1,0 @@
-name = "GPT-4o mini"
-routes = ["chat_completions", "responses"]

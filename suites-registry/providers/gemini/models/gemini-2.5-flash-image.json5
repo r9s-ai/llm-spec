@@ -1,0 +1,4 @@
+{
+  routes: ["generate_content"],
+  exclude_tests: ["image tools"],
+}

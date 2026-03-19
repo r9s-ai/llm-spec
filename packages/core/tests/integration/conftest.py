@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 import respx
-from mock_loader import MockDataLoader
 
 from llm_spec.adapters.api_family import APIFamilyAdapter, create_api_family_adapter
 from llm_spec.client.http_client import HTTPClient
 from llm_spec.config.loader import AppConfig, load_config
+from llm_spec_mock_server.mock_loader import MockDataLoader
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:

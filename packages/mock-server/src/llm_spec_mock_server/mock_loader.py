@@ -67,7 +67,7 @@ class MockDataLoader:
         ):
             file_path = stream_fallback_path
 
-        # Fallback: parameterized test variant → base mock file.
+        # Fallback: parameterized test variant -> base mock file.
         if not file_path.exists() and "[" in safe_name and "]" in safe_name:
             base_name = safe_name.split("[", 1)[0]
             if is_stream:

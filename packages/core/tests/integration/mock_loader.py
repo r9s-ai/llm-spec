@@ -1,8 +1,5 @@
-"""Re-export MockDataLoader from public API for backward compatibility.
+"""Re-export MockDataLoader from mock-server package for test compatibility."""
 
-New code should use: ``from llm_spec.mock import MockDataLoader``
-"""
-
-from llm_spec.mock.mock_loader import MockDataLoader
+from llm_spec_mock_server.mock_loader import MockDataLoader
 
 __all__ = ["MockDataLoader"]

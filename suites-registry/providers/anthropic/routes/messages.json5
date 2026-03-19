@@ -172,6 +172,35 @@
       },
     },
     {
+      name: "image.source.type-url",
+      description: "Test image URL source",
+      params: {
+        max_tokens: 256,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "url",
+                  url: "https://upload.wikimedia.org/wikipedia/commons/a/a7/Camponotus_flavomarginatus_ant.jpg",
+                },
+              },
+              {
+                type: "text",
+                text: "What is in the above image?",
+              },
+            ],
+          },
+        ],
+      },
+      focus_param: {
+        name: "image.source.type",
+        value: "url",
+      },
+    },
+    {
       name: "tools",
       description: "Test tools parameter",
       params: {
@@ -238,6 +267,10 @@
             type: "tool",
             name: "get_weather",
           },
+          {
+            variant_id: "none",
+            type: "none",
+          },
         ],
       },
       params: {
@@ -292,6 +325,24 @@
         value: "enabled",
       },
     },
+
+    {
+      name: "service_tier",
+      description: "Test service_tier variants",
+      variants: {
+        service_tier: [
+          "auto",
+          "standard_only",
+        ],
+      },
+      params: {
+        service_tier: "$service_tier",
+      },
+      focus_param: {
+        name: "service_tier",
+        value: "$service_tier",
+      },
+    },
     {
       name: "stream",
       description: "Basic streaming response test",
@@ -304,46 +355,66 @@
         value: true,
       },
     },
-
-    // {
-    //   name: "test_streaming_tool_use",
-    //   description: "Streaming tool use test",
-    //   stream: true,
-    //   params: {
-    //     stream: true,
-    //     tools: [
-    //       {
-    //         name: "get_weather",
-    //         description: "Get the current weather in a given location",
-    //         input_schema: {
-    //           type: "object",
-    //           properties: {
-    //             location: {
-    //               type: "string",
-    //               description: "The city and state, e.g. San Francisco, CA",
-    //             },
-    //           },
-    //           required: [
-    //             "location",
-    //           ],
-    //         },
-    //       },
-    //     ],
-    //     tool_choice: {
-    //       type: "any",
-    //     },
-    //     messages: [
-    //       {
-    //         role: "user",
-    //         content: "What is the weather like in San Francisco?",
-    //       },
-    //     ],
-    //   },
-    //   focus_param: {
-    //     name: "stream",
-    //     value: true,
-    //   },
-    // },
+    {
+      name: "stream_tool_use",
+      description: "Streaming tool use test",
+      check_stream: true,
+      // Tool-use streams can emit input_json_delta rather than text content deltas.
+      stream_rules: {
+        min_observations: 1,
+        checks: [
+          {
+            type: "required_sequence",
+            values: [
+              "message_start",
+              "content_block_start",
+              "content_block_delta",
+              "content_block_stop",
+              "message_delta",
+              "message_stop",
+            ],
+          },
+          {
+            type: "required_terminal",
+            value: "message_stop",
+          },
+        ],
+      },
+      params: {
+        stream: true,
+        tools: [
+          {
+            name: "get_weather",
+            description: "Get the current weather in a given location",
+            input_schema: {
+              type: "object",
+              properties: {
+                location: {
+                  type: "string",
+                  description: "The city and state, e.g. San Francisco, CA",
+                },
+              },
+              required: [
+                "location",
+              ],
+            },
+          },
+        ],
+        tool_choice: {
+          type: "any",
+        },
+        messages: [
+          {
+            role: "user",
+            content: "What is the weather like in San Francisco?",
+          },
+        ],
+      },
+      focus_param: {
+        name: "stream",
+        value: true,
+      },
+    },
     // {
     //   name: "test_streaming_extended_thinking",
     //   description: "Streaming extended thinking test",

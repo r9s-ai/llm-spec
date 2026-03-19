@@ -8,7 +8,7 @@ Registry layout follows [`_docs/DESIGN.md`](../_docs/DESIGN.md).
 providers/<provider>/
   provider.toml
   routes/*.json5
-  models/*.toml
+  models/*.json5
 ```
 
 ## How to Add a New Provider
@@ -19,7 +19,7 @@ Use this for providers that follow OpenAI endpoints/schemas.
 
 1. Create provider directory: `providers/<provider>/`.
 2. Add `provider.toml` with `api_family = "openai"` and `routes_from = "openai"`.
-3. Add one or more model files under `models/*.toml`.
+3. Add one or more model files under `models/*.json5`.
 4. (Optional) Add route overrides in `routes/*.json5` if this provider differs from upstream OpenAI behavior.
 
 Example `provider.toml`:
@@ -46,7 +46,7 @@ For a provider that is not OpenAI/Anthropic/Gemini compatible:
 
 1. Create `provider.toml`.
 2. Add all required route templates in `routes/*.json5`.
-3. Add model files in `models/*.toml`.
+3. Add model files in `models/*.json5`.
 4. Ensure the runtime has a matching adapter/schema implementation.
 
 ## Test Config File Rules
@@ -173,47 +173,47 @@ Gemini-style endpoint template:
 }
 ```
 
-### `models/<model-id>.toml`
+### `models/<model-id>.json5`
 
 - File name is the model ID.
 - `routes = [...]` is required and lists supported route names.
 - Optional `include_tests = [...]` keeps only listed tests by name (applies after route expansion).
 - Optional `exclude_tests = [...]` removes listed tests by name (applies after `include_tests`).
 - `baseline` must remain after filtering (cannot be excluded; if `include_tests` is set it must contain `baseline`).
-- Optional `[baseline_params_override]` deep-merges into route baseline params.
+- Optional `baseline_params_override` deep-merges into route baseline params.
 
 Minimal template:
 
-```toml
-# providers/<provider>/models/<model-id>.toml
-name = "Model Display Name"
-routes = ["chat_completions"]
+```json5
+{
+  routes: ["chat_completions"],
+}
 ```
 
 Complete template example:
 
-```toml
-# providers/<provider>/models/gpt-4o-mini.toml
-name = "GPT-4o mini"
-routes = ["chat_completions", "responses"]
+```json5
+{
+  routes: ["chat_completions", "responses"],
 
-# Optional: keep only listed tests by name
-include_tests = [
-  "baseline",
-  "reasoning_effort[high]",
-  "text.verbosity[low]",
-]
+  // Optional: keep only listed tests by name
+  include_tests: [
+    "baseline",
+    "reasoning_effort[high]",
+    "text.verbosity[low]",
+  ],
 
-# Optional: remove listed tests by name
-exclude_tests = [
-  "service_tier",
-]
+  // Optional: remove listed tests by name
+  exclude_tests: [
+    "service_tier",
+  ],
 
-# Optional: override route baseline params (deep merge)
-[baseline_params_override]
-max_completion_tokens = 1024
-temperature = 0.2
-
+  // Optional: override route baseline params (deep merge)
+  baseline_params_override: {
+    max_completion_tokens: 1024,
+    temperature: 0.2,
+  },
+}
 ```
 
 ### Asset and file references

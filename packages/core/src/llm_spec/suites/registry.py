@@ -42,7 +42,7 @@ def _suite_id(provider: str, model: str, route: str) -> str:
 def _read_json5(path: Path) -> dict[str, Any]:
     data = json5.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ValueError(f"Route file must be an object: {path}")
+        raise ValueError(f"Registry file must be an object: {path}")
     return data
 
 
@@ -93,30 +93,30 @@ def _load_model_specs(provider_dir: Path) -> dict[str, ModelSpec]:
     if not model_dir.exists():
         return {}
     models: dict[str, ModelSpec] = {}
-    for model_path in sorted(model_dir.glob("*.toml")):
-        data = tomllib.loads(model_path.read_text(encoding="utf-8"))
+    for model_path in sorted(model_dir.glob("*.json5")):
+        data = _read_json5(model_path)
         model_id = model_path.stem
 
         routes_raw = data.get("routes", [])
         if not isinstance(routes_raw, list):
-            raise ValueError(f"models/{model_id}.toml routes must be a list")
+            raise ValueError(f"models/{model_id}.json5 routes must be a list")
 
         include_raw = data.get("include_tests")
         if include_raw is not None and not isinstance(include_raw, list):
-            raise ValueError(f"models/{model_id}.toml include_tests must be a list")
+            raise ValueError(f"models/{model_id}.json5 include_tests must be a list")
 
         include_tests = [str(n) for n in include_raw] if isinstance(include_raw, list) else None
         if include_tests is not None and "baseline" not in include_tests:
-            raise ValueError(f"models/{model_id}.toml include_tests must include 'baseline'.")
+            raise ValueError(f"models/{model_id}.json5 include_tests must include 'baseline'.")
 
         exclude_raw = data.get("exclude_tests", []) or []
         if not isinstance(exclude_raw, list):
-            raise ValueError(f"models/{model_id}.toml exclude_tests must be a list")
+            raise ValueError(f"models/{model_id}.json5 exclude_tests must be a list")
 
         exclude_tests = [str(n) for n in exclude_raw] if exclude_raw else None
         if exclude_tests and "baseline" in exclude_tests:
             raise ValueError(
-                f"models/{model_id}.toml cannot exclude baseline test; baseline is required."
+                f"models/{model_id}.json5 cannot exclude baseline test; baseline is required."
             )
 
         models[model_id] = ModelSpec(

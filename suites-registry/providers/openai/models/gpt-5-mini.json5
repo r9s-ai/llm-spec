@@ -1,0 +1,16 @@
+{
+  routes: ["responses", "chat_completions"],
+  include_tests: [
+    "baseline",
+    "instructions",
+    "reasoning_effort[none]",
+    "reasoning_effort[minimal]",
+    "input_text_image",
+    "stream",
+    "input_text_image[png]",
+    "input_text_image[jpeg]",
+    "input_text_image[jpg]",
+    "input_text_image[webp]",
+    "input_text_image[gif]",
+  ],
+}

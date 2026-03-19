@@ -44,7 +44,7 @@ suites-registry/
   providers/<provider>/
     provider.toml
     routes/*.json5
-    models/*.toml
+    models/*.json5
   assets/
     audio/
     images/
@@ -193,13 +193,13 @@ If you need to override them, see:
 
 `llm-spec` expands suites as:
 
-`provider routes/*.json5 × models/*.toml`
+`provider routes/*.json5 × models/*.json5`
 
 Key points:
 
 - `provider.toml` defines provider metadata, `api_family`, optional `routes_from` inheritance.
 - `routes/*.json5` defines endpoint/baseline params/tests template.
-- `models/*.toml` defines model route coverage and optional overrides.
+- `models/*.json5` defines model route coverage and optional overrides.
 - Shared upload assets should be placed in `suites-registry/assets/`.
 
 See:

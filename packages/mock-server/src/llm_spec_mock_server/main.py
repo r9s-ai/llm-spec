@@ -11,7 +11,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 
-from llm_spec.mock import MockDataLoader
+from llm_spec_mock_server import MockDataLoader
 
 DEFAULT_FIXTURE_DIR = Path("packages/core/tests/integration/mocks")
 CASE_ID_HEADER = "X-LLM-Spec-Case-Id"

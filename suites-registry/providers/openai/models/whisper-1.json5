@@ -1,0 +1,3 @@
+{
+  routes: ["audio_transcriptions", "audio_translations"],
+}

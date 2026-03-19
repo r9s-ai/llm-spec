@@ -1,0 +1,4 @@
+{
+  routes: ["responses"],
+  include_tests: ["baseline", "instructions"],
+}

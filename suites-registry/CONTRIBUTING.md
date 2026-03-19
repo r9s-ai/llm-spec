@@ -4,7 +4,7 @@
 
 1. One provider per directory under `providers/`.
 2. Keep `provider.toml` at the provider root.
-3. Put route templates under `routes/*.json5` and model definitions under `models/*.toml`.
+3. Put route templates under `routes/*.json5` and model definitions under `models/*.json5`.
 4. Keep `route` and `model` IDs stable once published.
 5. Add only reproducible tests with clear names.
 

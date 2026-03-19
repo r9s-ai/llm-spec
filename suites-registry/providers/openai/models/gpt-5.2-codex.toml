@@ -1,3 +1,0 @@
-name = "gpt-5.2-codex"
-routes = ["responses"]
-include_tests=["baseline","instructions"]

@@ -80,12 +80,13 @@ def test_registry_filters_tests_with_include_and_exclude(tmp_path: Path) -> None
         """,
         encoding="utf-8",
     )
-    (models_dir / "demo-model.toml").write_text(
+    (models_dir / "demo-model.json5").write_text(
         """
-        name = "demo-model"
-        routes = ["chat"]
-        include_tests = ["baseline", "temperature", "top_p"]
-        exclude_tests = ["temperature"]
+        {
+          routes: ["chat"],
+          include_tests: ["baseline", "temperature", "top_p"],
+          exclude_tests: ["temperature"],
+        }
         """,
         encoding="utf-8",
     )

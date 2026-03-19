@@ -1,0 +1,3 @@
+{
+  routes: ["generate_content", "stream_generate_content"],
+}
