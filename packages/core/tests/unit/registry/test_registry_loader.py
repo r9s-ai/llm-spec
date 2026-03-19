@@ -73,8 +73,8 @@ def test_registry_filters_tests_with_include_and_exclude(tmp_path: Path) -> None
           endpoint: "/v1/chat/completions",
           tests: [
             { name: "baseline", baseline: true, params: { messages: [{ role: "user", content: "hi" }] } },
-            { name: "temperature", params: { temperature: 0.7 }, focus_param: { name: "temperature", value: 0.7 } },
-            { name: "top_p", params: { top_p: 0.9 }, focus_param: { name: "top_p", value: 0.9 } },
+            { name: "temperature", params: { temperature: 0.7 }, cover_params: { name: "temperature", value: 0.7 } },
+            { name: "top_p", params: { top_p: 0.9 }, cover_params: { name: "top_p", value: 0.9 } },
           ],
         }
         """,

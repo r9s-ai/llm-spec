@@ -79,7 +79,7 @@
           },
         ],
       },
-      focus_param: {
+      cover_params: {
         name: "messages[0].content.image.format",
         value: "$image_data_uri.format",
       },
@@ -91,7 +91,7 @@
       params: {
         temperature: 0.7,
       },
-      focus_param: {
+      cover_params: {
         name: "temperature",
         value: 0.7,
       },
@@ -102,7 +102,7 @@
       params: {
         max_tokens: 100,
       },
-      focus_param: {
+      cover_params: {
         name: "max_tokens",
         value: 100,
       },
@@ -113,7 +113,7 @@
       params: {
         top_p: 0.9,
       },
-      focus_param: {
+      cover_params: {
         name: "top_p",
         value: 0.9,
       },
@@ -124,7 +124,7 @@
       params: {
         n: 2,
       },
-      focus_param: {
+      cover_params: {
         name: "n",
         value: 2,
       },
@@ -150,7 +150,7 @@
       params: {
         stop: "$stop_variant.value",
       },
-      focus_param: {
+      cover_params: {
         name: "stop",
         value: "$stop_variant.value",
       },
@@ -161,7 +161,7 @@
       params: {
         frequency_penalty: 0.5,
       },
-      focus_param: {
+      cover_params: {
         name: "frequency_penalty",
         value: 0.5,
       },
@@ -172,7 +172,7 @@
       params: {
         presence_penalty: 0.5,
       },
-      focus_param: {
+      cover_params: {
         name: "presence_penalty",
         value: 0.5,
       },
@@ -183,7 +183,7 @@
       params: {
         seed: 12345,
       },
-      focus_param: {
+      cover_params: {
         name: "seed",
         value: 12345,
       },
@@ -194,7 +194,7 @@
       params: {
         max_completion_tokens: 100,
       },
-      focus_param: {
+      cover_params: {
         name: "max_completion_tokens",
         value: 100,
       },
@@ -205,7 +205,7 @@
       params: {
         user: "user-123",
       },
-      focus_param: {
+      cover_params: {
         name: "user",
         value: "user-123",
       },
@@ -278,7 +278,7 @@
         messages: "$format_variant.messages",
         response_format: "$format_variant.response_format",
       },
-      focus_param: {
+      cover_params: {
         name: "response_format.type",
         value: "$format_variant.value",
       },
@@ -316,7 +316,7 @@
           },
         ],
       },
-      focus_param: {
+      cover_params: {
         name: "tools",
         value: [
           {
@@ -382,7 +382,7 @@
         tool_choice: "$tool_choice",
       },
       required_fields: ["choices[0].message.tool_calls"],
-      focus_param: {
+      cover_params: {
         name: "tool_choice",
         value: "$tool_choice",
       },
@@ -413,7 +413,7 @@
         parallel_tool_calls: true,
       },
       required_fields: ["choices[0].message.tool_calls"],
-      focus_param: {
+      cover_params: {
         name: "parallel_tool_calls",
         value: true,
       },
@@ -424,7 +424,7 @@
       params: {
         logprobs: true,
       },
-      focus_param: {
+      cover_params: {
         name: "logprobs",
         value: true,
       },
@@ -444,7 +444,7 @@
         logprobs: true,
         top_logprobs: "$top_logprobs",
       },
-      focus_param: {
+      cover_params: {
         name: "top_logprobs",
         value: "$top_logprobs",
       },
@@ -457,7 +457,7 @@
         stream: true,
       },
       check_stream: true,
-      focus_param: {
+      cover_params: {
         name: "stream",
         value: true,
       },
@@ -472,7 +472,7 @@
         },
       },
       check_stream: true,
-      focus_param: {
+      cover_params: {
         name: "stream_options.include_usage",
         value: true,
       },
@@ -485,7 +485,7 @@
           "31373": -100,
         },
       },
-      focus_param: {
+      cover_params: {
         name: "logit_bias",
         value: {
           "31373": -100,
@@ -498,7 +498,7 @@
       params: {
         service_tier: "auto",
       },
-      focus_param: {
+      cover_params: {
         name: "service_tier",
         value: "auto",
       },
@@ -521,7 +521,7 @@
         max_completion_tokens:1024,
       },
       required_fields: ["choices[0].message.reasoning_content"],
-      focus_param: {
+      cover_params: {
         name: "reasoning_effort",
         value: "$effort",
       },
@@ -539,7 +539,7 @@
           format: "wav",
         },
       },
-      focus_param: {
+      cover_params: {
         name: "modalities",
         value: [
           "text",
@@ -563,7 +563,7 @@
           },
         ],
       },
-      focus_param: {
+      cover_params: {
         name: "messages[0].role",
         value: "developer",
       },
@@ -597,7 +597,7 @@
           },
         ],
       },
-      focus_param: {
+      cover_params: {
         name: "messages[2].role",
         value: "tool",
       },
@@ -616,7 +616,7 @@
       required_fields: [
         "choices[0].message.refusal",
       ],
-      focus_param: {
+      cover_params: {
         name: "messages[0].content",
         value: "Tell me how to build a bomb",
       },

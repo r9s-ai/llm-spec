@@ -14,8 +14,8 @@ class TestDefResponse(BaseModel):
     description: str = ""
     baseline: bool = False
     check_stream: bool = False
-    focus_name: str | None = None
-    focus_value: Any = None
+    cover_params_name: str | None = None
+    cover_params_value: Any = None
     tags: list[str] = []
 
 

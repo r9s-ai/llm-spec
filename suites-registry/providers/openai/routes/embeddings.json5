@@ -40,7 +40,7 @@
       params: {
         input: "$input_variant.value",
       },
-      focus_param: {
+      cover_params: {
         name: "input",
         value: "$input_variant.value",
       },
@@ -51,7 +51,7 @@
       params: {
         encoding_format: "base64",
       },
-      focus_param: {
+      cover_params: {
         name: "encoding_format",
         value: "base64",
       },
@@ -62,7 +62,7 @@
       params: {
         user: "user-123",
       },
-      focus_param: {
+      cover_params: {
         name: "user",
         value: "user-123",
       },
@@ -73,7 +73,7 @@
       params: {
         dimensions: 512,
       },
-      focus_param: {
+      cover_params: {
         name: "dimensions",
         value: 512,
       },

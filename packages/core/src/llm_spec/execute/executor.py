@@ -128,7 +128,7 @@ def _cancelled_verdict(case: ExecutableCase) -> TestVerdict:
     return TestVerdict(
         case_id=case.case_id,
         test_name=case.test_name,
-        focus=case.focus,
+        cover_params=case.cover_params,
         status="error",
         started_at=now,
         finished_at=now,

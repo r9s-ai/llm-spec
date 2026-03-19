@@ -43,7 +43,7 @@ def error_verdict(
     return TestVerdict(
         case_id=case.case_id,
         test_name=case.test_name,
-        focus=case.focus,
+        cover_params=case.cover_params,
         status="error",
         started_at=started_at or now,
         finished_at=finished_at or now,
@@ -179,7 +179,7 @@ class TestRunner:
         return TestVerdict(
             case_id=case.case_id,
             test_name=case.test_name,
-            focus=case.focus,
+            cover_params=case.cover_params,
             status=status,  # type: ignore[arg-type]
             started_at=started_at,
             finished_at=finished_at,

@@ -10,8 +10,8 @@ export function getTestRows(suite: Suite | undefined): TestRow[] {
 
   return tests.map((t) => {
     const name = t.name;
-    const paramName = t.focus_name ?? "baseline";
-    const valueText = t.focus_value === undefined || t.focus_value === null ? "-" : JSON.stringify(t.focus_value);
+    const paramName = t.cover_params_name ?? "baseline";
+    const valueText = t.cover_params_value === undefined || t.cover_params_value === null ? "-" : JSON.stringify(t.cover_params_value);
     const tags = t.tags ?? [];
     return { name, paramName, valueText, tags };
   });

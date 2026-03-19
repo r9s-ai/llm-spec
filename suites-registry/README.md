@@ -92,7 +92,7 @@ routes_from = "openai"
 - If there are no default baseline parameters, set `baseline.params` to `{}` explicitly.
 - For non-Gemini routes, do not hardcode `model` in `baseline.params`; runtime injects it.
 - For Gemini-style URLs, use `{model}` in `endpoint` and runtime will replace it.
-- `tests[]` entries follow existing suite format (`name`, `params`, `focus_param`, `baseline`, `tags`, etc.).
+- `tests[]` entries follow existing suite format (`name`, `params`, `cover_params`, `baseline`, `tags`, etc.).
 - `baseline` cannot be skipped.
 - Parameter precedence at runtime is: `baseline.params` -> `test.params` (test-level values override same keys in baseline params).
 
@@ -129,13 +129,13 @@ Complete template example (non-Gemini):
     {
       name: "temperature",
       params: { temperature: 0.7 },
-      focus_param: { name: "temperature", value: 0.7 },
+      cover_params: { name: "temperature", value: 0.7 },
       tags: ["core"],
     },
     {
       name: "stream",
       params: { stream: true },
-      focus_param: { name: "stream", value: true },
+      cover_params: { name: "stream", value: true },
       tags: ["streaming"],
     },
     {

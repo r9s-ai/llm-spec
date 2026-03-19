@@ -64,7 +64,7 @@
       params: {
         input: "$input_variant.value",
       },
-      focus_param: {
+      cover_params: {
         name: "input",
         value: "$input_variant.value",
       },
@@ -118,7 +118,7 @@
           },
         ],
       },
-      focus_param: {
+      cover_params: {
         name: "input_image.format",
         value: "$image_data_uri.format",
       },
@@ -131,7 +131,7 @@
           stream:true
       },
       check_stream:true,
-      focus_param: {
+      cover_params: {
         name: "instructions",
         value: "You are a helpful assistant.",
       },
@@ -142,7 +142,7 @@
       params: {
         temperature: 0.7,
       },
-      focus_param: {
+      cover_params: {
         name: "temperature",
         value: 0.7,
       },
@@ -153,7 +153,7 @@
       params: {
         top_p: 0.9,
       },
-      focus_param: {
+      cover_params: {
         name: "top_p",
         value: 0.9,
       },
@@ -164,7 +164,7 @@
       params: {
         max_output_tokens: 100,
       },
-      focus_param: {
+      cover_params: {
         name: "max_output_tokens",
         value: 100,
       },
@@ -178,7 +178,7 @@
           session: "abc",
         },
       },
-      focus_param: {
+      cover_params: {
         name: "metadata",
         value: {
           user_id: "123",
@@ -238,7 +238,7 @@
           format: "$format_variant.format",
         },
       },
-      focus_param: {
+      cover_params: {
         name: "text.format.type",
         value: "$format_variant.value",
       },
@@ -306,7 +306,7 @@
         input: "$tool_variant.input",
         tools: "$tool_variant.value",
       },
-      focus_param: {
+      cover_params: {
         name: "tools",
         value: "$tool_variant.value",
       },
@@ -345,7 +345,7 @@
         ],
         tool_choice: "$tool_choice",
       },
-      focus_param: {
+      cover_params: {
         name: "tool_choice",
         value: "$tool_choice",
       },
@@ -370,7 +370,7 @@
         ],
         parallel_tool_calls: true,
       },
-      focus_param: {
+      cover_params: {
         name: "parallel_tool_calls",
         value: true,
       },
@@ -381,7 +381,7 @@
       params: {
         store: false,
       },
-      focus_param: {
+      cover_params: {
         name: "store",
         value: false,
       },
@@ -392,7 +392,7 @@
       params: {
         service_tier: "auto",
       },
-      focus_param: {
+      cover_params: {
         name: "service_tier",
         value: "auto",
       },
@@ -416,7 +416,7 @@
         },
         max_output_tokens: 1024,
       },
-      focus_param: {
+      cover_params: {
         name: "reasoning.effort",
         value: "$effort",
       },
@@ -427,7 +427,7 @@
       params: {
         safety_identifier: "user_hash_123",
       },
-      focus_param: {
+      cover_params: {
         name: "safety_identifier",
         value: "user_hash_123",
       },
@@ -444,7 +444,7 @@
         ],
         max_tool_calls: 5,
       },
-      focus_param: {
+      cover_params: {
         name: "max_tool_calls",
         value: 5,
       },
@@ -455,7 +455,7 @@
       params: {
         truncation: "auto",
       },
-      focus_param: {
+      cover_params: {
         name: "truncation",
         value: "auto",
       },
@@ -467,7 +467,7 @@
         stream: true,
       },
       check_stream: true,
-      focus_param: {
+      cover_params: {
         name: "stream",
         value: true,
       },

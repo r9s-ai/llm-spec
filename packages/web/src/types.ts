@@ -7,8 +7,8 @@ export type SuiteTestDef = {
   description: string;
   baseline: boolean;
   check_stream: boolean;
-  focus_name: string | null;
-  focus_value: unknown;
+  cover_params_name: string | null;
+  cover_params_value: unknown;
   tags: string[];
 };
 

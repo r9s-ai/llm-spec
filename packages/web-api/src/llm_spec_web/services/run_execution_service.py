@@ -596,8 +596,10 @@ def _verdict_to_sse_payload(verdict: TestVerdict) -> dict[str, Any]:
     """Build the test_result dict for SSE push."""
     return {
         "test_name": verdict.test_name,
-        "focus": (
-            {"name": verdict.focus.name, "value": verdict.focus.value} if verdict.focus else None
+        "cover_params": (
+            {"name": verdict.cover_params.name, "value": verdict.cover_params.value}
+            if verdict.cover_params
+            else None
         ),
         "status": verdict.status,
         "latency_ms": verdict.latency_ms,

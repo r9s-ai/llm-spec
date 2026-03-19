@@ -361,8 +361,8 @@ class RunRepository:
 
         row.case_id = verdict.case_id
         row.test_name = verdict.test_name
-        row.focus_name = verdict.focus.name if verdict.focus else None
-        row.focus_value = verdict.focus.value if verdict.focus else None
+        row.cover_params_name = verdict.cover_params.name if verdict.cover_params else None
+        row.cover_params_value = verdict.cover_params.value if verdict.cover_params else None
         row.status = verdict.status
         row.latency_ms = verdict.latency_ms
         row.http_status = verdict.http_status

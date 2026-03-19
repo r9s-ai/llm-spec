@@ -31,7 +31,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      focus_param: {
+      cover_params: {
         name: "response_format",
         value: "$response_format",
       },
@@ -45,7 +45,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      focus_param: {
+      cover_params: {
         name: "prompt",
         value: "Translate this into French.",
       },
@@ -59,7 +59,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      focus_param: {
+      cover_params: {
         name: "temperature",
         value: 0.0,
       },

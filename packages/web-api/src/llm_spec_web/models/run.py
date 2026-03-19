@@ -95,10 +95,10 @@ class RunCase(Base):
     is_baseline: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
 
-    # Focus parameter
-    focus_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    focus_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
-        JSON, nullable=True
+    # Covered parameters
+    cover_params_name: Mapped[str | None] = mapped_column("focus_name", String(128), nullable=True)
+    cover_params_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+        "focus_value", JSON, nullable=True
     )
 
     # Request snapshot
@@ -151,10 +151,10 @@ class RunTestResult(Base):
     # Test identity
     test_name: Mapped[str] = mapped_column(String(255), nullable=False)
 
-    # Focus parameter
-    focus_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    focus_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
-        JSON, nullable=True
+    # Covered parameters
+    cover_params_name: Mapped[str | None] = mapped_column("focus_name", String(128), nullable=True)
+    cover_params_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+        "focus_value", JSON, nullable=True
     )
 
     # Verdict

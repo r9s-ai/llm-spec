@@ -36,7 +36,7 @@
       params: {
         voice: "$voice",
       },
-      focus_param: {
+      cover_params: {
         name: "voice",
         value: "$voice",
       },
@@ -57,7 +57,7 @@
       params: {
         response_format: "$response_format",
       },
-      focus_param: {
+      cover_params: {
         name: "response_format",
         value: "$response_format",
       },
@@ -78,7 +78,7 @@
       params: {
         speed: "$speed",
       },
-      focus_param: {
+      cover_params: {
         name: "speed",
         value: "$speed",
       },
@@ -89,7 +89,7 @@
       params: {
         instructions: "Speak in a cheerful and energetic tone.",
       },
-      focus_param: {
+      cover_params: {
         name: "instructions",
         value: "Speak in a cheerful and energetic tone.",
       },
@@ -115,7 +115,7 @@
         stream_format: "$variant.value",
       },
       check_stream: "$variant.check_stream",
-      focus_param: {
+      cover_params: {
         name: "stream_format",
         value: "$variant.value",
       },

@@ -389,7 +389,7 @@ def build_executable_cases(
                 description=test_def.description,
                 is_baseline=test_def.baseline,
                 tags=list(test_def.tags),
-                focus=test_def.focus_param,
+                cover_params=test_def.cover_params,
                 request=request,
                 checks=checks,
                 provider=suiteSpec.provider_id,

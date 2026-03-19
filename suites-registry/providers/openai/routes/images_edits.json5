@@ -25,7 +25,7 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      focus_param: {
+      cover_params: {
         name: "response_format",
         value: "url",
       },
@@ -39,7 +39,7 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      focus_param: {
+      cover_params: {
         name: "background",
         value: "transparent",
       },
@@ -53,7 +53,7 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      focus_param: {
+      cover_params: {
         name: "output_format",
         value: "webp",
       },
@@ -68,7 +68,7 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      focus_param: {
+      cover_params: {
         name: "output_compression",
         value: 80,
       },
@@ -82,7 +82,7 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      focus_param: {
+      cover_params: {
         name: "size",
         value: "1536x1024",
       },
@@ -96,7 +96,7 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      focus_param: {
+      cover_params: {
         name: "n",
         value: 2,
       },
@@ -110,7 +110,7 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      focus_param: {
+      cover_params: {
         name: "input_fidelity",
         value: "high",
       },
@@ -123,7 +123,7 @@
         image: "assets/images/test_base.png",
         mask: "assets/images/test_base.png",
       },
-      focus_param: {
+      cover_params: {
         name: "mask",
         value: null,
       },
@@ -137,7 +137,7 @@
       files: {
         image: "assets/images/test_base.png",
       },
-      focus_param: {
+      cover_params: {
         name: "user",
         value: "user-123",
       },

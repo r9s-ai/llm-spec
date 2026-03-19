@@ -53,8 +53,8 @@ def list_suites(
                     description=t.description,
                     baseline=t.baseline,
                     check_stream=t.check_stream,
-                    focus_name=t.focus_param.name if t.focus_param else None,
-                    focus_value=t.focus_param.value if t.focus_param else None,
+                    cover_params_name=t.cover_params.name if t.cover_params else None,
+                    cover_params_value=t.cover_params.value if t.cover_params else None,
                     tags=t.tags,
                 )
                 for t in s.tests
@@ -85,8 +85,8 @@ def get_suite(
                 description=t.description,
                 baseline=t.baseline,
                 check_stream=t.check_stream,
-                focus_name=t.focus_param.name if t.focus_param else None,
-                focus_value=t.focus_param.value if t.focus_param else None,
+                cover_params_name=t.cover_params.name if t.cover_params else None,
+                cover_params_value=t.cover_params.value if t.cover_params else None,
                 tags=t.tags,
             )
             for t in s.tests

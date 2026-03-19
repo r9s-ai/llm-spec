@@ -1,13 +1,13 @@
 from llm_spec.execute.executor import build_run_result
 from llm_spec.execute.types import TestVerdict
-from llm_spec.suites.types import FocusParam
+from llm_spec.suites.types import CoverParams
 
 
 def test_build_run_result_contains_verdicts() -> None:
     verdict = TestVerdict(
         case_id="suite:openai:gpt-5.2:responses:baseline",
         test_name="baseline",
-        focus=FocusParam(name="temperature", value=0.7),
+        cover_params=CoverParams(name="temperature", value=0.7),
         status="pass",
         started_at="2026-02-18T12:00:00Z",
         finished_at="2026-02-18T12:00:01Z",

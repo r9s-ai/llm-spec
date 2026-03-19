@@ -44,8 +44,8 @@ class RunQueryService:
                 {
                     "case_id": r.case_id,
                     "test_name": r.test_name,
-                    "focus_name": r.focus_name,
-                    "focus_value": r.focus_value,
+                    "cover_params_name": r.cover_params_name,
+                    "cover_params_value": r.cover_params_value,
                     "status": r.status,
                     "latency_ms": r.latency_ms,
                     "http_status": r.http_status,

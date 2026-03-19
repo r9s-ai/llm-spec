@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from llm_spec.execute.types import FailureInfo, RunResult, TestVerdict
-from llm_spec.suites.types import ExecutableCase, FocusParam, HttpRequest, ValidationSpec
+from llm_spec.suites.types import CoverParams, ExecutableCase, HttpRequest, ValidationSpec
 from llm_spec_web.models.run import RunCase, RunTestResult
 
 
@@ -24,8 +24,8 @@ def test_case_to_run_case(run_id: str, case: ExecutableCase) -> RunCase:
         description=case.description,
         is_baseline=case.is_baseline,
         tags=list(case.tags),
-        focus_name=case.focus.name if case.focus else None,
-        focus_value=case.focus.value if case.focus else None,
+        cover_params_name=case.cover_params.name if case.cover_params else None,
+        cover_params_value=case.cover_params.value if case.cover_params else None,
         request_method=case.request.method,
         request_endpoint=case.request.endpoint,
         request_params=deepcopy(case.request.params),
@@ -50,9 +50,9 @@ def run_case_to_test_case(run_case: RunCase) -> ExecutableCase:
         description=run_case.description,
         is_baseline=bool(run_case.is_baseline),
         tags=list(run_case.tags),
-        focus=(
-            FocusParam(name=run_case.focus_name, value=run_case.focus_value)
-            if run_case.focus_name
+        cover_params=(
+            CoverParams(name=run_case.cover_params_name, value=run_case.cover_params_value)
+            if run_case.cover_params_name
             else None
         ),
         request=HttpRequest(
@@ -84,8 +84,8 @@ def verdict_to_test_result_row(
         run_case_id=run_case_id,
         case_id=verdict.case_id,
         test_name=verdict.test_name,
-        focus_name=verdict.focus.name if verdict.focus else None,
-        focus_value=verdict.focus.value if verdict.focus else None,
+        cover_params_name=verdict.cover_params.name if verdict.cover_params else None,
+        cover_params_value=verdict.cover_params.value if verdict.cover_params else None,
         status=verdict.status,
         latency_ms=verdict.latency_ms,
         http_status=verdict.http_status,
@@ -108,7 +108,7 @@ def error_verdict(case: ExecutableCase, error: Exception) -> TestVerdict:
     return TestVerdict(
         case_id=case.case_id,
         test_name=case.test_name,
-        focus=case.focus,
+        cover_params=case.cover_params,
         status="error",
         started_at=now,
         finished_at=now,
@@ -132,12 +132,12 @@ def verdict_to_case_row(verdict: TestVerdict, run_case_id: str | None = None) ->
     }
     if run_case_id:
         row["run_case_id"] = run_case_id
-    if verdict.focus:
+    if verdict.cover_params:
         row["parameter"] = {
-            "name": verdict.focus.name,
-            "value": verdict.focus.value,
-            "value_type": type(verdict.focus.value).__name__
-            if verdict.focus.value is not None
+            "name": verdict.cover_params.name,
+            "value": verdict.cover_params.value,
+            "value_type": type(verdict.cover_params.value).__name__
+            if verdict.cover_params.value is not None
             else "str",
         }
     if verdict.http_status is not None or verdict.latency_ms is not None:

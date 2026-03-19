@@ -7,10 +7,10 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+from pydantic import AliasChoices, ConfigDict, Field, model_validator
 from pydantic import BaseModel as PydanticBaseModel
-from pydantic import ConfigDict, Field, model_validator
 
-from .types import FocusParam, RouteSpec, SchemaRef, TestDef
+from .types import CoverParams, RouteSpec, SchemaRef, TestDef
 
 # ── Pydantic raw validators (JSON5 file shape) ───────────
 
@@ -21,7 +21,10 @@ class _RawTestCase(PydanticBaseModel):
     name: str
     description: str = ""
     params: dict[str, Any] = Field(default_factory=dict)
-    focus_param: dict[str, Any] | None = None
+    cover_params: dict[str, Any] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("cover_params", "focus_param"),
+    )
     baseline: bool = False
     check_stream: Any = False
     stream_rules: dict[str, Any] | None = None
@@ -43,10 +46,10 @@ class _RawTestCase(PydanticBaseModel):
                     f"Invalid check_stream value for baseline test '{self.name}': {self.check_stream}"
                 )
             return self
-        if self.focus_param is None:
-            raise ValueError(f"Missing 'focus_param' for non-baseline test '{self.name}'")
-        if "name" not in self.focus_param:
-            raise ValueError(f"Missing focus_param.name for test '{self.name}'")
+        if self.cover_params is None:
+            raise ValueError(f"Missing 'cover_params' for non-baseline test '{self.name}'")
+        if "name" not in self.cover_params:
+            raise ValueError(f"Missing cover_params.name for test '{self.name}'")
         if isinstance(self.check_stream, str) and not self.variants:
             raise ValueError(
                 f"Invalid check_stream value for test '{self.name}': {self.check_stream}"
@@ -89,10 +92,10 @@ class _RawSuite(PydanticBaseModel):
 # ── Conversion helpers ────────────────────────────────────
 
 
-def _raw_focus_to_focus_param(raw: dict[str, Any] | None) -> FocusParam | None:
+def _raw_cover_params(raw: dict[str, Any] | None) -> CoverParams | None:
     if not raw or "name" not in raw:
         return None
-    return FocusParam(name=raw["name"], value=raw.get("value"))
+    return CoverParams(name=raw["name"], value=raw.get("value"))
 
 
 def _raw_schemas_to_schema_ref(raw: dict[str, str] | None) -> SchemaRef | None:
@@ -130,9 +133,11 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[TestDef]
         params = copy.deepcopy(test_config.get("params", {}))
         replace_parameter_references(params, param_name, value)
 
-        raw_focus = copy.deepcopy(test_config.get("focus_param"))
-        if raw_focus:
-            replace_parameter_references(raw_focus, param_name, value)
+        raw_cover_params = copy.deepcopy(
+            test_config.get("cover_params") or test_config.get("focus_param")
+        )
+        if raw_cover_params:
+            replace_parameter_references(raw_cover_params, param_name, value)
 
         variant_name = f"{test_config['name']}[{suffix}]"
 
@@ -146,7 +151,7 @@ def expand_parameterized_tests(test_config: dict[str, Any]) -> Iterator[TestDef]
             name=variant_name,
             description=test_config.get("description", ""),
             params=params,
-            focus_param=_raw_focus_to_focus_param(raw_focus),
+            cover_params=_raw_cover_params(raw_cover_params),
             baseline=test_config.get("baseline", False),
             check_stream=check_stream if isinstance(check_stream, bool) else False,
             stream_rules=raw_stream_rules,
@@ -213,7 +218,7 @@ def parse_route_dict(
                     name=t.name,
                     description=t.description,
                     params=t.params,
-                    focus_param=_raw_focus_to_focus_param(t.focus_param),
+                    cover_params=_raw_cover_params(t.cover_params),
                     baseline=t.baseline,
                     check_stream=t.check_stream if isinstance(t.check_stream, bool) else False,
                     stream_rules=t.effective_stream_rules,

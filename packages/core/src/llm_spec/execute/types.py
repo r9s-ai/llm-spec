@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from llm_spec.client.http_client import HTTPClient
-from llm_spec.suites.types import ExecutableCase, FocusParam, SuiteSpec
+from llm_spec.suites.types import CoverParams, ExecutableCase, SuiteSpec
 
 if TYPE_CHECKING:
     from llm_spec.execute.executor import Executor
@@ -31,8 +31,8 @@ class TestVerdict:
     case_id: str
     test_name: str
 
-    # Focus parameter
-    focus: FocusParam | None = None
+    # Covered parameters
+    cover_params: CoverParams | None = None
 
     # Verdict
     status: Literal["pass", "fail", "error"] = "error"

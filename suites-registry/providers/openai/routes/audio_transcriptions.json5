@@ -23,7 +23,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      focus_param: {
+      cover_params: {
         name: "language",
         value: "en",
       },
@@ -37,7 +37,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      focus_param: {
+      cover_params: {
         name: "temperature",
         value: 0.0,
       },
@@ -60,7 +60,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      focus_param: {
+      cover_params: {
         name: "response_format",
         value: "$response_format",
       },
@@ -74,7 +74,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      focus_param: {
+      cover_params: {
         name: "prompt",
         value: "Please transcribe in a friendly style.",
       },
@@ -102,7 +102,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      focus_param: {
+      cover_params: {
         name: "chunking_strategy",
         value: "$chunking_variant.value",
       },
@@ -119,7 +119,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      focus_param: {
+      cover_params: {
         name: "include",
         value: [
           "logprobs",
@@ -143,7 +143,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      focus_param: {
+      cover_params: {
         name: "known_speaker_names",
         value: [
           "speaker_a",
@@ -164,7 +164,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      focus_param: {
+      cover_params: {
         name: "timestamp_granularities",
         value: [
           "word",
@@ -183,7 +183,7 @@
       files: {
         file: "assets/audio/hello_en.mp3",
       },
-      focus_param: {
+      cover_params: {
         name: "stream",
         value: true,
       },

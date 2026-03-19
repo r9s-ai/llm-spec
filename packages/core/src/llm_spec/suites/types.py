@@ -16,8 +16,8 @@ from typing import Any
 
 
 @dataclass(frozen=True)
-class FocusParam:
-    """Marks which parameter this test is exercising."""
+class CoverParams:
+    """Marks which parameters this test is intended to cover."""
 
     name: str
     value: Any
@@ -51,7 +51,7 @@ class TestDef:
     name: str
     description: str = ""
     params: dict[str, Any] = field(default_factory=dict)
-    focus_param: FocusParam | None = None
+    cover_params: CoverParams | None = None
     baseline: bool = False
     check_stream: bool = False
     stream_rules: dict[str, Any] | None = None
@@ -161,8 +161,8 @@ class ExecutableCase:
     is_baseline: bool = False
     tags: list[str] = field(default_factory=list)
 
-    # Focus parameter
-    focus: FocusParam | None = None
+    # Covered parameters
+    cover_params: CoverParams | None = None
 
     # Full request
     request: HttpRequest = field(default_factory=lambda: HttpRequest(method="POST", endpoint=""))

@@ -28,7 +28,7 @@
       params: {
         size: "$size.value",
       },
-      focus_param: {
+      cover_params: {
         name: "size",
         value: "$size.value",
       },
@@ -45,7 +45,7 @@
       params: {
         size: "$size",
       },
-      focus_param: {
+      cover_params: {
         name: "size",
         value: "$size",
       },
@@ -62,7 +62,7 @@
       params: {
         size: "$size",
       },
-      focus_param: {
+      cover_params: {
         name: "size",
         value: "$size",
       },
@@ -79,7 +79,7 @@
       params: {
         quality: "$quality",
       },
-      focus_param: {
+      cover_params: {
         name: "quality",
         value: "$quality",
       },
@@ -96,7 +96,7 @@
       params: {
         response_format: "$response_format",
       },
-      focus_param: {
+      cover_params: {
         name: "response_format",
         value: "$response_format",
       },
@@ -113,7 +113,7 @@
       params: {
         style: "$style",
       },
-      focus_param: {
+      cover_params: {
         name: "style",
         value: "$style",
       },
@@ -139,7 +139,7 @@
     //     prompt: "$n_variant.prompt",
     //     n: "$n_variant.value",
     //   },
-    //   focus_param: {
+    //   cover_params: {
     //     name: "n",
     //     value: "$n_variant.value",
     //   },
@@ -150,7 +150,7 @@
       params: {
         user: "user-123",
       },
-      focus_param: {
+      cover_params: {
         name: "user",
         value: "user-123",
       },
@@ -169,7 +169,7 @@
         prompt: "A minimal illustration of a rocket",
         output_format: "$output_format",
       },
-      focus_param: {
+      cover_params: {
         name: "output_format",
         value: "$output_format",
       },
@@ -198,7 +198,7 @@
         output_format: "$compression_variant.output_format",
         output_compression: "$compression_variant.value",
       },
-      focus_param: {
+      cover_params: {
         name: "output_compression",
         value: "$compression_variant.value",
       },
@@ -217,7 +217,7 @@
         prompt: "A product icon with specified background",
         background: "$background",
       },
-      focus_param: {
+      cover_params: {
         name: "background",
         value: "$background",
       },
@@ -243,7 +243,7 @@
         prompt: "$moderation_variant.prompt",
         moderation: "$moderation_variant.value",
       },
-      focus_param: {
+      cover_params: {
         name: "moderation",
         value: "$moderation_variant.value",
       },
@@ -263,7 +263,7 @@
         prompt: "A detailed illustration of a spaceship cockpit",
         quality: "$quality.value",
       },
-      focus_param: {
+      cover_params: {
         name: "quality",
         value: "$quality.value",
       },
@@ -282,7 +282,7 @@
         prompt: "A clean line-art illustration",
         quality: "$quality",
       },
-      focus_param: {
+      cover_params: {
         name: "quality",
         value: "$quality",
       },
@@ -301,7 +301,7 @@
         prompt: "A landscape or portrait illustration",
         size: "$size",
       },
-      focus_param: {
+      cover_params: {
         name: "size",
         value: "$size",
       },
@@ -315,7 +315,7 @@
         stream: true,
       },
       check_stream: true,
-      focus_param: {
+      cover_params: {
         name: "stream",
         value: true,
       },
