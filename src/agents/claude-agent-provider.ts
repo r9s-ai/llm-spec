@@ -1,17 +1,24 @@
 import type { ProviderSummary } from '../types';
-import { buildClaudeAgentCases, CLAUDE_AGENT_PARAMS } from './cases/anthropic';
-import type { ClaudeAgentProviderConfig } from './runtime-config';
+import {
+  buildClaudeAgentCases,
+  CLAUDE_AGENT_PARAMS,
+  getClaudeAgentCaseHttpTrace,
+  resetClaudeAgentCaseHttpTraces,
+} from '../api-sdk-tester/cases/anthropic';
+import type { ClaudeAgentProviderConfig } from '../api-sdk-tester/runtime-config';
 import {
   createSetupSkippedSummary,
   executeProviderCases,
   setCurrentProvider,
-} from './shared';
+} from '../api-sdk-tester/shared';
 
 export async function runClaudeAgentCases(
   config: ClaudeAgentProviderConfig,
   failFast: boolean,
+  concurrency: number = 1,
 ): Promise<ProviderSummary> {
   setCurrentProvider('claude-agent');
+  resetClaudeAgentCaseHttpTraces();
 
   if (!config.apiKey) {
     return createSetupSkippedSummary(
@@ -32,5 +39,12 @@ export async function runClaudeAgentCases(
     CLAUDE_AGENT_PARAMS,
     cases,
     failFast,
-  );
+    concurrency,
+  ).then((summary) => ({
+    ...summary,
+    caseResults: summary.caseResults.map((result) => ({
+      ...result,
+      httpTrace: getClaudeAgentCaseHttpTrace(result.id),
+    })),
+  }));
 }

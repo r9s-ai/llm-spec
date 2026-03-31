@@ -43,6 +43,18 @@ TARGET_PROVIDERS=openai node dist/index.js
 TARGET_PROVIDERS=anthropic,gemini node dist/index.js
 ```
 
+- 只运行指定测试用例（逗号分隔）：
+
+```bash
+TARGET_CASES=basic,stream node dist/index.js
+TARGET_CASES=claude-agent:basic_prompt,openai:responses_* node dist/index.js
+```
+
+说明：
+- 支持 `caseId`、`provider:caseId`
+- 支持通配符：`*`（任意长度）和 `?`（单字符）
+- 兼容别名环境变量：`TEST_CASES`、`CASE_IDS`
+
 - 失败即停：
 
 ```bash
@@ -68,6 +80,7 @@ REPORT_FILE=./report.json node dist/index.js
 - `API_KEY`
 - `API_BASE_URL`
 - `TARGET_PROVIDERS`
+- `TARGET_CASES`（可选，只运行匹配的用例）
 - `FAIL_FAST`
 - `REPORT_FILE`
 - `SDK_TIMEOUT_MS`
@@ -88,6 +101,15 @@ REPORT_FILE=./report.json node dist/index.js
 - `ANTHROPIC_MODEL`
 - `ANTHROPIC_CONTAINER`（启用 container 参数测试）
 - `ANTHROPIC_INFERENCE_GEO`（启用 inference_geo 参数测试）
+
+### Claude Agent
+
+- `CLAUDE_AGENT_API_KEY`
+- `CLAUDE_AGENT_API_BASE_URL`
+- `CLAUDE_AGENT_MODEL`
+- `CLAUDE_AGENT_CUSTOM_HEADERS`（JSON 对象字符串，例如 `{"X-Debug-Channel-ID":"13"}`）
+
+说明：`CLAUDE_AGENT_CUSTOM_HEADERS` 会注入到 Agent 请求头；同时兼容 `ANTHROPIC_CUSTOM_HEADERS`。
 
 ### Gemini
 

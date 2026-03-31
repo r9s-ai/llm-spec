@@ -8,18 +8,20 @@
 ## 测试用例结构
 
 ```
-src/api-sdk-tester/
-├── cases/
-│   ├── claude-agent/
-│   │   └── index.ts        # Claude Agent SDK测试用例
-│   ├── codex/
-│   │   └── index.ts        # Codex SDK测试用例
-│   ├── anthropic/
-│   ├── openai/
-│   └── gemini/
-├── claude-agent-provider.ts  # Claude Agent provider
-├── codex-provider.ts         # Codex provider
-└── runtime-config.ts         # 运行时配置
+src/
+├── agents/
+│   ├── claude-agent-provider.ts  # Claude Agent provider
+│   └── codex-provider.ts         # Codex provider
+└── api-sdk-tester/
+    ├── cases/
+    │   ├── claude-agent/
+    │   │   └── index.ts        # Claude Agent SDK测试用例
+    │   ├── codex/
+    │   │   └── index.ts        # Codex SDK测试用例
+    │   ├── anthropic/
+    │   ├── openai/
+    │   └── gemini/
+    └── runtime-config.ts         # 运行时配置
 ```
 
 ## 配置
@@ -222,7 +224,68 @@ TARGET_PROVIDERS=claude-agent,codex pnpm test:sdk
 | `api_base_url_priority` | API Base URL 环境变量优先级测试 | env |
 | `env_inheritance` | 环境变量继承测试 | env |
 
-**总计**: 46个测试用例 (8个原有 + 38个新增)
+**Beta 功能测试** (28个):
+| 测试ID | 描述 | 覆盖参数 |
+|--------|------|----------|
+| `beta_context_1m_basic` | Beta: 启用 1M 上下文窗口 (Sonnet 4.6) | betas, model, prompt |
+| `beta_context_1m_with_session` | Beta: 在会话中使用 1M 上下文窗口 | betas, model, prompt, streaming |
+| `beta_context_1m_system_message` | Beta: 验证系统消息中显示 beta 功能 | betas, model, prompt |
+| `beta_context_1m_opus` | Beta: Opus 4.6 与 1M 上下文 (兼容性测试) | betas, model, prompt |
+| `beta_context_1m_haiku` | Beta: Haiku 4.5 与 1M 上下文 (兼容性测试) | betas, model, prompt |
+| `beta_invalid_feature` | Beta: 测试无效的 beta 功能错误处理 | betas, model, prompt |
+| `beta_empty_array` | Beta: 测试空 beta 数组 | betas, model, prompt |
+| `beta_with_tools` | Beta: Beta 功能与工具组合测试 | betas, model, prompt, allowedTools |
+| `beta_context_1m_streaming` | Beta: 1M 上下文窗口流式传输测试 | betas, model, prompt, streaming |
+| `beta_context_1m_multi_turn` | Beta: 1M 上下文窗口多轮对话测试 | betas, model, prompt |
+| `beta_context_1m_resume_session` | Beta: 恢复使用 1M 上下文的会话 | betas, model, prompt |
+| `beta_context_1m_with_custom_env` | Beta: 1M 上下文与自定义环境变量组合 | betas, model, prompt, betas, env |
+| `beta_context_1m_error_recovery` | Beta: 1M 上下文会话错误恢复 | betas, model, prompt |
+| `beta_thinking_adaptive` | Beta: Adaptive thinking (触发 interleaved-thinking beta) | model, prompt, thinking |
+| `beta_thinking_enabled` | Beta: Enabled thinking (固定 token 预算) | model, prompt, thinking |
+| `beta_thinking_disabled` | Beta: Disabled thinking | model, prompt, thinking |
+| `beta_effort_low` | Beta: Effort=low (触发 effort beta) | model, prompt, effort |
+| `beta_effort_high` | Beta: Effort=high | model, prompt, effort |
+| `beta_effort_max` | Beta: Effort=max (仅 Opus 4.6) | model, prompt, effort |
+| `beta_effort_with_thinking` | Beta: Effort + Thinking 组合 | model, prompt, effort, thinking |
+| `beta_mcp_servers_config` | Beta: MCP 服务器配置 (触发 mcp beta) | model, prompt, mcpServers |
+| `beta_context_1m_with_effort` | Beta: 1M 上下文 + Effort 组合 | betas, model, prompt, effort |
+| `beta_thinking_effort_context_1m` | Beta: Thinking + Effort + 1M 三重组合 | betas, model, prompt, thinking, effort |
+
+**总计**: 74个测试用例 (8个原有 + 38个新增 + 28个 beta 测试)
+
+## Beta 功能触发说明
+
+### 通过 SDK 参数触发的 Beta 功能
+
+虽然 CLI 内部有 26 个 beta 功能,但只有部分可以通过 SDK 参数触发:
+
+#### 1. 显式启用的 Beta 功能
+- **`context-1m-2025-08-07`** - 通过 `betas: ['context-1m-2025-08-07']` 参数启用
+
+#### 2. Thinking 相关 Beta 功能
+- **`interleaved-thinking-2025-05-14`** - 通过 `thinking: { type: 'adaptive' }` 或 `thinking: { type: 'enabled' }` 自动触发
+- **`redact-thinking-2026-02-12`** - 可能与 thinking 配置相关
+
+#### 3. Effort 相关 Beta 功能
+- **`effort-2025-11-24`** - 通过 `effort: 'low' | 'medium' | 'high' | 'max'` 参数自动触发
+
+#### 4. MCP 相关 Beta 功能
+- **`mcp-client-2025-11-20`** - 通过 `mcpServers` 配置自动触发
+- **`mcp-servers-2025-12-04`** - 通过 `mcpServers` 配置自动触发
+
+#### 5. 上下文管理 Beta 功能
+- **`context-management-2025-06-27`** - 系统自动启用
+- **`compact-2026-01-12`** - 系统自动启用
+
+#### 6. 其他内部 Beta 功能
+其余 19 个 beta 功能是 CLI 内部实现细节,无法通过 SDK 参数直接控制。
+
+### 测试策略
+
+- ✅ **显式测试**: 测试用户可控的 beta 功能 (`betas` 参数)
+- ✅ **触发测试**: 测试通过其他参数自动触发的 beta 功能
+- ✅ **组合测试**: 测试多个 beta 功能的组合使用
+- ℹ️ **观察测试**: 验证系统消息中的 beta 功能列表
 
 ### Codex SDK测试用例
 

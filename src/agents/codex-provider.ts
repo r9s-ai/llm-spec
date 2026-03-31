@@ -1,17 +1,18 @@
 import { Codex } from '@openai/codex-sdk';
 
 import type { ProviderSummary } from '../types';
-import { buildCodexCases, CODEX_PARAMS } from './cases/openai';
-import type { CodexProviderConfig } from './runtime-config';
+import { buildCodexCases, CODEX_PARAMS } from '../api-sdk-tester/cases/openai';
+import type { CodexProviderConfig } from '../api-sdk-tester/runtime-config';
 import {
   createSetupSkippedSummary,
   executeProviderCases,
   setCurrentProvider,
-} from './shared';
+} from '../api-sdk-tester/shared';
 
 export async function runCodexCases(
   config: CodexProviderConfig,
   failFast: boolean,
+  concurrency: number = 1,
 ): Promise<ProviderSummary> {
   setCurrentProvider('codex');
 
@@ -39,5 +40,6 @@ export async function runCodexCases(
     CODEX_PARAMS,
     cases,
     failFast,
+    concurrency,
   );
 }

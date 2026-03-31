@@ -1,4 +1,11 @@
-import type { ProviderSummary, RunSummary, TestCaseResult, TestStatus } from '../types';
+import type {
+  HttpTraceExchange,
+  ProviderSummary,
+  RunSummary,
+  TestCaseHttpTrace,
+  TestCaseResult,
+  TestStatus,
+} from '../types';
 import type { RuntimeConfig } from './runtime-config';
 
 function printProviderHeader(name: string): void {
@@ -45,6 +52,43 @@ function formatCoverage(covered: number, total: number): string {
   return `${covered}/${total} (${percent}%)`;
 }
 
+const CLAUDE_AGENT_BETA_CASE_ANNOTATIONS: Readonly<Record<string, readonly string[]>> = {
+  beta_context_1m_basic: ['context-1m-2025-08-07'],
+  beta_context_1m_with_session: ['context-1m-2025-08-07'],
+  beta_context_1m_system_message: ['context-1m-2025-08-07'],
+  beta_context_1m_opus: ['context-1m-2025-08-07'],
+  beta_context_1m_haiku: ['context-1m-2025-08-07'],
+  beta_invalid_feature: ['invalid-beta-feature-xyz'],
+  beta_empty_array: [],
+  beta_with_tools: ['context-1m-2025-08-07'],
+  beta_context_1m_streaming: ['context-1m-2025-08-07'],
+  beta_context_1m_multi_turn: ['context-1m-2025-08-07'],
+  beta_context_1m_resume_session: ['context-1m-2025-08-07'],
+  beta_context_1m_with_custom_env: ['context-1m-2025-08-07'],
+  beta_context_1m_error_recovery: ['context-1m-2025-08-07'],
+  beta_thinking_adaptive: ['interleaved-thinking-2025-05-14'],
+  beta_thinking_enabled: ['interleaved-thinking-2025-05-14'],
+  beta_thinking_disabled: ['interleaved-thinking-2025-05-14'],
+  beta_effort_low: ['effort-2025-11-24'],
+  beta_effort_high: ['effort-2025-11-24'],
+  beta_effort_max: ['effort-2025-11-24'],
+  beta_effort_with_thinking: ['effort-2025-11-24', 'interleaved-thinking-2025-05-14'],
+  beta_mcp_servers_config: ['mcp-servers-2025-12-04'],
+  beta_context_1m_with_effort: ['context-1m-2025-08-07', 'effort-2025-11-24'],
+  beta_thinking_effort_context_1m: [
+    'context-1m-2025-08-07',
+    'interleaved-thinking-2025-05-14',
+    'effort-2025-11-24',
+  ],
+};
+
+function getCaseBetaAnnotation(provider: string, caseId: string): readonly string[] | undefined {
+  if (!provider.includes('claude-agent')) {
+    return undefined;
+  }
+  return CLAUDE_AGENT_BETA_CASE_ANNOTATIONS[caseId];
+}
+
 function formatCaseNote(result: TestCaseResult): string | undefined {
   if (result.error) {
     return `error: ${result.error}`;
@@ -76,10 +120,142 @@ function maskSecret(value: string | undefined): string {
   return `${value.slice(0, 3)}***${value.slice(-3)}`;
 }
 
+const HTTP_TRACE_PREVIEW_LIMIT = 4000;
+
+function truncateTracePreview(value: string): string {
+  if (value.length <= HTTP_TRACE_PREVIEW_LIMIT) {
+    return value;
+  }
+  return `${value.slice(0, HTTP_TRACE_PREVIEW_LIMIT - 15)}\n...[truncated]`;
+}
+
+function formatTracePayload(value: string | undefined): string {
+  if (!value) {
+    return '(none)';
+  }
+  return truncateTracePreview(value);
+}
+
+function formatTraceHeaders(headers: Record<string, string>): string {
+  if (Object.keys(headers).length === 0) {
+    return '(none)';
+  }
+  return truncateTracePreview(JSON.stringify(headers, null, 2));
+}
+
+function appendTraceBlock(
+  lines: string[],
+  prefix: string,
+  label: string,
+  value: string,
+): void {
+  lines.push(`${prefix}${label}:`);
+  for (const line of value.split('\n')) {
+    lines.push(`${prefix}  ${line}`);
+  }
+}
+
+function appendHttpTraceText(lines: string[], trace: TestCaseHttpTrace | undefined): void {
+  if (!trace) {
+    return;
+  }
+
+  lines.push(`  httpTrace: testId=${trace.testId}, exchanges=${trace.exchangeCount}, source=${trace.source}`);
+  if (trace.exchanges.length === 0) {
+    lines.push('  httpTraceDetail: no matching request/response found in requests.log');
+    return;
+  }
+
+  trace.exchanges.forEach((exchange, index) => {
+    const responseSummary = exchange.response
+      ? exchange.response.kind === 'error'
+        ? `error=${exchange.response.error ?? '(unknown)'}`
+        : `status=${exchange.response.status ?? '(unknown)'} ${exchange.response.statusText ?? ''}`.trim()
+      : 'response=(missing)';
+
+    lines.push(`  http[${index + 1}]: ${exchange.request.method} ${exchange.request.url} | ${responseSummary}`);
+    appendTraceBlock(lines, '    ', 'requestHeaders', formatTraceHeaders(exchange.request.headers));
+    appendTraceBlock(lines, '    ', 'requestBody', formatTracePayload(exchange.request.body));
+
+    if (exchange.response) {
+      appendTraceBlock(lines, '    ', 'responseHeaders', formatTraceHeaders(exchange.response.headers));
+      appendTraceBlock(lines, '    ', 'responseBody', formatTracePayload(exchange.response.body));
+      if (exchange.response.kind === 'error' && exchange.response.error) {
+        appendTraceBlock(lines, '    ', 'responseError', truncateTracePreview(exchange.response.error));
+      }
+    }
+  });
+}
+
+function renderHttpTraceExchangeHtml(exchange: HttpTraceExchange, index: number): string {
+  const responseSummary = exchange.response
+    ? exchange.response.kind === 'error'
+      ? `error=${exchange.response.error ?? '(unknown)'}`
+      : `status=${exchange.response.status ?? '(unknown)'} ${exchange.response.statusText ?? ''}`.trim()
+    : 'response=(missing)';
+
+  const responseBody = exchange.response
+    ? `<div class="trace-section">
+  <div class="trace-label">Response Body</div>
+  <pre class="trace-block">${escapeHtml(formatTracePayload(exchange.response.body))}</pre>
+</div>`
+    : '';
+
+  const responseHeaders = exchange.response
+    ? `<div class="trace-section">
+  <div class="trace-label">Response Headers</div>
+  <pre class="trace-block">${escapeHtml(formatTraceHeaders(exchange.response.headers))}</pre>
+</div>`
+    : '';
+
+  const responseError = exchange.response?.kind === 'error' && exchange.response.error
+    ? `<div class="trace-section">
+  <div class="trace-label">Response Error</div>
+  <pre class="trace-block">${escapeHtml(truncateTracePreview(exchange.response.error))}</pre>
+</div>`
+    : '';
+
+  return `<div class="trace-entry">
+  <div class="trace-title">HTTP ${index + 1}: ${escapeHtml(exchange.request.method)} ${escapeHtml(exchange.request.url)}</div>
+  <div class="trace-summary">${escapeHtml(responseSummary)}</div>
+  <div class="trace-section">
+    <div class="trace-label">Request Headers</div>
+    <pre class="trace-block">${escapeHtml(formatTraceHeaders(exchange.request.headers))}</pre>
+  </div>
+  <div class="trace-section">
+    <div class="trace-label">Request Body</div>
+    <pre class="trace-block">${escapeHtml(formatTracePayload(exchange.request.body))}</pre>
+  </div>
+  ${responseHeaders}
+  ${responseBody}
+  ${responseError}
+</div>`;
+}
+
+function renderHttpTraceHtml(trace: TestCaseHttpTrace | undefined): string {
+  if (!trace) {
+    return '';
+  }
+
+  if (trace.exchanges.length === 0) {
+    return `<details class="http-trace">
+  <summary>HTTP Trace | testId=${escapeHtml(trace.testId)} | exchanges=0</summary>
+  <div class="trace-empty">No matching request/response found in requests.log.</div>
+</details>`;
+  }
+
+  return `<details class="http-trace">
+  <summary>HTTP Trace | testId=${escapeHtml(trace.testId)} | exchanges=${trace.exchangeCount}</summary>
+  ${trace.exchanges.map((exchange, index) => renderHttpTraceExchangeHtml(exchange, index)).join('\n')}
+</details>`;
+}
+
 export function printRuntimeConfig(config: RuntimeConfig): void {
   printProviderHeader('Runtime Config');
   console.log(`providers: ${config.targetProviders.join(', ')}`);
+  console.log(`targetCases: ${config.targetCases ?? '(all)'}`);
   console.log(`failFast: ${String(config.failFast)}`);
+  console.log(`concurrency: ${String(config.concurrency)}`);
   console.log(`reportFile: ${config.reportFile ?? '(none)'}`);
   console.log('');
   console.log('[openai]');
@@ -183,10 +359,15 @@ export function renderTextReport(summary: RunSummary): string {
         lines.push(`- [${formatStatus(result.status)}] ${result.id} (${formatDuration(result.durationMs)})`);
         lines.push(`  description: ${result.description}`);
         lines.push(`  covered: ${result.coveredParams.length > 0 ? result.coveredParams.join(', ') : '(none)'}`);
+        const betaAnnotation = getCaseBetaAnnotation(provider.provider, result.id);
+        if (betaAnnotation) {
+          lines.push(`  beta: ${betaAnnotation.length > 0 ? betaAnnotation.join(', ') : '(none)'}`);
+        }
         const note = formatCaseNote(result);
         if (note) {
           lines.push(`  note: ${note}`);
         }
+        appendHttpTraceText(lines, result.httpTrace);
       }
     }
   }
@@ -217,10 +398,15 @@ export function renderTextReport(summary: RunSummary): string {
         lines.push(`- [${formatStatus(result.status)}] ${result.id} (${formatDuration(result.durationMs)})`);
         lines.push(`  description: ${result.description}`);
         lines.push(`  covered: ${result.coveredParams.length > 0 ? result.coveredParams.join(', ') : '(none)'}`);
+        const betaAnnotation = getCaseBetaAnnotation(provider.provider, result.id);
+        if (betaAnnotation) {
+          lines.push(`  beta: ${betaAnnotation.length > 0 ? betaAnnotation.join(', ') : '(none)'}`);
+        }
         const note = formatCaseNote(result);
         if (note) {
           lines.push(`  note: ${note}`);
         }
+        appendHttpTraceText(lines, result.httpTrace);
       }
     }
   }
@@ -237,12 +423,22 @@ export function renderHtmlReport(summary: RunSummary): string {
       const caseRows = provider.caseResults
         .map((result) => {
           const note = formatCaseNote(result);
+          const betaAnnotation = getCaseBetaAnnotation(provider.provider, result.id);
+          const betaLine = betaAnnotation
+            ? `<div class="beta-note">beta: ${escapeHtml(betaAnnotation.length > 0 ? betaAnnotation.join(', ') : '(none)')}</div>`
+            : '';
+          const httpTrace = renderHttpTraceHtml(result.httpTrace);
+          const noteContent = note
+            ? `<pre class="note">${escapeHtml(note)}</pre>`
+            : httpTrace
+              ? ''
+              : '<span class="muted">(none)</span>';
           return `<tr>
   <td><code>${escapeHtml(result.id)}</code><br><span class="muted">${escapeHtml(result.description)}</span></td>
   <td><span class="status ${statusClassName(result.status)}">${formatStatus(result.status)}</span></td>
   <td>${escapeHtml(formatDuration(result.durationMs))}</td>
   <td>${escapeHtml(result.coveredParams.length > 0 ? result.coveredParams.join(', ') : '(none)')}</td>
-  <td>${note ? `<pre class="note">${escapeHtml(note)}</pre>` : '<span class="muted">(none)</span>'}</td>
+  <td>${betaLine}${noteContent}${httpTrace}</td>
 </tr>`;
         })
         .join('\n');
@@ -414,6 +610,52 @@ ${caseRows}
   }
   .params, .note {
     margin: 6px 0 0 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    background: #f8fafc;
+    border: 1px solid #d0d7de;
+    border-radius: 4px;
+    padding: 6px;
+    font-size: 12px;
+    font-family: inherit;
+  }
+  .beta-note {
+    margin-top: 6px;
+    padding: 4px 6px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    background: #fff7ed;
+    border: 1px solid #fdba74;
+    border-radius: 4px;
+    color: #9a3412;
+    font-size: 12px;
+  }
+  .http-trace {
+    margin-top: 8px;
+  }
+  .trace-entry {
+    margin-top: 8px;
+    padding: 8px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    background: #ffffff;
+  }
+  .trace-title {
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .trace-summary, .trace-label, .trace-empty {
+    color: #475569;
+    font-size: 12px;
+  }
+  .trace-label {
+    margin: 6px 0 4px 0;
+    font-weight: 600;
+  }
+  .trace-block {
+    margin: 0;
     white-space: pre-wrap;
     word-break: break-word;
     overflow-wrap: anywhere;

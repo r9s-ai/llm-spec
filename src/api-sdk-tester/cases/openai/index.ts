@@ -1,5 +1,10 @@
 import type OpenAI from 'openai';
-import { Codex } from '@openai/codex-sdk';
+import {
+  Codex,
+  type Input as CodexInput,
+  type Thread,
+  type TurnOptions as CodexTurnOptions,
+} from '@openai/codex-sdk';
 
 import type { OpenAIProviderConfig, CodexProviderConfig } from '../../runtime-config';
 import {
@@ -1916,6 +1921,106 @@ export function buildOpenAICases(
   return cases;
 }
 
+function isAbortLikeError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.name === 'AbortError' || /\babort(?:ed|ing)?\b/i.test(error.message);
+}
+
+async function withCodexTurnTimeout<T>(
+  timeoutMs: number,
+  run: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer =
+    timeoutMs > 0
+      ? setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, timeoutMs)
+      : undefined;
+
+  try {
+    return await run(controller.signal);
+  } catch (error) {
+    if (timedOut && isAbortLikeError(error)) {
+      throw new Error(`Codex turn timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+async function runCodexTurn(
+  thread: Thread,
+  input: CodexInput,
+  config: CodexProviderConfig,
+  turnOptions: Omit<CodexTurnOptions, 'signal'> = {},
+) {
+  return withCodexTurnTimeout(config.timeoutMs, (signal) =>
+    thread.run(input, {
+      ...turnOptions,
+      signal,
+    }),
+  );
+}
+
+async function collectCodexStream(
+  thread: Thread,
+  input: CodexInput,
+  config: CodexProviderConfig,
+  turnOptions: Omit<CodexTurnOptions, 'signal'> = {},
+): Promise<{ eventCount: number; eventTypes: string[]; text: string }> {
+  return withCodexTurnTimeout(config.timeoutMs, async (signal) => {
+    const { events } = await thread.runStreamed(input, {
+      ...turnOptions,
+      signal,
+    });
+
+    let eventCount = 0;
+    const eventTypes: string[] = [];
+    let text = '';
+    let streamFailure: string | null = null;
+
+    try {
+      for await (const event of events) {
+        eventCount += 1;
+        eventTypes.push(event.type);
+
+        if (event.type === 'item.completed' && event.item.type === 'agent_message') {
+          text += event.item.text;
+        }
+
+        if (event.type === 'turn.failed') {
+          streamFailure = event.error.message;
+        } else if (event.type === 'error') {
+          streamFailure = event.message;
+        }
+      }
+    } catch (error) {
+      if (streamFailure) {
+        throw new Error(streamFailure);
+      }
+      throw error;
+    }
+
+    if (streamFailure) {
+      throw new Error(streamFailure);
+    }
+
+    return {
+      eventCount,
+      eventTypes,
+      text,
+    };
+  });
+}
+
 export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[] {
   const cases = defineCases({
     'basic_thread': {
@@ -1927,7 +2032,7 @@ export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[
           skipGitRepoCheck: config.skipGitRepoCheck,
         });
 
-        const turn = await thread.run('Reply with exactly: ok');
+        const turn = await runCodexTurn(thread, 'Reply with exactly: ok', config);
 
         return `finalResponse="${truncate(turn.finalResponse)}", items=${turn.items.length}`;
       },
@@ -1941,16 +2046,11 @@ export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[
           skipGitRepoCheck: config.skipGitRepoCheck,
         });
 
-        const { events } = await thread.runStreamed('Reply with exactly: ok');
-
-        let eventCount = 0;
-        let text = '';
-        for await (const event of events) {
-          eventCount += 1;
-          if (event.type === 'item.completed' && event.item.type === 'agent_message') {
-            text += event.item.text;
-          }
-        }
+        const { eventCount, text } = await collectCodexStream(
+          thread,
+          'Reply with exactly: ok',
+          config,
+        );
 
         return `events=${eventCount}, text="${truncate(text)}"`;
       },
@@ -1974,9 +2074,14 @@ export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[
           additionalProperties: false,
         } as const;
 
-        const turn = await thread.run('Return JSON object with keys: ok(string), provider(string).', {
-          outputSchema: schema,
-        });
+        const turn = await runCodexTurn(
+          thread,
+          'Return JSON object with keys: ok(string), provider(string).',
+          config,
+          {
+            outputSchema: schema,
+          },
+        );
 
         return `finalResponse="${truncate(turn.finalResponse)}"`;
       },
@@ -2000,18 +2105,14 @@ export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[
           additionalProperties: false,
         } as const;
 
-        const { events } = await thread.runStreamed('Return JSON: {"status":"ok","count":42}', {
-          outputSchema: schema,
-        });
-
-        let eventCount = 0;
-        let text = '';
-        for await (const event of events) {
-          eventCount += 1;
-          if (event.type === 'item.completed' && event.item.type === 'agent_message') {
-            text += event.item.text;
-          }
-        }
+        const { eventCount, text } = await collectCodexStream(
+          thread,
+          'Return JSON: {"status":"ok","count":42}',
+          config,
+          {
+            outputSchema: schema,
+          },
+        );
 
         return `events=${eventCount}, text="${truncate(text)}"`;
       },
@@ -2025,8 +2126,12 @@ export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[
           skipGitRepoCheck: config.skipGitRepoCheck,
         });
 
-        const turn1 = await thread.run('Remember the number 42');
-        const turn2 = await thread.run('What number did I ask you to remember?');
+        const turn1 = await runCodexTurn(thread, 'Remember the number 42', config);
+        const turn2 = await runCodexTurn(
+          thread,
+          'What number did I ask you to remember?',
+          config,
+        );
 
         return `turn1="${truncate(turn1.finalResponse)}", turn2="${truncate(turn2.finalResponse)}"`;
       },
@@ -2042,10 +2147,14 @@ export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[
           skipGitRepoCheck: config.skipGitRepoCheck,
         });
 
-        const turn = await thread.run([
-          { type: 'text', text: 'What is in this image? Reply briefly.' },
-          { type: 'local_image', path: config.testImagePath! },
-        ]);
+        const turn = await runCodexTurn(
+          thread,
+          [
+            { type: 'text', text: 'What is in this image? Reply briefly.' },
+            { type: 'local_image', path: config.testImagePath! },
+          ],
+          config,
+        );
 
         return `finalResponse="${truncate(turn.finalResponse)}"`;
       },
@@ -2059,7 +2168,7 @@ export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[
           skipGitRepoCheck: config.skipGitRepoCheck,
         });
 
-        await thread1.run('Remember the word "test"');
+        await runCodexTurn(thread1, 'Remember the word "test"', config);
         const threadId = thread1.id;
 
         if (!threadId) {
@@ -2068,7 +2177,7 @@ export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[
 
         // 恢复thread
         const thread2 = client.resumeThread(threadId);
-        const turn = await thread2.run('What word did I ask you to remember?');
+        const turn = await runCodexTurn(thread2, 'What word did I ask you to remember?', config);
 
         return `threadId=${threadId}, finalResponse="${truncate(turn.finalResponse)}"`;
       },
@@ -2078,6 +2187,8 @@ export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[
       covers: ['config'],
       run: async () => {
         const customClient = new Codex({
+          apiKey: config.apiKey,
+          baseUrl: config.apiBaseUrl,
           config: {
             show_raw_agent_reasoning: true,
           },
@@ -2088,7 +2199,7 @@ export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[
           skipGitRepoCheck: config.skipGitRepoCheck,
         });
 
-        const turn = await thread.run('Reply with: config test ok');
+        const turn = await runCodexTurn(thread, 'Reply with: config test ok', config);
 
         return `finalResponse="${truncate(turn.finalResponse)}"`;
       },
@@ -2098,8 +2209,12 @@ export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[
       covers: ['env'],
       run: async () => {
         const customClient = new Codex({
+          apiKey: config.apiKey,
+          baseUrl: config.apiBaseUrl,
           env: {
             PATH: process.env.PATH || '',
+            HOME: process.env.HOME || '',
+            TMPDIR: process.env.TMPDIR || '',
           },
         });
 
@@ -2108,7 +2223,7 @@ export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[
           skipGitRepoCheck: config.skipGitRepoCheck,
         });
 
-        const turn = await thread.run('Reply with: env test ok');
+        const turn = await runCodexTurn(thread, 'Reply with: env test ok', config);
 
         return `finalResponse="${truncate(turn.finalResponse)}"`;
       },
@@ -2145,12 +2260,7 @@ export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[
           skipGitRepoCheck: config.skipGitRepoCheck,
         });
 
-        const { events } = await thread.runStreamed('Count from 1 to 3');
-
-        const eventTypes: string[] = [];
-        for await (const event of events) {
-          eventTypes.push(event.type);
-        }
+        const { eventTypes } = await collectCodexStream(thread, 'Count from 1 to 3', config);
 
         return `eventTypes=${eventTypes.join(',')}`;
       },
@@ -2164,7 +2274,7 @@ export function buildCodexCases({ client, config }: CodexCaseContext): TestCase[
           skipGitRepoCheck: config.skipGitRepoCheck,
         });
 
-        const turn = await thread.run('Reply with: usage test');
+        const turn = await runCodexTurn(thread, 'Reply with: usage test', config);
 
         if (turn.usage) {
           return `input_tokens=${turn.usage.input_tokens}, output_tokens=${turn.usage.output_tokens}`;

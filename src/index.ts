@@ -8,17 +8,16 @@
  */
 
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, extname, resolve as resolvePath } from 'node:path';
+import { dirname, resolve as resolvePath } from 'node:path';
 
 import type { ProviderSummary, RunSummary } from './types';
 import {
   formatError,
+  initializeRequestLogFile,
   installGlobalFetchInterceptor,
   printProviderSummary,
   printRunSummary,
   printRuntimeConfig,
-  renderHtmlReport,
-  renderTextReport,
   resolveRuntimeConfig,
   runAnthropicCases,
   runClaudeAgentCases,
@@ -27,36 +26,15 @@ import {
   runOpenAICases,
 } from './api-sdk-tester';
 
-interface ReportPaths {
-  jsonFile: string;
-  htmlFile: string;
-  textFile: string;
-}
-
-function resolveReportPaths(reportFile: string): ReportPaths {
-  const extension = extname(reportFile);
-  if (!extension) {
-    return {
-      jsonFile: reportFile,
-      htmlFile: `${reportFile}.html`,
-      textFile: `${reportFile}.txt`,
-    };
-  }
-
-  const base = reportFile.slice(0, -extension.length);
-  return {
-    jsonFile: reportFile,
-    htmlFile: `${base}.html`,
-    textFile: `${base}.txt`,
-  };
-}
-
 function writeReportFile(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content, 'utf8');
 }
 
 async function run(): Promise<RunSummary> {
+  // 初始化请求日志文件
+  initializeRequestLogFile();
+
   // 安装全局fetch拦截器,用于记录所有HTTP请求和响应
   installGlobalFetchInterceptor();
 
@@ -68,7 +46,7 @@ async function run(): Promise<RunSummary> {
 
   for (const provider of config.targetProviders) {
     if (provider === 'openai') {
-      const summaries = await runOpenAICases(config.openai, config.failFast);
+      const summaries = await runOpenAICases(config.openai, config.failFast, config.concurrency);
       for (const summary of summaries) {
         providers.push(summary);
         printProviderSummary(summary);
@@ -77,28 +55,28 @@ async function run(): Promise<RunSummary> {
     }
 
     if (provider === 'anthropic') {
-      const summary = await runAnthropicCases(config.anthropic, config.failFast);
+      const summary = await runAnthropicCases(config.anthropic, config.failFast, config.concurrency);
       providers.push(summary);
       printProviderSummary(summary);
       continue;
     }
 
     if (provider === 'gemini') {
-      const summary = await runGeminiCases(config.gemini, config.failFast);
+      const summary = await runGeminiCases(config.gemini, config.failFast, config.concurrency);
       providers.push(summary);
       printProviderSummary(summary);
       continue;
     }
 
     if (provider === 'claude-agent') {
-      const summary = await runClaudeAgentCases(config.claudeAgent, config.failFast);
+      const summary = await runClaudeAgentCases(config.claudeAgent, config.failFast, config.concurrency);
       providers.push(summary);
       printProviderSummary(summary);
       continue;
     }
 
     if (provider === 'codex') {
-      const summary = await runCodexCases(config.codex, config.failFast);
+      const summary = await runCodexCases(config.codex, config.failFast, config.concurrency);
       providers.push(summary);
       printProviderSummary(summary);
       continue;
@@ -121,18 +99,9 @@ async function run(): Promise<RunSummary> {
   printRunSummary(summary);
 
   if (config.reportFile) {
-    const paths = resolveReportPaths(config.reportFile);
-    const jsonPath = resolvePath(process.cwd(), paths.jsonFile);
-    const htmlPath = resolvePath(process.cwd(), paths.htmlFile);
-    const textPath = resolvePath(process.cwd(), paths.textFile);
-
+    const jsonPath = resolvePath(process.cwd(), config.reportFile);
     writeReportFile(jsonPath, `${JSON.stringify(summary, null, 2)}\n`);
-    writeReportFile(htmlPath, renderHtmlReport(summary));
-    writeReportFile(textPath, renderTextReport(summary));
-
-    console.log(`report written (json): ${jsonPath}`);
-    console.log(`report written (html): ${htmlPath}`);
-    console.log(`report written (text): ${textPath}`);
+    console.log(`report written: ${jsonPath}`);
   }
 
   if (totalFailed > 0) {

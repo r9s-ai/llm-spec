@@ -13,6 +13,7 @@ import {
 export async function runOpenAICases(
   config: OpenAIProviderConfig,
   failFast: boolean,
+  concurrency: number = 1,
 ): Promise<ProviderSummary[]> {
   if (!config.apiKey) {
     const skipReason = 'missing API key (set OPENAI_API_KEY or API_KEY)';
@@ -40,6 +41,7 @@ export async function runOpenAICases(
     OPENAI_CHAT_PARAMS,
     chatCompletionsCases,
     failFast,
+    concurrency,
   );
 
   // 运行 responses 测试
@@ -52,6 +54,7 @@ export async function runOpenAICases(
     OPENAI_RESPONSES_PARAMS,
     responsesCases,
     failFast,
+    concurrency,
   );
 
   return [chatCompletionsSummary, responsesSummary];

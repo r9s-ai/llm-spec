@@ -13,6 +13,7 @@ import {
 export async function runGeminiCases(
   config: GeminiProviderConfig,
   failFast: boolean,
+  concurrency: number = 1,
 ): Promise<ProviderSummary> {
   setCurrentProvider('gemini');
 
@@ -59,5 +60,6 @@ export async function runGeminiCases(
     GEMINI_GENERATE_CONTENT_PARAMS,
     cases,
     failFast,
+    concurrency,
   );
 }

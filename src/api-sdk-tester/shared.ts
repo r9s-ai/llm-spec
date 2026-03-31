@@ -1,3 +1,6 @@
+import { appendFileSync, writeFileSync } from 'node:fs';
+import { resolve as resolvePath } from 'node:path';
+
 import type { ProviderSummary, TestCaseResult } from '../types';
 
 export interface TestCase {
@@ -11,8 +14,32 @@ export interface TestCase {
 
 let currentProvider = 'unknown';
 const originalFetch = globalThis.fetch;
-const MAX_LOG_BODY_LENGTH = 500;
 const STREAM_CONTENT_TYPE_HINTS = ['text/event-stream', 'application/x-ndjson'];
+const REQUEST_LOG_FILE = resolvePath(process.cwd(), 'requests.log');
+
+export function initializeRequestLogFile(): void {
+  try {
+    writeFileSync(REQUEST_LOG_FILE, '', 'utf8');
+  } catch {
+    // Ignore file initialization errors to avoid affecting test execution.
+  }
+}
+
+export function appendRequestLog(lines: readonly string[]): void {
+  const content = `${lines.join('\n')}\n`;
+  try {
+    appendFileSync(REQUEST_LOG_FILE, content, 'utf8');
+  } catch {
+    // Ignore file logging errors to avoid affecting test execution.
+  }
+}
+
+export function logRequest(lines: readonly string[]): void {
+  for (const line of lines) {
+    console.log(line);
+  }
+  appendRequestLog(lines);
+}
 
 /**
  * 设置当前provider名称,用于日志记录
@@ -54,7 +81,7 @@ function sanitizeHeaders(headers: Record<string, string>): Record<string, string
 }
 
 function truncateLogBody(text: string): string {
-  return text.length > MAX_LOG_BODY_LENGTH ? `${text.slice(0, MAX_LOG_BODY_LENGTH)}...(truncated)` : text;
+  return text;
 }
 
 function serializeBodyForLog(body: RequestInit['body']): string | undefined {
@@ -151,6 +178,12 @@ async function logResponseBody(response: Response): Promise<void> {
   }
 }
 
+function logStreamingResponseBody(response: Response): void {
+  void logResponseBody(response).catch((error) => {
+    console.log(`  Body: [Unable to read streaming response: ${error}]`);
+  });
+}
+
 function createInstrumentedFetch(resolveProvider: () => string): typeof fetch {
   return async function loggingFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
     const provider = resolveProvider();
@@ -161,21 +194,24 @@ function createInstrumentedFetch(resolveProvider: () => string): typeof fetch {
     const streamRequested = looksLikeStreamingRequest(url, requestHeaders, requestBody);
 
     // 记录请求信息
-    console.log(`\n[${provider}] 📤 HTTP REQUEST`);
-    console.log(`  URL: ${url}`);
-    console.log(`  Method: ${method}`);
+    const requestLines: string[] = [];
+    requestLines.push('');
+    requestLines.push(`[${provider}] 📤 HTTP REQUEST`);
+    requestLines.push(`  URL: ${url}`);
+    requestLines.push(`  Method: ${method}`);
 
     if (requestHeaders) {
-      console.log(
+      requestLines.push(
         `  Headers: ${JSON.stringify(sanitizeHeaders(requestHeaders), null, 2).replace(/\n/g, '\n  ')}`,
       );
     }
 
     if (requestBody) {
-      console.log(`  Body: ${truncateLogBody(requestBody).replace(/\n/g, '\n  ')}`);
+      requestLines.push(`  Body: ${truncateLogBody(requestBody).replace(/\n/g, '\n  ')}`);
     } else if (init?.body) {
-      console.log('  Body: [Unable to serialize]');
+      requestLines.push('  Body: [Unable to serialize]');
     }
+    logRequest(requestLines);
 
     const startTime = Date.now();
 
@@ -200,7 +236,7 @@ function createInstrumentedFetch(resolveProvider: () => string): typeof fetch {
       );
 
       if (isStreamingResponse(response, streamRequested)) {
-        console.log('  Body: [streaming response omitted to preserve flow]');
+        logStreamingResponseBody(response);
         return response;
       }
 
@@ -436,6 +472,125 @@ export function createSetupSkippedSummary(
   };
 }
 
+interface CaseFilterEnv {
+  key: string;
+  value: string;
+}
+
+interface CaseSelector {
+  provider?: string;
+  caseIdPattern: RegExp;
+}
+
+function resolveCaseFilterEnv(): CaseFilterEnv | undefined {
+  const keys = ['TARGET_CASES', 'TEST_CASES', 'CASE_IDS'];
+  for (const key of keys) {
+    const value = process.env[key]?.trim();
+    if (value) {
+      return { key, value };
+    }
+  }
+  return undefined;
+}
+
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeProviderSelector(raw: string): string {
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'claude') {
+    return 'anthropic';
+  }
+  if (normalized === 'claudeagent') {
+    return 'claude-agent';
+  }
+  return normalized;
+}
+
+function buildCaseIdPattern(raw: string): RegExp {
+  const source = raw.trim() || '*';
+  const regexSource = escapeRegExp(source).replace(/\\\*/g, '.*').replace(/\\\?/g, '.');
+  return new RegExp(`^${regexSource}$`);
+}
+
+function parseCaseSelectors(raw: string): CaseSelector[] {
+  return raw
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => {
+      const separatorIndex = item.indexOf(':');
+      if (separatorIndex <= 0) {
+        return {
+          caseIdPattern: buildCaseIdPattern(item),
+        };
+      }
+
+      const providerPart = normalizeProviderSelector(item.slice(0, separatorIndex));
+      const casePart = item.slice(separatorIndex + 1).trim();
+      return {
+        provider: providerPart,
+        caseIdPattern: buildCaseIdPattern(casePart),
+      };
+    });
+}
+
+function matchesProviderSelector(provider: string, selectorProvider: string): boolean {
+  const normalizedProvider = provider.trim().toLowerCase();
+  if (normalizedProvider === selectorProvider) {
+    return true;
+  }
+  return normalizedProvider.startsWith(`${selectorProvider}(`);
+}
+
+function applyCaseFilter(
+  provider: string,
+  cases: readonly TestCase[],
+): {
+  filteredCases: readonly TestCase[];
+  filterEnv?: CaseFilterEnv;
+} {
+  const filterEnv = resolveCaseFilterEnv();
+  if (!filterEnv) {
+    return { filteredCases: cases };
+  }
+
+  const selectors = parseCaseSelectors(filterEnv.value);
+  if (selectors.length === 0) {
+    return { filteredCases: cases, filterEnv };
+  }
+
+  const filteredCases = cases.filter((testCase) =>
+    selectors.some((selector) => {
+      if (selector.provider && !matchesProviderSelector(provider, selector.provider)) {
+        return false;
+      }
+      return selector.caseIdPattern.test(testCase.id);
+    }),
+  );
+
+  return {
+    filteredCases,
+    filterEnv,
+  };
+}
+
+function logCaseResult(provider: string, result: TestCaseResult): void {
+  const marker =
+    result.status === 'passed' ? 'PASS' : result.status === 'failed' ? 'FAIL' : 'SKIP';
+  const messageParts: string[] = [
+    `[${provider}] ${marker} ${result.id} (${formatDuration(result.durationMs)})`,
+  ];
+  if (result.detail) {
+    messageParts.push(`detail=${truncate(result.detail, 180)}`);
+  }
+  if (result.error) {
+    messageParts.push(`error=${truncate(result.error, 220)}`);
+  }
+  console.log(messageParts.join(' | '));
+}
+
 export async function executeProviderCases(
   provider: string,
   model: string,
@@ -443,30 +598,112 @@ export async function executeProviderCases(
   allParams: readonly string[],
   cases: readonly TestCase[],
   failFast: boolean,
+  concurrency: number = 1,
 ): Promise<ProviderSummary> {
   const startedAt = new Date().toISOString();
   const caseResults: TestCaseResult[] = [];
+  const { filteredCases, filterEnv } = applyCaseFilter(provider, cases);
 
-  for (const testCase of cases) {
-    console.log(`[${provider}] running ${testCase.id} - ${testCase.description}`);
-    const result = await runCase(testCase);
-    caseResults.push(result);
+  if (filterEnv) {
+    console.log(
+      `[${provider}] case filter enabled: ${filterEnv.key}=${filterEnv.value} (${filteredCases.length}/${cases.length} selected)`,
+    );
+  }
 
-    const marker = result.status === 'passed' ? 'PASS' : result.status === 'failed' ? 'FAIL' : 'SKIP';
-    const messageParts: string[] = [
-      `[${provider}] ${marker} ${result.id} (${formatDuration(result.durationMs)})`,
-    ];
-    if (result.detail) {
-      messageParts.push(`detail=${truncate(result.detail, 180)}`);
+  if (filteredCases.length === 0) {
+    const detail = filterEnv
+      ? `no cases matched ${filterEnv.key}=${filterEnv.value}`
+      : 'no cases selected';
+
+    return {
+      provider,
+      model,
+      apiBaseUrl,
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      passed: 0,
+      failed: 0,
+      skipped: 1,
+      caseResults: [
+        {
+          id: 'case_filter',
+          description: 'Case selection filter',
+          status: 'skipped',
+          durationMs: 0,
+          coveredParams: [],
+          detail,
+        },
+      ],
+      allParams: [...allParams],
+      coveredParams: [],
+      untestedParams: [...allParams],
+    };
+  }
+
+  if (concurrency <= 1) {
+    // Sequential execution (backward compatible)
+    for (const testCase of filteredCases) {
+      console.log(`[${provider}] running ${testCase.id} - ${testCase.description}`);
+      const result = await runCase(testCase);
+      caseResults.push(result);
+
+      logCaseResult(provider, result);
+
+      if (failFast && result.status === 'failed') {
+        console.log(`[${provider}] fail-fast enabled, stop remaining cases.`);
+        break;
+      }
     }
-    if (result.error) {
-      messageParts.push(`error=${truncate(result.error, 220)}`);
-    }
-    console.log(messageParts.join(' | '));
+  } else {
+    // Concurrent execution with worker pool
+    let stopped = false;
+    let nextIndex = 0;
 
-    if (failFast && result.status === 'failed') {
-      console.log(`[${provider}] fail-fast enabled, stop remaining cases.`);
-      break;
+    const worker = async (): Promise<void> => {
+      while (nextIndex < filteredCases.length && !stopped) {
+        const index = nextIndex++;
+        if (index >= filteredCases.length) {
+          break;
+        }
+
+        const testCase = filteredCases[index]!;
+        if (stopped) {
+          caseResults[index] = {
+            id: testCase.id,
+            description: testCase.description,
+            status: 'skipped',
+            durationMs: 0,
+            coveredParams: [...testCase.covers],
+            detail: 'skipped due to fail-fast',
+          };
+          continue;
+        }
+
+        console.log(`[${provider}] running ${testCase.id} - ${testCase.description}`);
+        const result = await runCase(testCase);
+        caseResults[index] = result;
+
+        logCaseResult(provider, result);
+
+        if (failFast && result.status === 'failed') {
+          stopped = true;
+          console.log(`[${provider}] fail-fast enabled, stop remaining cases.`);
+        }
+      }
+    };
+
+    // Initialize results array with placeholders
+    const placeholders = filteredCases.map(() => null);
+    caseResults.push(...(placeholders as unknown as TestCaseResult[]));
+
+    const workerCount = Math.min(concurrency, filteredCases.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+    // Remove any null placeholders that weren't filled
+    for (let i = caseResults.length - 1; i >= 0; i--) {
+      if (caseResults[i] === null) {
+        caseResults.splice(i, 1);
+      }
     }
   }
 

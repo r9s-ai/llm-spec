@@ -44,10 +44,12 @@ export interface ClaudeAgentProviderConfig {
   provider: 'claude-agent';
   apiKey?: string;
   apiBaseUrl?: string;
+  model: string;
   workingDirectory: string;
   skipGitRepoCheck: boolean;
   testImagePath?: string;
   timeoutMs: number;
+  customHeaders?: Record<string, string>;
 }
 
 export interface CodexProviderConfig {
@@ -62,7 +64,9 @@ export interface CodexProviderConfig {
 
 export interface RuntimeConfig {
   targetProviders: ProviderName[];
+  targetCases?: string;
   failFast: boolean;
+  concurrency: number;
   reportFile?: string;
   openai: OpenAIProviderConfig;
   anthropic: AnthropicProviderConfig;
@@ -140,6 +144,27 @@ function parseNumber(value: string | undefined, defaultValue: number): number {
   return parsed;
 }
 
+function parseCustomHeaders(value: string | undefined): Record<string, string> | undefined {
+  if (!value) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      const headers: Record<string, string> = {};
+      for (const [key, val] of Object.entries(parsed)) {
+        if (typeof val === 'string') {
+          headers[key] = val;
+        }
+      }
+      return Object.keys(headers).length > 0 ? headers : undefined;
+    }
+  } catch {
+    // invalid JSON, ignore
+  }
+  return undefined;
+}
+
 function normalizeProviderName(raw: string): ProviderName | undefined {
   const normalized = raw.trim().toLowerCase();
   if (!normalized) {
@@ -198,7 +223,9 @@ export function resolveRuntimeConfig(): RuntimeConfig {
   const targetProviders = resolveTargetProviders(
     firstNonEmptyEnv('TARGET_PROVIDERS', 'PROVIDERS', 'PROVIDER'),
   );
+  const targetCases = firstNonEmptyEnv('TARGET_CASES', 'TEST_CASES', 'CASE_IDS');
   const failFast = parseBoolean(firstNonEmptyEnv('FAIL_FAST'), false);
+  const concurrency = parseNumber(firstNonEmptyEnv('SDK_CONCURRENCY'), 1);
   const reportFile = firstNonEmptyEnv('REPORT_FILE');
 
   const defaultTimeoutMs = parseNumber(firstNonEmptyEnv('SDK_TIMEOUT_MS'), 45_000);
@@ -249,10 +276,14 @@ export function resolveRuntimeConfig(): RuntimeConfig {
       'ANTHROPIC_BASE_URL',
       'API_BASE_URL',
     ),
+    model: firstNonEmptyEnv('CLAUDE_AGENT_MODEL', 'ANTHROPIC_MODEL') ?? 'claude-sonnet-4-6',
     workingDirectory: resolveWorkingDirectory('CLAUDE_AGENT_WORKING_DIRECTORY'),
     skipGitRepoCheck: parseBoolean(firstNonEmptyEnv('CLAUDE_AGENT_SKIP_GIT_REPO_CHECK'), true),
     testImagePath: firstNonEmptyEnv('CLAUDE_AGENT_TEST_IMAGE_PATH'),
     timeoutMs: parseNumber(firstNonEmptyEnv('CLAUDE_AGENT_TIMEOUT_MS'), defaultTimeoutMs),
+    customHeaders: parseCustomHeaders(
+      firstNonEmptyEnv('CLAUDE_AGENT_CUSTOM_HEADERS', 'ANTHROPIC_CUSTOM_HEADERS'),
+    ),
   };
 
   const codex: CodexProviderConfig = {
@@ -272,7 +303,9 @@ export function resolveRuntimeConfig(): RuntimeConfig {
 
   return {
     targetProviders,
+    targetCases,
     failFast,
+    concurrency,
     reportFile,
     openai,
     anthropic,

@@ -1,8 +1,8 @@
 export { runOpenAICases } from './openai-provider';
 export { runAnthropicCases } from './anthropic-provider';
 export { runGeminiCases } from './gemini-provider';
-export { runClaudeAgentCases } from './claude-agent-provider';
-export { runCodexCases } from './codex-provider';
+export { runClaudeAgentCases } from '../agents/claude-agent-provider';
+export { runCodexCases } from '../agents/codex-provider';
 
 export { resolveRuntimeConfig } from './runtime-config';
 export type {
@@ -21,4 +21,4 @@ export {
   renderHtmlReport,
   renderTextReport,
 } from './reporting';
-export { formatError, installGlobalFetchInterceptor } from './shared';
+export { formatError, initializeRequestLogFile, installGlobalFetchInterceptor } from './shared';

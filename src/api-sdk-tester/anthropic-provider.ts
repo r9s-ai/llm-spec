@@ -13,6 +13,7 @@ import {
 export async function runAnthropicCases(
   config: AnthropicProviderConfig,
   failFast: boolean,
+  concurrency: number = 1,
 ): Promise<ProviderSummary> {
   setCurrentProvider('anthropic');
 
@@ -43,5 +44,6 @@ export async function runAnthropicCases(
     ANTHROPIC_MESSAGE_PARAMS,
     cases,
     failFast,
+    concurrency,
   );
 }
