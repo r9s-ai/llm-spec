@@ -6,14 +6,14 @@ import {
   type TurnOptions as CodexTurnOptions,
 } from '@openai/codex-sdk';
 
-import type { OpenAIProviderConfig, CodexProviderConfig } from '../../runtime-config';
+import type { OpenAIProviderConfig, CodexProviderConfig } from '../../environment';
 import {
   formatError,
   summarizeOpenAIResponse,
   summarizeOpenAIResponses,
   truncate,
-  type TestCase,
-} from '../../shared';
+} from '../runtime';
+import type { TestCase } from '../types';
 import { defineCases } from '../define-cases';
 
 export const OPENAI_CHAT_PARAMS = [

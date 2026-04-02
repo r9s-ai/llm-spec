@@ -1,14 +1,13 @@
 import OpenAI from 'openai';
 
 import type { ProviderSummary } from '../types';
+import type { OpenAIProviderConfig } from './environment';
 import { buildOpenAICases, OPENAI_CHAT_PARAMS, OPENAI_RESPONSES_PARAMS } from './cases/openai';
-import type { OpenAIProviderConfig } from './runtime-config';
 import {
   createLoggingFetch,
-  createSetupSkippedSummary,
-  executeProviderCases,
   setCurrentProvider,
-} from './shared';
+} from './environment';
+import { createSetupSkippedSummary, executeProviderCases } from './cases/runtime';
 
 export async function runOpenAICases(
   config: OpenAIProviderConfig,
@@ -29,6 +28,7 @@ export async function runOpenAICases(
     timeout: config.timeoutMs,
     maxRetries: 0,
     fetch: createLoggingFetch('openai'),
+    ...(config.customHeaders ? { defaultHeaders: config.customHeaders } : {}),
   });
 
   // 运行 chatCompletions 测试

@@ -33,10 +33,6 @@ export default function App() {
       ? null
       : report.providers.find((p) => p.provider === activeProvider) ?? null
 
-  const displayCases = activeProviderData
-    ? activeProviderData.caseResults
-    : report.providers.flatMap((p) => p.caseResults)
-
   return (
     <div className="min-h-screen p-6 md:p-12 font-sans">
       <div className="max-w-6xl mx-auto space-y-8">

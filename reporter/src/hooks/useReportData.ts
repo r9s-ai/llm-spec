@@ -2,8 +2,8 @@ import { useState, useCallback, useEffect } from 'react'
 import type { RunSummary } from '@/types'
 import { loadFromFile, loadFromUrl, parseReport } from '@/lib/data-loader'
 
-const req = (url: string, body: object) => JSON.stringify(body, null, 2)
-const res = (body: object, status = 200) => JSON.stringify(body, null, 2)
+const req = (_url: string, body: object) => JSON.stringify(body, null, 2)
+const res = (body: object, _status = 200) => JSON.stringify(body, null, 2)
 
 const openaiBaseUrl = 'https://api.openai.com/v1/chat/completions'
 const openaiHeaders = { 'Content-Type': 'application/json', Authorization: 'Bearer sk-***redacted***' }

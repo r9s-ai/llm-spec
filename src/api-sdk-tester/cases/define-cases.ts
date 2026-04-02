@@ -1,4 +1,4 @@
-import type { TestCase } from '../shared';
+import type { TestCase } from './types';
 
 export interface TestCaseDefinition {
   description: string;

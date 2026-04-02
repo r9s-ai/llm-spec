@@ -6,7 +6,7 @@ import type {
   TestCaseResult,
   TestStatus,
 } from '../types';
-import type { RuntimeConfig } from './runtime-config';
+import type { RuntimeConfig } from './environment';
 
 function printProviderHeader(name: string): void {
   console.log('\n============================================================');

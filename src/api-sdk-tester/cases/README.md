@@ -13,15 +13,18 @@ src/
 │   ├── claude-agent-provider.ts  # Claude Agent provider
 │   └── codex-provider.ts         # Codex provider
 └── api-sdk-tester/
+    ├── environment/
+    │   ├── runtime-config.ts     # 运行时环境与 provider 配置
+    │   ├── case-filter.ts        # TARGET_CASES 过滤
+    │   └── request-logging.ts    # 请求日志与 fetch 拦截
     ├── cases/
-    │   ├── claude-agent/
-    │   │   └── index.ts        # Claude Agent SDK测试用例
-    │   ├── codex/
-    │   │   └── index.ts        # Codex SDK测试用例
+    │   ├── runtime.ts            # 用例执行器与摘要
+    │   ├── types.ts              # TestCase 类型
     │   ├── anthropic/
     │   ├── openai/
     │   └── gemini/
-    └── runtime-config.ts         # 运行时配置
+    ├── runtime-config.ts         # 兼容导出层
+    └── shared.ts                 # 兼容导出层
 ```
 
 ## 配置

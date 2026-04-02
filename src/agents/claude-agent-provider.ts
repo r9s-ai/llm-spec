@@ -5,12 +5,11 @@ import {
   getClaudeAgentCaseHttpTrace,
   resetClaudeAgentCaseHttpTraces,
 } from '../api-sdk-tester/cases/anthropic';
-import type { ClaudeAgentProviderConfig } from '../api-sdk-tester/runtime-config';
+import type { ClaudeAgentProviderConfig } from '../api-sdk-tester/environment';
 import {
-  createSetupSkippedSummary,
-  executeProviderCases,
   setCurrentProvider,
-} from '../api-sdk-tester/shared';
+} from '../api-sdk-tester/environment';
+import { createSetupSkippedSummary, executeProviderCases } from '../api-sdk-tester/cases/runtime';
 
 export async function runClaudeAgentCases(
   config: ClaudeAgentProviderConfig,

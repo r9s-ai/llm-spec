@@ -1,14 +1,13 @@
 import { GoogleGenAI } from '@google/genai';
 
 import type { ProviderSummary } from '../types';
+import type { GeminiProviderConfig } from './environment';
 import { GEMINI_GENERATE_CONTENT_PARAMS, buildGeminiCases } from './cases/gemini';
-import type { GeminiProviderConfig } from './runtime-config';
 import {
   createLoggingFetch,
-  createSetupSkippedSummary,
-  executeProviderCases,
   setCurrentProvider,
-} from './shared';
+} from './environment';
+import { createSetupSkippedSummary, executeProviderCases } from './cases/runtime';
 
 export async function runGeminiCases(
   config: GeminiProviderConfig,

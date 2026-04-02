@@ -8,8 +8,9 @@ import {
 
 import type { GoogleGenAI } from '@google/genai';
 
-import type { GeminiProviderConfig } from '../../runtime-config';
-import { summarizeGeminiResponse, truncate, type TestCase } from '../../shared';
+import type { GeminiProviderConfig } from '../../environment';
+import { summarizeGeminiResponse, truncate } from '../runtime';
+import type { TestCase } from '../types';
 import { defineCases } from '../define-cases';
 
 export const GEMINI_GENERATE_CONTENT_PARAMS = [

@@ -4,7 +4,13 @@ export { runGeminiCases } from './gemini-provider';
 export { runClaudeAgentCases } from '../agents/claude-agent-provider';
 export { runCodexCases } from '../agents/codex-provider';
 
-export { resolveRuntimeConfig } from './runtime-config';
+export {
+  createLoggingFetch,
+  initializeRequestLogFile,
+  installGlobalFetchInterceptor,
+  resolveRuntimeConfig,
+  setCurrentProvider,
+} from './environment';
 export type {
   RuntimeConfig,
   OpenAIProviderConfig,
@@ -12,7 +18,7 @@ export type {
   GeminiProviderConfig,
   ClaudeAgentProviderConfig,
   CodexProviderConfig,
-} from './runtime-config';
+} from './environment';
 
 export {
   printRuntimeConfig,
@@ -21,4 +27,4 @@ export {
   renderHtmlReport,
   renderTextReport,
 } from './reporting';
-export { formatError, initializeRequestLogFile, installGlobalFetchInterceptor } from './shared';
+export { formatError } from './cases/runtime';

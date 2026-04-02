@@ -2,12 +2,11 @@ import { Codex } from '@openai/codex-sdk';
 
 import type { ProviderSummary } from '../types';
 import { buildCodexCases, CODEX_PARAMS } from '../api-sdk-tester/cases/openai';
-import type { CodexProviderConfig } from '../api-sdk-tester/runtime-config';
+import type { CodexProviderConfig } from '../api-sdk-tester/environment';
 import {
-  createSetupSkippedSummary,
-  executeProviderCases,
   setCurrentProvider,
-} from '../api-sdk-tester/shared';
+} from '../api-sdk-tester/environment';
+import { createSetupSkippedSummary, executeProviderCases } from '../api-sdk-tester/cases/runtime';
 
 export async function runCodexCases(
   config: CodexProviderConfig,

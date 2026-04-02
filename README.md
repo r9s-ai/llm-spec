@@ -139,3 +139,17 @@ REPORT_FILE=./report.json node dist/index.js
 - `TXT`：纯文本，适合终端、日志系统和 CI artifact 预览
 
 当存在失败用例时，进程退出码为 `1`。
+
+## 代码结构
+
+测试执行代码按两部分组织：
+
+- `src/api-sdk-tester/environment/`
+  - 运行时环境解析
+  - `.env` 加载和 provider 配置
+  - `TARGET_CASES` 过滤
+  - HTTP 请求日志和 provider 上下文
+- `src/api-sdk-tester/cases/`
+  - 各 provider/agent 的测试用例定义
+  - `TestCase` 类型和用例执行器
+  - provider 级别的覆盖率统计和执行摘要

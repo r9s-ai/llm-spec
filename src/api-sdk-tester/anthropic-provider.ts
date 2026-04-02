@@ -1,14 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 import type { ProviderSummary } from '../types';
+import type { AnthropicProviderConfig } from './environment';
 import { ANTHROPIC_MESSAGE_PARAMS, buildAnthropicCases } from './cases/anthropic';
-import type { AnthropicProviderConfig } from './runtime-config';
 import {
   createLoggingFetch,
-  createSetupSkippedSummary,
-  executeProviderCases,
   setCurrentProvider,
-} from './shared';
+} from './environment';
+import { createSetupSkippedSummary, executeProviderCases } from './cases/runtime';
 
 export async function runAnthropicCases(
   config: AnthropicProviderConfig,

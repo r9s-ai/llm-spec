@@ -15,8 +15,9 @@ import type {
   HttpTraceResponse,
   TestCaseHttpTrace,
 } from '../../../types';
-import type { AnthropicProviderConfig, ClaudeAgentProviderConfig } from '../../runtime-config';
-import { formatError, summarizeAnthropicResponse, truncate, type TestCase } from '../../shared';
+import type { AnthropicProviderConfig, ClaudeAgentProviderConfig } from '../../environment';
+import { formatError, summarizeAnthropicResponse, truncate } from '../runtime';
+import type { TestCase } from '../types';
 import { defineCases } from '../define-cases';
 
 export const ANTHROPIC_MESSAGE_PARAMS = [

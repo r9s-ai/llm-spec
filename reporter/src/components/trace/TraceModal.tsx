@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import { X, ListTree, Play, RefreshCw, Maximize2, Minimize2 } from 'lucide-react'
 import { StatusBadge } from '@/components/test-cases/StatusBadge'
 import { StatusIcon } from '@/components/test-cases/StatusIcon'
-import type { TestCaseResult, HttpTraceExchange } from '@/types'
+import type { TestCaseResult } from '@/types'
 
 const Editor = lazy(() => import('@monaco-editor/react'))
 
@@ -23,6 +23,8 @@ interface TraceModalProps {
 export function TraceModal({ result, onClose }: TraceModalProps) {
   const trace = result.httpTrace
   const hasTrace = trace && trace.exchanges.length > 0
+  const resultSummary = useMemo(() => formatResultSummary(result), [result])
+  const traceStatus = useMemo(() => formatTraceStatus(trace), [trace])
 
   const [activeIndex, setActiveIndex] = useState(0)
   const [activeReqTab, setActiveReqTab] = useState<'body' | 'headers'>('body')
@@ -63,6 +65,7 @@ export function TraceModal({ result, onClose }: TraceModalProps) {
   const handleSend = useCallback(async () => {
     if (!active) return
     setIsSending(true)
+    const startTime = performance.now()
 
     // Clear previous sent response for this index, show loading
     setSentResponses((prev) => {
@@ -87,8 +90,9 @@ export function TraceModal({ result, onClose }: TraceModalProps) {
 
       const text = await res.text()
       const formatted = tryFormatJson(text)
+      const durationMs = Math.round(performance.now() - startTime)
 
-      const statusLabel = `// Status: ${res.status} ${res.statusText}\n// Duration: ${Date.now()}ms\n\n`
+      const statusLabel = `// Status: ${res.status} ${res.statusText}\n// Duration: ${durationMs}ms\n\n`
 
       setSentResponses((prev) => {
         const next = [...prev]
@@ -316,37 +320,27 @@ export function TraceModal({ result, onClose }: TraceModalProps) {
             </div>
           </div>
         ) : (
-          /* No trace — show placeholder */
+          /* No trace — show test result summary instead of request/response editors */
           <div className="flex-1 overflow-hidden flex bg-slate-100">
             <div className="flex-1 overflow-hidden flex flex-col">
-              <div className="p-4 border-b border-slate-200 bg-white flex flex-col sm:flex-row gap-3">
-                <div className="flex flex-1 gap-2">
-                  <select className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 shrink-0">
-                    <option>POST</option>
-                  </select>
-                  <input
-                    type="text"
-                    className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="https://api.example.com/v1/..."
-                  />
+              <div className="px-4 py-3 border-b border-slate-200 bg-white">
+                <div className="text-sm font-semibold text-slate-900">No HTTP trace available</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  This case only contains summarized execution output, so request replay is disabled.
                 </div>
-                <button className="flex items-center justify-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-sm">
-                  <Play className="w-4 h-4 fill-current" />
-                  Send Request
-                </button>
               </div>
 
               <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-px bg-slate-200 overflow-hidden">
                 <div className="flex flex-col bg-white overflow-hidden">
-                  <div className="px-4 pt-3 border-b border-slate-200 bg-slate-50 text-sm font-medium text-slate-600">
-                    <span className="pb-2.5 border-b-2 border-blue-500 text-blue-700">Request Body</span>
+                  <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 text-sm font-medium text-slate-700">
+                    Test Result
                   </div>
                   <div className="flex-1 relative">
                     <Suspense fallback={<div className="flex items-center justify-center h-full text-sm text-slate-400">Loading...</div>}>
                       <Editor
                         height="100%"
                         defaultLanguage="json"
-                        value={result.error ? JSON.stringify({ error: result.error }, null, 2) : result.detail ? JSON.stringify({ detail: result.detail }, null, 2) : '// No request data available'}
+                        value={resultSummary}
                         theme="light"
                         options={readOnlyOptions}
                       />
@@ -354,15 +348,15 @@ export function TraceModal({ result, onClose }: TraceModalProps) {
                   </div>
                 </div>
                 <div className="flex flex-col bg-white overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 bg-slate-50 text-sm font-medium text-slate-600">
-                    <span className="text-slate-700">Response</span>
+                  <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 text-sm font-medium text-slate-700">
+                    Trace Status
                   </div>
                   <div className="flex-1 relative">
                     <Suspense fallback={<div className="flex items-center justify-center h-full text-sm text-slate-400">Loading...</div>}>
                       <Editor
                         height="100%"
                         defaultLanguage="json"
-                        value="// No response data available"
+                        value={traceStatus}
                         theme="light"
                         options={readOnlyOptions}
                       />
@@ -385,4 +379,36 @@ function tryFormatJson(text: string | undefined): string {
   } catch {
     return text
   }
+}
+
+function formatResultSummary(result: TestCaseResult): string {
+  return JSON.stringify({
+    id: result.id,
+    description: result.description,
+    status: result.status,
+    durationMs: result.durationMs,
+    apiType: result.apiType,
+    coveredParams: result.coveredParams,
+    ...(result.detail ? { detail: result.detail } : {}),
+    ...(result.error ? { error: result.error } : {}),
+  }, null, 2)
+}
+
+function formatTraceStatus(trace: TestCaseResult['httpTrace']): string {
+  if (!trace) {
+    return JSON.stringify({
+      available: false,
+      message: 'HTTP trace was not captured for this test case.',
+    }, null, 2)
+  }
+
+  return JSON.stringify({
+    available: trace.exchanges.length > 0,
+    source: trace.source,
+    testId: trace.testId,
+    exchangeCount: trace.exchangeCount,
+    message: trace.exchanges.length > 0
+      ? 'HTTP trace is available.'
+      : 'Trace metadata exists, but no matching request/response exchange was captured.',
+  }, null, 2)
 }
