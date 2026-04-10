@@ -1,4 +1,4 @@
-export { runOpenAICases } from './openai-provider';
+export { runOpenAICases, runOpenAIChatCases, runOpenAIResponsesCases } from './openai-provider';
 export { runAnthropicCases } from './anthropic-provider';
 export { runGeminiCases } from './gemini-provider';
 export { runClaudeAgentCases } from '../agents/claude-agent-provider';
@@ -18,6 +18,8 @@ export type {
   GeminiProviderConfig,
   ClaudeAgentProviderConfig,
   CodexProviderConfig,
+  TestTargetConfig,
+  TargetApiType,
 } from './environment';
 
 export {

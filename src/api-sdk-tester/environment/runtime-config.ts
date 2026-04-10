@@ -63,12 +63,29 @@ export interface CodexProviderConfig {
   timeoutMs: number;
 }
 
+export type TargetApiType =
+  | 'openai.chat'
+  | 'openai.responses'
+  | 'anthropic.messages'
+  | 'gemini.generateContent';
+
+export interface TestTargetConfig {
+  apiType: TargetApiType;
+  apiKey?: string;
+  apiBaseUrl?: string;
+  model: string;
+  timeoutMs: number;
+  customHeaders?: Record<string, string>;
+  apiVersion?: string;
+}
+
 export interface RuntimeConfig {
   targetProviders: ProviderName[];
   targetCases?: string;
   failFast: boolean;
   concurrency: number;
   reportFile?: string;
+  testTarget?: TestTargetConfig;
   openai: OpenAIProviderConfig;
   anthropic: AnthropicProviderConfig;
   gemini: GeminiProviderConfig;
@@ -189,6 +206,58 @@ function normalizeProviderName(raw: string): ProviderName | undefined {
   return undefined;
 }
 
+function normalizeTargetApiType(raw: string | undefined): TargetApiType | undefined {
+  if (!raw) {
+    return undefined;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (
+    normalized === 'openai.chat' ||
+    normalized === 'openai.chatcompletions' ||
+    normalized === 'openai.chat_completions' ||
+    normalized === 'openai(chatcompletions)' ||
+    normalized === 'chat' ||
+    normalized === 'chatcompletions'
+  ) {
+    return 'openai.chat';
+  }
+
+  if (
+    normalized === 'openai.responses' ||
+    normalized === 'openai(responses)' ||
+    normalized === 'responses'
+  ) {
+    return 'openai.responses';
+  }
+
+  if (
+    normalized === 'anthropic.messages' ||
+    normalized === 'anthropic.message' ||
+    normalized === 'messages' ||
+    normalized === 'claude.messages' ||
+    normalized === 'claude.message'
+  ) {
+    return 'anthropic.messages';
+  }
+
+  if (
+    normalized === 'gemini.generatecontent' ||
+    normalized === 'gemini.generate_content' ||
+    normalized === 'gemini' ||
+    normalized === 'google.generatecontent' ||
+    normalized === 'genai.generatecontent'
+  ) {
+    return 'gemini.generateContent';
+  }
+
+  return undefined;
+}
+
 function resolveTargetProviders(raw: string | undefined): ProviderName[] {
   const fallback: ProviderName[] = ['openai', 'anthropic', 'gemini'];
   if (!raw) {
@@ -217,12 +286,96 @@ function resolveWorkingDirectory(envKey: string): string {
   return process.cwd();
 }
 
+function resolveTestTarget(
+  rawApiType: string | undefined,
+  openai: OpenAIProviderConfig,
+  anthropic: AnthropicProviderConfig,
+  gemini: GeminiProviderConfig,
+  defaultTimeoutMs: number,
+): TestTargetConfig | undefined {
+  const apiType = normalizeTargetApiType(rawApiType);
+  if (!apiType) {
+    return undefined;
+  }
+
+  if (apiType === 'openai.chat' || apiType === 'openai.responses') {
+    return {
+      apiType,
+      apiKey: firstNonEmptyEnv('TEST_API_KEY', 'TEST_KEY', 'OPENAI_API_KEY', 'API_KEY') ?? openai.apiKey,
+      apiBaseUrl:
+        firstNonEmptyEnv('TEST_API_BASE_URL', 'TEST_BASE_URL', 'OPENAI_API_BASE_URL', 'OPENAI_BASE_URL', 'BASE_URL', 'API_BASE_URL')
+        ?? openai.apiBaseUrl,
+      model: firstNonEmptyEnv('TEST_MODEL', 'MODEL', 'OPENAI_MODEL') ?? openai.model,
+      timeoutMs: parseNumber(
+        firstNonEmptyEnv('TEST_TIMEOUT_MS', 'OPENAI_TIMEOUT_MS', 'TIMEOUT_MS'),
+        openai.timeoutMs || defaultTimeoutMs,
+      ),
+      customHeaders:
+        parseCustomHeaders(firstNonEmptyEnv('TEST_CUSTOM_HEADERS', 'CUSTOM_HEADERS', 'OPENAI_CUSTOM_HEADERS'))
+        ?? openai.customHeaders,
+    };
+  }
+
+  if (apiType === 'anthropic.messages') {
+    return {
+      apiType,
+      apiKey:
+        firstNonEmptyEnv('TEST_API_KEY', 'TEST_KEY', 'ANTHROPIC_API_KEY', 'API_KEY')
+        ?? anthropic.apiKey,
+      apiBaseUrl:
+        firstNonEmptyEnv(
+          'TEST_API_BASE_URL',
+          'TEST_BASE_URL',
+          'ANTHROPIC_API_BASE_URL',
+          'ANTHROPIC_BASE_URL',
+          'BASE_URL',
+          'API_BASE_URL',
+        )
+        ?? anthropic.apiBaseUrl,
+      model: firstNonEmptyEnv('TEST_MODEL', 'MODEL', 'ANTHROPIC_MODEL') ?? anthropic.model,
+      timeoutMs: parseNumber(
+        firstNonEmptyEnv('TEST_TIMEOUT_MS', 'ANTHROPIC_TIMEOUT_MS', 'TIMEOUT_MS'),
+        anthropic.timeoutMs || defaultTimeoutMs,
+      ),
+    };
+  }
+
+  return {
+    apiType,
+    apiKey:
+      firstNonEmptyEnv(
+        'TEST_API_KEY',
+        'TEST_KEY',
+        'GEMINI_API_KEY',
+        'GOOGLE_API_KEY',
+        'GOOGLE_AI_API_KEY',
+        'API_KEY',
+      )
+      ?? gemini.apiKey,
+    apiBaseUrl:
+      firstNonEmptyEnv(
+        'TEST_API_BASE_URL',
+        'TEST_BASE_URL',
+        'GEMINI_API_BASE_URL',
+        'GOOGLE_API_BASE_URL',
+        'BASE_URL',
+        'API_BASE_URL',
+      )
+      ?? gemini.apiBaseUrl,
+    model: firstNonEmptyEnv('TEST_MODEL', 'MODEL', 'GEMINI_MODEL') ?? gemini.model,
+    timeoutMs: parseNumber(
+      firstNonEmptyEnv('TEST_TIMEOUT_MS', 'GEMINI_TIMEOUT_MS', 'TIMEOUT_MS'),
+      gemini.timeoutMs || defaultTimeoutMs,
+    ),
+    apiVersion: firstNonEmptyEnv('TEST_API_VERSION', 'GEMINI_API_VERSION', 'GOOGLE_API_VERSION', 'API_VERSION')
+      ?? gemini.apiVersion,
+  };
+}
+
 export function resolveRuntimeConfig(): RuntimeConfig {
   loadDotEnvIfPresent();
 
-  const targetProviders = resolveTargetProviders(
-    firstNonEmptyEnv('TARGET_PROVIDERS', 'PROVIDERS', 'PROVIDER'),
-  );
+  const rawTargetApiType = firstNonEmptyEnv('TEST_API_TYPE', 'API_TYPE');
   const targetCases = firstNonEmptyEnv('TARGET_CASES', 'TEST_CASES', 'CASE_IDS');
   const failFast = parseBoolean(firstNonEmptyEnv('FAIL_FAST'), false);
   const concurrency = parseNumber(firstNonEmptyEnv('SDK_CONCURRENCY'), 1);
@@ -238,7 +391,7 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     audioModel: firstNonEmptyEnv('OPENAI_AUDIO_MODEL'),
     reasoningModel: firstNonEmptyEnv('OPENAI_REASONING_MODEL'),
     responsesPromptId: firstNonEmptyEnv('OPENAI_RESPONSES_PROMPT_ID'),
-    customHeaders: parseCustomHeaders(firstNonEmptyEnv('OPENAI_CUSTOM_HEADERS')),
+    customHeaders: parseCustomHeaders(firstNonEmptyEnv('CUSTOM_HEADERS', 'OPENAI_CUSTOM_HEADERS')),
     timeoutMs: parseNumber(firstNonEmptyEnv('OPENAI_TIMEOUT_MS'), defaultTimeoutMs),
   };
 
@@ -283,7 +436,7 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     testImagePath: firstNonEmptyEnv('CLAUDE_AGENT_TEST_IMAGE_PATH'),
     timeoutMs: parseNumber(firstNonEmptyEnv('CLAUDE_AGENT_TIMEOUT_MS'), defaultTimeoutMs),
     customHeaders: parseCustomHeaders(
-      firstNonEmptyEnv('CLAUDE_AGENT_CUSTOM_HEADERS', 'ANTHROPIC_CUSTOM_HEADERS'),
+      firstNonEmptyEnv('CUSTOM_HEADERS', 'CLAUDE_AGENT_CUSTOM_HEADERS', 'ANTHROPIC_CUSTOM_HEADERS'),
     ),
   };
 
@@ -302,12 +455,24 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     timeoutMs: parseNumber(firstNonEmptyEnv('CODEX_TIMEOUT_MS'), defaultTimeoutMs),
   };
 
+  const testTarget = resolveTestTarget(
+    rawTargetApiType,
+    openai,
+    anthropic,
+    gemini,
+    defaultTimeoutMs,
+  );
+  const targetProviders = testTarget
+    ? []
+    : resolveTargetProviders(firstNonEmptyEnv('TARGET_PROVIDERS', 'PROVIDERS', 'PROVIDER'));
+
   return {
     targetProviders,
     targetCases,
     failFast,
     concurrency,
     reportFile,
+    testTarget,
     openai,
     anthropic,
     gemini,

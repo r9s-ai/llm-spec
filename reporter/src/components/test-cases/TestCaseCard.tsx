@@ -47,6 +47,16 @@ export function TestCaseCard({ result, index, onClick }: TestCaseCardProps) {
             <Clock className="w-3 h-3" />
             {formatDuration(result.durationMs)}
           </span>
+          {result.protocol && (
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+              {result.protocol}
+            </Badge>
+          )}
+          {result.modelScope && (
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+              {result.modelScope}
+            </Badge>
+          )}
           {result.apiType && (
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
               {result.apiType}

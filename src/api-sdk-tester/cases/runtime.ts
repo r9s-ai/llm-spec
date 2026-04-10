@@ -162,6 +162,8 @@ async function runCase(provider: string, testCase: TestCase): Promise<TestCaseRe
       coveredParams: [...testCase.covers],
       detail: skipReason,
       apiType: testCase.apiType,
+      protocol: testCase.protocol,
+      modelScope: testCase.modelScope,
     };
   }
 
@@ -178,6 +180,8 @@ async function runCase(provider: string, testCase: TestCase): Promise<TestCaseRe
       coveredParams: [...testCase.covers],
       detail,
       apiType: testCase.apiType,
+      protocol: testCase.protocol,
+      modelScope: testCase.modelScope,
       httpTrace,
     };
   } catch (error) {
@@ -190,6 +194,8 @@ async function runCase(provider: string, testCase: TestCase): Promise<TestCaseRe
       coveredParams: [...testCase.covers],
       error: formatError(error),
       apiType: testCase.apiType,
+      protocol: testCase.protocol,
+      modelScope: testCase.modelScope,
       httpTrace,
     };
   }
@@ -207,21 +213,13 @@ export function createSetupSkippedSummary(
     provider,
     model,
     apiBaseUrl,
+    setupDetail: reason,
     startedAt: now,
     finishedAt: now,
     passed: 0,
     failed: 0,
     skipped: 1,
-    caseResults: [
-      {
-        id: 'provider_setup',
-        description: 'Provider setup validation',
-        status: 'skipped',
-        durationMs: 0,
-        coveredParams: [],
-        detail: reason,
-      },
-    ],
+    caseResults: [],
     allParams: [...allParams],
     coveredParams: [],
     untestedParams: [...allParams],

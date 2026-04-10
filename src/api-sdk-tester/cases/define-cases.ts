@@ -6,12 +6,25 @@ export interface TestCaseDefinition {
   precondition?: () => string | undefined;
   run: () => Promise<string | undefined>;
   apiType?: 'chatCompletions' | 'responses';
+  protocol?: string;
+  modelScope?: string;
 }
 
-export function defineCases(definitions: Record<string, TestCaseDefinition>): TestCase[] {
+export interface DefineCasesDefaults {
+  apiType?: 'chatCompletions' | 'responses';
+  protocol?: string;
+  modelScope?: string;
+}
+
+export function defineCases(
+  definitions: Record<string, TestCaseDefinition>,
+  defaults: DefineCasesDefaults = {},
+): TestCase[] {
   return Object.entries(definitions).map(([id, definition]) => {
-    // 自动推断 apiType:如果 ID 以 responses_ 开头,则为 responses,否则为 chatCompletions
-    const inferredApiType = definition.apiType ?? (id.startsWith('responses_') ? 'responses' : 'chatCompletions');
+    const inferredApiType =
+      definition.apiType ??
+      defaults.apiType ??
+      (id.startsWith('responses_') ? 'responses' : 'chatCompletions');
 
     return {
       id,
@@ -20,6 +33,8 @@ export function defineCases(definitions: Record<string, TestCaseDefinition>): Te
       precondition: definition.precondition,
       run: definition.run,
       apiType: inferredApiType,
+      protocol: definition.protocol ?? defaults.protocol,
+      modelScope: definition.modelScope ?? defaults.modelScope,
     };
   });
 }

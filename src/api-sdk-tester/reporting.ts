@@ -252,7 +252,20 @@ function renderHttpTraceHtml(trace: TestCaseHttpTrace | undefined): string {
 
 export function printRuntimeConfig(config: RuntimeConfig): void {
   printProviderHeader('Runtime Config');
-  console.log(`providers: ${config.targetProviders.join(', ')}`);
+  if (config.testTarget) {
+    console.log('mode: single target');
+    console.log(`apiType: ${config.testTarget.apiType}`);
+    console.log(`apiKey: ${maskSecret(config.testTarget.apiKey)}`);
+    console.log(`apiBaseUrl: ${config.testTarget.apiBaseUrl ?? '(default)'}`);
+    console.log(`model: ${config.testTarget.model}`);
+    console.log(`timeoutMs: ${String(config.testTarget.timeoutMs)}`);
+    if (config.testTarget.apiVersion) {
+      console.log(`apiVersion: ${config.testTarget.apiVersion}`);
+    }
+  } else {
+    console.log(`mode: provider matrix`);
+    console.log(`providers: ${config.targetProviders.join(', ')}`);
+  }
   console.log(`targetCases: ${config.targetCases ?? '(all)'}`);
   console.log(`failFast: ${String(config.failFast)}`);
   console.log(`concurrency: ${String(config.concurrency)}`);
@@ -299,6 +312,9 @@ export function printProviderSummary(summary: ProviderSummary): void {
   console.log(`type: ${isAgent ? 'Agent SDK' : 'Standard API'}`);
   console.log(`model: ${summary.model}`);
   console.log(`baseUrl: ${summary.apiBaseUrl ?? '(default)'}`);
+  if (summary.setupDetail) {
+    console.log(`setup: ${summary.setupDetail}`);
+  }
   console.log(`startedAt: ${summary.startedAt}`);
   console.log(`finishedAt: ${summary.finishedAt}`);
   console.log(`passed=${summary.passed} failed=${summary.failed} skipped=${summary.skipped}`);
@@ -346,6 +362,9 @@ export function renderTextReport(summary: RunSummary): string {
       lines.push(`Provider: ${provider.provider}`);
       lines.push(`model: ${provider.model}`);
       lines.push(`baseUrl: ${provider.apiBaseUrl ?? '(default)'}`);
+      if (provider.setupDetail) {
+        lines.push(`setup: ${provider.setupDetail}`);
+      }
       lines.push(
         `coverage: ${formatCoverage(provider.coveredParams.length, provider.allParams.length)} | passed=${provider.passed} failed=${provider.failed} skipped=${provider.skipped}`,
       );
@@ -353,11 +372,17 @@ export function renderTextReport(summary: RunSummary): string {
       lines.push(
         `untestedParams: ${provider.untestedParams.length > 0 ? provider.untestedParams.join(', ') : '(none)'}`,
       );
-      lines.push('cases:');
+      lines.push(`cases: ${provider.caseResults.length > 0 ? '' : '(none)'}`.trimEnd());
 
       for (const result of provider.caseResults) {
         lines.push(`- [${formatStatus(result.status)}] ${result.id} (${formatDuration(result.durationMs)})`);
         lines.push(`  description: ${result.description}`);
+        if (result.protocol) {
+          lines.push(`  protocol: ${result.protocol}`);
+        }
+        if (result.modelScope) {
+          lines.push(`  modelScope: ${result.modelScope}`);
+        }
         lines.push(`  covered: ${result.coveredParams.length > 0 ? result.coveredParams.join(', ') : '(none)'}`);
         const betaAnnotation = getCaseBetaAnnotation(provider.provider, result.id);
         if (betaAnnotation) {
@@ -385,6 +410,9 @@ export function renderTextReport(summary: RunSummary): string {
       lines.push(`type: Agent SDK`);
       lines.push(`model: ${provider.model}`);
       lines.push(`baseUrl: ${provider.apiBaseUrl ?? '(default)'}`);
+      if (provider.setupDetail) {
+        lines.push(`setup: ${provider.setupDetail}`);
+      }
       lines.push(
         `coverage: ${formatCoverage(provider.coveredParams.length, provider.allParams.length)} | passed=${provider.passed} failed=${provider.failed} skipped=${provider.skipped}`,
       );
@@ -392,11 +420,17 @@ export function renderTextReport(summary: RunSummary): string {
       lines.push(
         `untestedParams: ${provider.untestedParams.length > 0 ? provider.untestedParams.join(', ') : '(none)'}`,
       );
-      lines.push('cases:');
+      lines.push(`cases: ${provider.caseResults.length > 0 ? '' : '(none)'}`.trimEnd());
 
       for (const result of provider.caseResults) {
         lines.push(`- [${formatStatus(result.status)}] ${result.id} (${formatDuration(result.durationMs)})`);
         lines.push(`  description: ${result.description}`);
+        if (result.protocol) {
+          lines.push(`  protocol: ${result.protocol}`);
+        }
+        if (result.modelScope) {
+          lines.push(`  modelScope: ${result.modelScope}`);
+        }
         lines.push(`  covered: ${result.coveredParams.length > 0 ? result.coveredParams.join(', ') : '(none)'}`);
         const betaAnnotation = getCaseBetaAnnotation(provider.provider, result.id);
         if (betaAnnotation) {
@@ -433,12 +467,18 @@ export function renderHtmlReport(summary: RunSummary): string {
             : httpTrace
               ? ''
               : '<span class="muted">(none)</span>';
+          const scopeLines = [
+            result.protocol ? `<div class="case-meta">protocol: ${escapeHtml(result.protocol)}</div>` : '',
+            result.modelScope ? `<div class="case-meta">modelScope: ${escapeHtml(result.modelScope)}</div>` : '',
+          ]
+            .filter(Boolean)
+            .join('');
           return `<tr>
   <td><code>${escapeHtml(result.id)}</code><br><span class="muted">${escapeHtml(result.description)}</span></td>
   <td><span class="status ${statusClassName(result.status)}">${formatStatus(result.status)}</span></td>
   <td>${escapeHtml(formatDuration(result.durationMs))}</td>
   <td>${escapeHtml(result.coveredParams.length > 0 ? result.coveredParams.join(', ') : '(none)')}</td>
-  <td>${betaLine}${noteContent}${httpTrace}</td>
+  <td>${scopeLines}${betaLine}${noteContent}${httpTrace}</td>
 </tr>`;
         })
         .join('\n');
@@ -448,6 +488,25 @@ export function renderHtmlReport(summary: RunSummary): string {
         : '';
 
       const providerClass = isAgent ? 'provider agent-provider' : 'provider';
+      const setupDetail = provider.setupDetail
+        ? `<p class="meta">setup: ${escapeHtml(provider.setupDetail)}</p>`
+        : '';
+      const caseTable = provider.caseResults.length > 0
+        ? `<table>
+<thead>
+<tr>
+  <th>Case</th>
+  <th>Status</th>
+  <th>Duration</th>
+  <th>Covered Params</th>
+  <th>Detail/Error</th>
+</tr>
+</thead>
+<tbody>
+${caseRows}
+</tbody>
+</table>`
+        : '<p class="muted">No test cases recorded.</p>';
 
       return `<section class="${providerClass}">
 <h2>${agentBadge}${escapeHtml(displayName)}</h2>
@@ -466,20 +525,8 @@ export function renderHtmlReport(summary: RunSummary): string {
 <summary>untested params (${provider.untestedParams.length})</summary>
 <pre class="params">${escapeHtml(provider.untestedParams.length > 0 ? provider.untestedParams.join(', ') : '(none)')}</pre>
 </details>
-<table>
-<thead>
-<tr>
-  <th>Case</th>
-  <th>Status</th>
-  <th>Duration</th>
-  <th>Covered Params</th>
-  <th>Detail/Error</th>
-</tr>
-</thead>
-<tbody>
-${caseRows}
-</tbody>
-</table>
+${setupDetail}
+${caseTable}
 </section>`;
     })
     .join('\n');
@@ -604,6 +651,11 @@ ${caseRows}
     font-size: 11px;
     font-weight: 600;
     margin-right: 8px;
+  }
+  .case-meta {
+    color: #475569;
+    font-size: 12px;
+    margin-bottom: 4px;
   }
   details {
     margin-top: 8px;

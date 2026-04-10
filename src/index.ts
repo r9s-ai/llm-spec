@@ -24,11 +24,91 @@ import {
   runCodexCases,
   runGeminiCases,
   runOpenAICases,
+  runOpenAIChatCases,
+  runOpenAIResponsesCases,
 } from './api-sdk-tester';
 
 function writeReportFile(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content, 'utf8');
+}
+
+async function runConfiguredTarget(config: ReturnType<typeof resolveRuntimeConfig>): Promise<ProviderSummary[]> {
+  const target = config.testTarget;
+  if (!target) {
+    return [];
+  }
+
+  if (target.apiType === 'openai.chat') {
+    return [
+      await runOpenAIChatCases(
+        {
+          provider: 'openai',
+          apiKey: target.apiKey,
+          apiBaseUrl: target.apiBaseUrl,
+          model: target.model,
+          timeoutMs: target.timeoutMs,
+          customHeaders: target.customHeaders,
+        },
+        config.failFast,
+        config.concurrency,
+      ),
+    ];
+  }
+
+  if (target.apiType === 'openai.responses') {
+    return [
+      await runOpenAIResponsesCases(
+        {
+          provider: 'openai',
+          apiKey: target.apiKey,
+          apiBaseUrl: target.apiBaseUrl,
+          model: target.model,
+          timeoutMs: target.timeoutMs,
+          customHeaders: target.customHeaders,
+        },
+        config.failFast,
+        config.concurrency,
+      ),
+    ];
+  }
+
+  if (target.apiType === 'anthropic.messages') {
+    return [
+      await runAnthropicCases(
+        {
+          provider: 'anthropic',
+          apiKey: target.apiKey,
+          apiBaseUrl: target.apiBaseUrl,
+          model: target.model,
+          timeoutMs: target.timeoutMs,
+        },
+        config.failFast,
+        config.concurrency,
+      ),
+    ];
+  }
+
+  return [
+    await runGeminiCases(
+      {
+        provider: 'gemini',
+        apiKey: target.apiKey,
+        apiBaseUrl: target.apiBaseUrl,
+        model: target.model,
+        timeoutMs: target.timeoutMs,
+        apiVersion: target.apiVersion,
+        cachedContent: undefined,
+        audioModel: undefined,
+        imageModel: undefined,
+        enableVertexOnlyCases: false,
+        modelArmorPromptTemplate: undefined,
+        modelArmorResponseTemplate: undefined,
+      },
+      config.failFast,
+      config.concurrency,
+    ),
+  ];
 }
 
 async function run(): Promise<RunSummary> {
@@ -44,42 +124,50 @@ async function run(): Promise<RunSummary> {
   const startedAt = new Date().toISOString();
   const providers: ProviderSummary[] = [];
 
-  for (const provider of config.targetProviders) {
-    if (provider === 'openai') {
-      const summaries = await runOpenAICases(config.openai, config.failFast, config.concurrency);
-      for (const summary of summaries) {
+  if (config.testTarget) {
+    const summaries = await runConfiguredTarget(config);
+    for (const summary of summaries) {
+      providers.push(summary);
+      printProviderSummary(summary);
+    }
+  } else {
+    for (const provider of config.targetProviders) {
+      if (provider === 'openai') {
+        const summaries = await runOpenAICases(config.openai, config.failFast, config.concurrency);
+        for (const summary of summaries) {
+          providers.push(summary);
+          printProviderSummary(summary);
+        }
+        continue;
+      }
+
+      if (provider === 'anthropic') {
+        const summary = await runAnthropicCases(config.anthropic, config.failFast, config.concurrency);
         providers.push(summary);
         printProviderSummary(summary);
+        continue;
       }
-      continue;
-    }
 
-    if (provider === 'anthropic') {
-      const summary = await runAnthropicCases(config.anthropic, config.failFast, config.concurrency);
-      providers.push(summary);
-      printProviderSummary(summary);
-      continue;
-    }
+      if (provider === 'gemini') {
+        const summary = await runGeminiCases(config.gemini, config.failFast, config.concurrency);
+        providers.push(summary);
+        printProviderSummary(summary);
+        continue;
+      }
 
-    if (provider === 'gemini') {
-      const summary = await runGeminiCases(config.gemini, config.failFast, config.concurrency);
-      providers.push(summary);
-      printProviderSummary(summary);
-      continue;
-    }
+      if (provider === 'claude-agent') {
+        const summary = await runClaudeAgentCases(config.claudeAgent, config.failFast, config.concurrency);
+        providers.push(summary);
+        printProviderSummary(summary);
+        continue;
+      }
 
-    if (provider === 'claude-agent') {
-      const summary = await runClaudeAgentCases(config.claudeAgent, config.failFast, config.concurrency);
-      providers.push(summary);
-      printProviderSummary(summary);
-      continue;
-    }
-
-    if (provider === 'codex') {
-      const summary = await runCodexCases(config.codex, config.failFast, config.concurrency);
-      providers.push(summary);
-      printProviderSummary(summary);
-      continue;
+      if (provider === 'codex') {
+        const summary = await runCodexCases(config.codex, config.failFast, config.concurrency);
+        providers.push(summary);
+        printProviderSummary(summary);
+        continue;
+      }
     }
   }
 

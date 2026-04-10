@@ -64,6 +64,25 @@ function isGemini25FlashModel(model: string): boolean {
   return normalizeGeminiModelName(model).startsWith('gemini-2.5-flash');
 }
 
+function resolveGeminiModelScope(caseId: string): string {
+  if (
+    caseId === 'labels' ||
+    caseId === 'labels_stream' ||
+    caseId === 'routing_and_model_selection' ||
+    caseId === 'routing_and_model_selection_stream' ||
+    caseId === 'model_armor'
+  ) {
+    return 'vertex';
+  }
+  if (caseId === 'audio_modality') {
+    return 'audio';
+  }
+  if (caseId === 'image_config') {
+    return 'image';
+  }
+  return 'default';
+}
+
 export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] {
   const functionDeclaration = {
     name: 'echoText',
@@ -893,5 +912,9 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
     },
   });
 
-  return cases;
+  return cases.map((testCase) => ({
+    ...testCase,
+    protocol: 'gemini.generateContent',
+    modelScope: resolveGeminiModelScope(testCase.id),
+  }));
 }

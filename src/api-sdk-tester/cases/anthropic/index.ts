@@ -96,6 +96,35 @@ function supportsFastMode(model: string): boolean {
   return normalized === 'claude-opus-4-6';
 }
 
+function resolveAnthropicMessageModelScope(caseId: string): string {
+  if (caseId.startsWith('different_model_haiku')) {
+    return 'claude-haiku-4-5';
+  }
+  if (caseId === 'thinking' || caseId === 'thinking_stream') {
+    return 'claude-4+';
+  }
+  if (caseId === 'fast_mode_basic' || caseId === 'fast_mode_stream' || caseId === 'fast_mode_with_tools' || caseId === 'fast_mode_with_thinking' || caseId === 'beta_fast_mode') {
+    return 'claude-opus-4-6';
+  }
+  return 'default';
+}
+
+function resolveClaudeAgentModelScope(caseId: string): string {
+  if (caseId.startsWith('different_model_opus')) {
+    return 'claude-opus-4-6';
+  }
+  if (caseId.startsWith('different_model_haiku')) {
+    return 'claude-haiku-4-5';
+  }
+  if (caseId.includes('effort')) {
+    return 'claude-opus-4-6';
+  }
+  if (caseId.includes('context_1m') || caseId.includes('thinking') || caseId.includes('mcp')) {
+    return 'claude-sonnet-4-6';
+  }
+  return 'default';
+}
+
 export function resetClaudeAgentCaseHttpTraces(): void {
   claudeAgentCaseExecutionCounter = 0;
   claudeAgentCaseHttpTraceByCaseId.clear();
@@ -133,6 +162,18 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
           messages: [...baseMessages],
         });
         return summarizeAnthropicResponse(response);
+      },
+    },
+    'different_model_haiku': {
+      description: 'different model: Claude Haiku 4.5',
+      covers: ['model'],
+      run: async () => {
+        const response = await client.messages.create({
+          model: 'claude-haiku-4-5',
+          max_tokens: 64,
+          messages: [...baseMessages],
+        });
+        return `model=claude-haiku-4-5, ${summarizeAnthropicResponse(response)}`;
       },
     },
     'sampling_and_stop': {
@@ -1256,7 +1297,11 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
     },
   });
 
-  return cases;
+  return cases.map((testCase) => ({
+    ...testCase,
+    protocol: 'anthropic.messages',
+    modelScope: resolveAnthropicMessageModelScope(testCase.id),
+  }));
 }
 
 export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestCase[] {
@@ -1471,11 +1516,13 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
     overrides: Record<string, string | undefined> = {},
   ): Record<string, string | undefined> {
     const {
+      CUSTOM_HEADERS: _customHeaders,
       ANTHROPIC_CUSTOM_HEADERS: _anthropicCustomHeaders,
       CLAUDE_AGENT_CUSTOM_HEADERS: _claudeAgentCustomHeaders,
       ...baseEnv
     } = process.env;
     const {
+      CUSTOM_HEADERS: overrideCustomHeaders,
       ANTHROPIC_CUSTOM_HEADERS: overrideAnthropicCustomHeaders,
       CLAUDE_AGENT_CUSTOM_HEADERS: overrideClaudeAgentCustomHeaders,
       ...restOverrides
@@ -1485,9 +1532,11 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
       mergeCustomHeaderMaps(
         normalizeAnthropicCustomHeaders(_anthropicCustomHeaders),
         normalizeAnthropicCustomHeaders(_claudeAgentCustomHeaders),
+        normalizeAnthropicCustomHeaders(_customHeaders),
         config.customHeaders,
         normalizeAnthropicCustomHeaders(overrideAnthropicCustomHeaders),
         normalizeAnthropicCustomHeaders(overrideClaudeAgentCustomHeaders),
+        normalizeAnthropicCustomHeaders(overrideCustomHeaders),
       ),
     );
 
@@ -1502,6 +1551,7 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
         : {}),
       ...(customHeaders
         ? {
+            CUSTOM_HEADERS: customHeaders,
             ANTHROPIC_CUSTOM_HEADERS: customHeaders,
             CLAUDE_AGENT_CUSTOM_HEADERS: customHeaders,
           }
@@ -3440,6 +3490,8 @@ Please proceed.`,
 
   return cases.map((testCase) => ({
     ...testCase,
+    protocol: 'claude-agent',
+    modelScope: resolveClaudeAgentModelScope(testCase.id),
     run: async () => {
       const testId = createClaudeAgentTestId(testCase.id);
       let detail: string | undefined;

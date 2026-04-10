@@ -36,6 +36,37 @@ function normalizeProviderSelector(raw: string): string {
   return normalized;
 }
 
+function getProviderSelectorAliases(provider: string): string[] {
+  const normalizedProvider = provider.trim().toLowerCase();
+  const aliases = new Set<string>([normalizedProvider]);
+
+  if (normalizedProvider === 'openai(chatcompletions)') {
+    aliases.add('openai');
+    aliases.add('chat');
+    aliases.add('openai.chat');
+    aliases.add('openai.chatcompletions');
+  } else if (normalizedProvider === 'openai(responses)') {
+    aliases.add('openai');
+    aliases.add('responses');
+    aliases.add('openai.responses');
+  } else if (normalizedProvider === 'anthropic') {
+    aliases.add('claude');
+    aliases.add('messages');
+    aliases.add('anthropic.messages');
+    aliases.add('claude.messages');
+  } else if (normalizedProvider === 'gemini') {
+    aliases.add('google');
+    aliases.add('genai');
+    aliases.add('generatecontent');
+    aliases.add('gemini.generatecontent');
+    aliases.add('google.generatecontent');
+  } else if (normalizedProvider === 'claude-agent') {
+    aliases.add('claudeagent');
+  }
+
+  return Array.from(aliases);
+}
+
 function buildCaseIdPattern(raw: string): RegExp {
   const source = raw.trim() || '*';
   const regexSource = escapeRegExp(source).replace(/\\\*/g, '.*').replace(/\\\?/g, '.');
@@ -65,11 +96,8 @@ function parseCaseSelectors(raw: string): CaseSelector[] {
 }
 
 function matchesProviderSelector(provider: string, selectorProvider: string): boolean {
-  const normalizedProvider = provider.trim().toLowerCase();
-  if (normalizedProvider === selectorProvider) {
-    return true;
-  }
-  return normalizedProvider.startsWith(`${selectorProvider}(`);
+  const aliases = getProviderSelectorAliases(provider);
+  return aliases.includes(selectorProvider);
 }
 
 export function applyCaseFilter(

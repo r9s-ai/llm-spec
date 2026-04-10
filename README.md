@@ -12,6 +12,8 @@
 
 支持统一配置 `API_BASE_URL` / `API_KEY`，也支持各 provider 的独立配置。
 
+现在也支持单目标模式：直接指定 `apiType + apiBaseUrl + apiKey + model`，只运行这个 API surface 对应的测试用例。
+
 ## 快速开始
 
 1. 安装依赖
@@ -35,6 +37,50 @@ node dist/index.js
 
 ## 运行方式
 
+### 单目标模式
+
+设置 `TEST_API_TYPE` 后，会忽略 `TARGET_PROVIDERS`，只执行一个 API surface：
+
+```bash
+TEST_API_TYPE=openai.chat \
+TEST_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/ \
+TEST_API_KEY=your_gemini_key_here \
+TEST_MODEL=gemini-2.5-flash \
+node dist/index.js
+```
+
+支持的 `TEST_API_TYPE`：
+
+- `openai.chat`
+- `openai.responses`
+- `anthropic.messages`
+- `gemini.generateContent`
+
+示例：
+
+```bash
+TEST_API_TYPE=openai.responses \
+TEST_API_KEY=your_openai_key_here \
+TEST_API_BASE_URL=https://api.openai.com/v1 \
+TEST_MODEL=gpt-4o-mini \
+TARGET_CASES=openai.responses:responses_* \
+node dist/index.js
+```
+
+```bash
+TEST_API_TYPE=anthropic.messages \
+TEST_API_KEY=your_anthropic_key_here \
+TEST_MODEL=claude-3-5-haiku-latest \
+node dist/index.js
+```
+
+```bash
+TEST_API_TYPE=gemini.generateContent \
+TEST_API_KEY=your_gemini_key_here \
+TEST_MODEL=gemini-2.5-flash \
+node dist/index.js
+```
+
 - 运行全部 provider（默认）：`openai,anthropic,gemini`
 - 指定 provider：
 
@@ -52,6 +98,7 @@ TARGET_CASES=claude-agent:basic_prompt,openai:responses_* node dist/index.js
 
 说明：
 - 支持 `caseId`、`provider:caseId`
+- 也支持 `apiType:caseId`，例如 `openai.chat:basic`、`openai.responses:responses_*`、`anthropic.messages:*`
 - 支持通配符：`*`（任意长度）和 `?`（单字符）
 - 兼容别名环境变量：`TEST_CASES`、`CASE_IDS`
 
@@ -84,6 +131,17 @@ REPORT_FILE=./report.json node dist/index.js
 - `FAIL_FAST`
 - `REPORT_FILE`
 - `SDK_TIMEOUT_MS`
+- `CUSTOM_HEADERS`（JSON 对象字符串，作为 OpenAI SDK / Claude Agent 的统一自定义请求头配置；兼容旧的 `OPENAI_CUSTOM_HEADERS` / `CLAUDE_AGENT_CUSTOM_HEADERS`）
+
+### 单目标配置
+
+- `TEST_API_TYPE`
+- `TEST_API_KEY`
+- `TEST_API_BASE_URL`
+- `TEST_MODEL`
+- `TEST_TIMEOUT_MS`
+- `TEST_CUSTOM_HEADERS`（JSON 对象字符串，目前主要用于 OpenAI SDK）
+- `TEST_API_VERSION`（用于 Gemini 原生 SDK）
 
 ### OpenAI
 
@@ -107,9 +165,8 @@ REPORT_FILE=./report.json node dist/index.js
 - `CLAUDE_AGENT_API_KEY`
 - `CLAUDE_AGENT_API_BASE_URL`
 - `CLAUDE_AGENT_MODEL`
-- `CLAUDE_AGENT_CUSTOM_HEADERS`（JSON 对象字符串，例如 `{"X-Debug-Channel-ID":"13"}`）
 
-说明：`CLAUDE_AGENT_CUSTOM_HEADERS` 会注入到 Agent 请求头；同时兼容 `ANTHROPIC_CUSTOM_HEADERS`。
+说明：使用 `CUSTOM_HEADERS` 注入 Agent 请求头，例如 `{"X-Debug-Channel-ID":"13"}`；同时兼容旧的 `CLAUDE_AGENT_CUSTOM_HEADERS` 和 `ANTHROPIC_CUSTOM_HEADERS`。
 
 ### Gemini
 

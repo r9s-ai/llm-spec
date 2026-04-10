@@ -53,6 +53,8 @@ export interface TestCaseResult {
   detail?: string;
   error?: string;
   apiType?: 'chatCompletions' | 'responses';
+  protocol?: string;
+  modelScope?: string;
   httpTrace?: TestCaseHttpTrace;
 }
 
@@ -60,6 +62,7 @@ export interface ProviderSummary {
   provider: string; // 可以是 'openai', 'openai(chatCompletions)', 'openai(responses)', 'anthropic', 'gemini' 等
   model: string;
   apiBaseUrl?: string;
+  setupDetail?: string;
   startedAt: string;
   finishedAt: string;
   passed: number;

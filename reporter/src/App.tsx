@@ -72,6 +72,11 @@ export default function App() {
                       {provider.passed} passed / {provider.failed} failed / {provider.skipped} skipped
                     </span>
                   </div>
+                  {provider.setupDetail && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                      {provider.setupDetail}
+                    </div>
+                  )}
                   <TestCaseGrid
                     cases={provider.caseResults}
                     onViewTrace={setTraceCase}
@@ -84,10 +89,17 @@ export default function App() {
 
         {/* Single provider mode */}
         {activeProviderData && (
-          <TestCaseGrid
-            cases={activeProviderData.caseResults}
-            onViewTrace={setTraceCase}
-          />
+          <div className="space-y-3">
+            {activeProviderData.setupDetail && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {activeProviderData.setupDetail}
+              </div>
+            )}
+            <TestCaseGrid
+              cases={activeProviderData.caseResults}
+              onViewTrace={setTraceCase}
+            />
+          </div>
         )}
       </div>
 

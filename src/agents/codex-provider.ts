@@ -1,7 +1,7 @@
 import { Codex } from '@openai/codex-sdk';
 
 import type { ProviderSummary } from '../types';
-import { buildCodexCases, CODEX_PARAMS } from '../api-sdk-tester/cases/openai';
+import { buildCodexCases, CODEX_PARAMS } from '../api-sdk-tester/cases/codex';
 import type { CodexProviderConfig } from '../api-sdk-tester/environment';
 import {
   setCurrentProvider,

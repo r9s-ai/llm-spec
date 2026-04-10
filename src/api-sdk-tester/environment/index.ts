@@ -16,4 +16,6 @@ export type {
   GeminiProviderConfig,
   OpenAIProviderConfig,
   RuntimeConfig,
+  TestTargetConfig,
+  TargetApiType,
 } from './runtime-config';
