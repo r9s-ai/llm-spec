@@ -5,6 +5,7 @@ import {
   getClaudeAgentCaseHttpTrace,
   resetClaudeAgentCaseHttpTraces,
 } from '../api-sdk-tester/cases/anthropic';
+import { startClaudeAgentReverseProxy } from '../api-sdk-tester/claude-agent-reverse-proxy';
 import type { ClaudeAgentProviderConfig } from '../api-sdk-tester/environment';
 import {
   setCurrentProvider,
@@ -29,21 +30,33 @@ export async function runClaudeAgentCases(
     );
   }
 
-  const cases = buildClaudeAgentCases({ config });
+  const proxy = await startClaudeAgentReverseProxy(config.apiBaseUrl);
+  const proxiedConfig: ClaudeAgentProviderConfig = {
+    ...config,
+    apiBaseUrl: proxy.baseUrl,
+  };
 
-  return executeProviderCases(
-    'claude-agent',
-    'agent',
-    config.apiBaseUrl,
-    CLAUDE_AGENT_PARAMS,
-    cases,
-    failFast,
-    concurrency,
-  ).then((summary) => ({
-    ...summary,
-    caseResults: summary.caseResults.map((result) => ({
-      ...result,
-      httpTrace: getClaudeAgentCaseHttpTrace(result.id),
-    })),
-  }));
+  try {
+    const cases = buildClaudeAgentCases({ config: proxiedConfig });
+
+    const summary = await executeProviderCases(
+      'claude-agent',
+      'agent',
+      config.apiBaseUrl,
+      CLAUDE_AGENT_PARAMS,
+      cases,
+      failFast,
+      concurrency,
+    );
+
+    return {
+      ...summary,
+      caseResults: summary.caseResults.map((result) => ({
+        ...result,
+        httpTrace: getClaudeAgentCaseHttpTrace(result.id),
+      })),
+    };
+  } finally {
+    await proxy.close();
+  }
 }

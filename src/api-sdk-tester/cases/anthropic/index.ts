@@ -68,7 +68,7 @@ export interface ClaudeAgentCaseContext {
 
 const CLAUDE_AGENT_TEST_ID_ENV_KEY = 'LLM_SPEC_TEST_ID';
 const CLAUDE_AGENT_TEST_ID_HEADER = 'x-test-id';
-const CLAUDE_AGENT_TRACE_SOURCE = 'claude-agent-fetch-hook';
+const CLAUDE_AGENT_TRACE_SOURCE = 'claude-agent-reverse-proxy';
 const CLAUDE_AGENT_TRACE_DIR = resolvePath(process.cwd(), '.llm-spec-traces');
 
 const claudeAgentTestContext = new AsyncLocalStorage<string>();
@@ -1344,34 +1344,6 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
 
 export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestCase[] {
   const defaultModel = config.model;
-  const fetchHookPath = resolvePath(process.cwd(), 'src/api-sdk-tester/claude-agent-fetch-hook.cjs');
-
-  function ensureExecutableArgsWithFetchHook(
-    executableArgs: string[] | undefined,
-  ): string[] {
-    const requireHookArg = `--require=${fetchHookPath}`;
-    if (!executableArgs || executableArgs.length === 0) {
-      return [requireHookArg];
-    }
-
-    const hasFetchHook = executableArgs.some((arg, index) => {
-      if (arg.includes(fetchHookPath)) {
-        return true;
-      }
-      if (arg === '--require' && executableArgs[index + 1] === fetchHookPath) {
-        return true;
-      }
-      if (arg.startsWith('--require=')) {
-        return arg.slice('--require='.length) === fetchHookPath;
-      }
-      return false;
-    });
-
-    if (hasFetchHook) {
-      return [...executableArgs];
-    }
-    return [...executableArgs, requireHookArg];
-  }
 
   function parseCustomHeadersObject(
     raw: string | undefined,
@@ -1565,6 +1537,7 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
       CLAUDE_AGENT_CUSTOM_HEADERS: overrideClaudeAgentCustomHeaders,
       ...restOverrides
     } = overrides;
+    const activeTestId = claudeAgentTestContext.getStore();
 
     const customHeaders = formatAnthropicCustomHeaders(
       mergeCustomHeaderMaps(
@@ -1575,6 +1548,7 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
         normalizeAnthropicCustomHeaders(overrideAnthropicCustomHeaders),
         normalizeAnthropicCustomHeaders(overrideClaudeAgentCustomHeaders),
         normalizeAnthropicCustomHeaders(overrideCustomHeaders),
+        activeTestId ? { [CLAUDE_AGENT_TEST_ID_HEADER]: activeTestId } : undefined,
       ),
     );
 
@@ -1595,7 +1569,7 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
           }
         : {}),
       ...restOverrides,
-      ...(claudeAgentTestContext.getStore() ? { [CLAUDE_AGENT_TEST_ID_ENV_KEY]: claudeAgentTestContext.getStore() } : {}),
+      ...(activeTestId ? { [CLAUDE_AGENT_TEST_ID_ENV_KEY]: activeTestId } : {}),
     };
 
     return mergedEnv;
@@ -1626,18 +1600,12 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
   const baseOptions: SDKSessionOptions = {
     model: defaultModel,
     env: buildClaudeAgentEnv(),
-    executableArgs: ensureExecutableArgsWithFetchHook(undefined),
   };
 
   function createSessionOptions(overrides: Partial<SDKSessionOptions> = {}): SDKSessionOptions {
-    const executableArgs = ensureExecutableArgsWithFetchHook(
-      overrides.executableArgs === undefined ? baseOptions.executableArgs : overrides.executableArgs,
-    );
-
     return normalizeClaudeAgentSessionOptions({
       ...baseOptions,
       ...overrides,
-      executableArgs,
       env:
         overrides.env === undefined
           ? baseOptions.env
@@ -1801,7 +1769,7 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
     httpTrace?: TestCaseHttpTrace;
   }
 
-  // NDJSON trace entry written by claude-agent-fetch-hook.cjs
+  // NDJSON trace entries written by the local Claude Agent reverse proxy
   interface TraceEntry {
     type: 'request' | 'response' | 'error';
     requestId?: string;
