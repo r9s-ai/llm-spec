@@ -25,6 +25,13 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
   } = createOpenAIChatSharedState({ client, config });
   const outputLimit = (requested: number, model = config.model) =>
     resolveChatCompletionOutputLimit(model, requested);
+  const promptCacheMessages = [
+    {
+      role: (isReasoningModel(config.model) ? 'developer' : 'system') as 'developer' | 'system',
+      content: `${'llm-spec cache prefix. '.repeat(384)}Keep this shared prefix stable across identical requests.`,
+    },
+    { role: 'user' as const, content: 'Reply with exactly: cache-ok' },
+  ];
 
   return defineCases(
     {
@@ -88,6 +95,53 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
             preferredRetention,
           );
           return summarizeOpenAIResponse(response);
+        },
+      },
+      'prompt_cache_round_trip': {
+        description: 'prompt_cache_key + prompt_cache_retention round trip',
+        covers: ['prompt_cache_key', 'prompt_cache_retention'],
+        precondition: () =>
+          skipOpenAIOnlyCaseOnGemini('prompt cache extensions on chat.completions'),
+        run: async () => {
+          let appliedRetention: PromptCacheRetentionValue = compatibilityGateway
+            ? 'in_memory'
+            : 'in-memory';
+
+          const runCacheRequest = () =>
+            withPromptCacheRetentionFallback(
+              (retention) => {
+                appliedRetention = retention;
+                return client.chat.completions.create(
+                  {
+                    model: config.model,
+                    messages: promptCacheMessages,
+                    prompt_cache_key: 'llm-spec-chat-cache-round-trip',
+                    prompt_cache_retention: retention,
+                    max_completion_tokens: outputLimit(64),
+                  } as never,
+                );
+              },
+              appliedRetention,
+            );
+
+          const first = await runCacheRequest();
+          const second = await runCacheRequest();
+          const firstUsage = (first as {
+            usage?: {
+              prompt_tokens_details?: {
+                cached_tokens?: number;
+              };
+            };
+          }).usage;
+          const secondUsage = (second as {
+            usage?: {
+              prompt_tokens_details?: {
+                cached_tokens?: number;
+              };
+            };
+          }).usage;
+
+          return `retention=${appliedRetention}, first_cached=${firstUsage?.prompt_tokens_details?.cached_tokens ?? 'n/a'}, second_cached=${secondUsage?.prompt_tokens_details?.cached_tokens ?? 'n/a'}, ${summarizeOpenAIResponse(second)}`;
         },
       },
       'logprobs': {

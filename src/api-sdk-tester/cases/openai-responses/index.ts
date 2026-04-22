@@ -55,6 +55,7 @@ function resolveOpenAIResponsesModelScope(caseId: string): string {
 export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext): TestCase[] {
   const compatibilityGateway = isOpenAICompatibilityGateway(config.apiBaseUrl);
   const responsesReasoningModel = config.reasoningModel ?? config.model;
+  const promptCacheInput = `${'llm-spec responses cache prefix. '.repeat(384)}Reply with exactly: cache-ok`;
 
   const functionSchema = {
     type: 'object',
@@ -142,6 +143,51 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
             preferredRetention,
           );
           return summarizeOpenAIResponses(response);
+        },
+      },
+      'responses_prompt_cache_round_trip': {
+        description: 'responses prompt_cache_key + prompt_cache_retention round trip',
+        covers: ['prompt_cache_key', 'prompt_cache_retention'],
+        run: async () => {
+          let appliedRetention: PromptCacheRetentionValue = compatibilityGateway
+            ? 'in_memory'
+            : 'in-memory';
+
+          const runCacheRequest = () =>
+            withPromptCacheRetentionFallback(
+              (retention) => {
+                appliedRetention = retention;
+                return client.responses.create(
+                  {
+                    model: config.model,
+                    input: promptCacheInput,
+                    prompt_cache_key: 'llm-spec-responses-cache-round-trip',
+                    prompt_cache_retention: retention,
+                    max_output_tokens: 32,
+                  } as never,
+                );
+              },
+              appliedRetention,
+            );
+
+          const first = await runCacheRequest();
+          const second = await runCacheRequest();
+          const firstUsage = (first as {
+            usage?: {
+              input_tokens_details?: {
+                cached_tokens?: number;
+              };
+            };
+          }).usage;
+          const secondUsage = (second as {
+            usage?: {
+              input_tokens_details?: {
+                cached_tokens?: number;
+              };
+            };
+          }).usage;
+
+          return `retention=${appliedRetention}, first_cached=${firstUsage?.input_tokens_details?.cached_tokens ?? 'n/a'}, second_cached=${secondUsage?.input_tokens_details?.cached_tokens ?? 'n/a'}, ${summarizeOpenAIResponses(second)}`;
         },
       },
       'responses_context_include_truncation': {

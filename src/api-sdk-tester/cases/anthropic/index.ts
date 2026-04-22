@@ -138,6 +138,12 @@ export function getClaudeAgentCaseHttpTrace(caseId: string): TestCaseHttpTrace |
 
 export function buildAnthropicCases({ client, config }: AnthropicCaseContext): TestCase[] {
   const baseMessages = [{ role: 'user', content: 'Reply with exactly: ok' }] as const;
+  const cacheProbeMessages = [
+    {
+      role: 'user' as const,
+      content: `${'llm-spec anthropic cache prefix. '.repeat(384)}Reply with exactly: cache-ok`,
+    },
+  ] as const;
   const echoTool = {
     name: 'echo',
     description: 'Echoes the provided text.',
@@ -506,6 +512,38 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
           },
         });
         return summarizeAnthropicResponse(response);
+      },
+    },
+    'cache_control_round_trip': {
+      description: 'cache_control round trip usage',
+      covers: ['cache_control'],
+      run: async () => {
+        const request = {
+          model: config.model,
+          max_tokens: 64,
+          messages: [...cacheProbeMessages],
+          cache_control: {
+            type: 'ephemeral' as const,
+            ttl: '5m' as const,
+          },
+        };
+
+        const first = await client.messages.create(request);
+        const second = await client.messages.create(request);
+        const firstUsage = (first as {
+          usage?: {
+            cache_creation_input_tokens?: number | null;
+            cache_read_input_tokens?: number | null;
+          };
+        }).usage;
+        const secondUsage = (second as {
+          usage?: {
+            cache_creation_input_tokens?: number | null;
+            cache_read_input_tokens?: number | null;
+          };
+        }).usage;
+
+        return `first_creation=${firstUsage?.cache_creation_input_tokens ?? 'n/a'}, first_read=${firstUsage?.cache_read_input_tokens ?? 'n/a'}, second_creation=${secondUsage?.cache_creation_input_tokens ?? 'n/a'}, second_read=${secondUsage?.cache_read_input_tokens ?? 'n/a'}, ${summarizeAnthropicResponse(second)}`;
       },
     },
     'container': {
