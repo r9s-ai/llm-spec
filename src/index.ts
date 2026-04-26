@@ -11,6 +11,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve as resolvePath } from 'node:path';
 
 import type { ProviderSummary, RunSummary } from './types';
+import { clearUsageCaptures, flushUsageCaptures } from './audit/usageCapture';
 import {
   formatError,
   initializeRequestLogFile,
@@ -112,11 +113,16 @@ async function runConfiguredTarget(config: ReturnType<typeof resolveRuntimeConfi
 }
 
 async function run(): Promise<RunSummary> {
+  
+
   // 初始化请求日志文件
   initializeRequestLogFile();
 
   // 安装全局fetch拦截器,用于记录所有HTTP请求和响应
   installGlobalFetchInterceptor();
+
+  //audit usage 收集
+  clearUsageCaptures();
 
   const config = resolveRuntimeConfig();
   printRuntimeConfig(config);
@@ -190,6 +196,11 @@ async function run(): Promise<RunSummary> {
     const jsonPath = resolvePath(process.cwd(), config.reportFile);
     writeReportFile(jsonPath, `${JSON.stringify(summary, null, 2)}\n`);
     console.log(`report written: ${jsonPath}`);
+  }
+  //将收集的usage写入文件
+  const usageArtifactPath = flushUsageCaptures();
+  if (usageArtifactPath) {
+    console.log(`usage artifact written: ${usageArtifactPath}`);
   }
 
   if (totalFailed > 0) {

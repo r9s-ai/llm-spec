@@ -93,7 +93,7 @@ export interface RuntimeConfig {
   codex: CodexProviderConfig;
 }
 
-function loadDotEnvIfPresent(path = '.env'): void {
+export function loadDotEnvIfPresent(path = '.env'): void {
   const fullPath = resolvePath(process.cwd(), path);
   if (!existsSync(fullPath)) {
     return;

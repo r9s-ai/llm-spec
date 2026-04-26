@@ -8,6 +8,7 @@ import {
 
 import type { GoogleGenAI } from '@google/genai';
 
+import { recordUsageCapture } from '../../../audit/usageCapture';
 import type { GeminiProviderConfig } from '../../environment';
 import { summarizeGeminiResponse, truncate } from '../runtime';
 import type { TestCase } from '../types';
@@ -64,6 +65,30 @@ function isGemini25FlashModel(model: string): boolean {
   return normalizeGeminiModelName(model).startsWith('gemini-2.5-flash');
 }
 
+function createSilentWavBase64(): string {
+  const sampleRate = 16_000;
+  const durationMs = 120;
+  const samples = Math.floor((sampleRate * durationMs) / 1000);
+  const dataSize = samples * 2;
+  const buffer = Buffer.alloc(44 + dataSize);
+
+  buffer.write('RIFF', 0);
+  buffer.writeUInt32LE(36 + dataSize, 4);
+  buffer.write('WAVE', 8);
+  buffer.write('fmt ', 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write('data', 36);
+  buffer.writeUInt32LE(dataSize, 40);
+
+  return buffer.toString('base64');
+}
+
 function resolveGeminiModelScope(caseId: string): string {
   if (
     caseId === 'labels' ||
@@ -75,6 +100,9 @@ function resolveGeminiModelScope(caseId: string): string {
     return 'vertex';
   }
   if (caseId === 'audio_modality') {
+    return 'audio';
+  }
+  if (caseId === 'audit_audio_input') {
     return 'audio';
   }
   if (caseId === 'image_config') {
@@ -127,6 +155,45 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
           model: config.model,
           contents: 'Reply with exactly: ok',
         });
+        return summarizeGeminiResponse(response);
+      },
+    },
+    'audit_audio_input': {
+      description: 'audit: audio input usage capture',
+      covers: ['model', 'contents'],
+      run: async () => {
+        const model = config.audioModel ?? config.model;
+        const response = await ai.models.generateContent({
+          model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: 'The attached audio is silence. Reply with exactly: audio-ok',
+                },
+                {
+                  inlineData: {
+                    mimeType: 'audio/wav',
+                    data: createSilentWavBase64(),
+                  },
+                },
+              ],
+            },
+          ],
+          config: {
+            maxOutputTokens: 16,
+          },
+        });
+
+        if (response.usageMetadata) {//收集usage
+          recordUsageCapture({
+            provider: 'gemini',
+            model,
+            usage: response.usageMetadata,
+          });
+        }
+
         return summarizeGeminiResponse(response);
       },
     },

@@ -33,3 +33,9 @@ llm-api-feature-report
 
 # Trace 文件 (per-test NDJSON)
 .llm-spec-traces/
+
+
+#audit
+src/audit/data
+src/audit/usage.json
+src/audit/billing.json
