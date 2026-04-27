@@ -42,15 +42,15 @@ export async function fetchBilling({
   outputPath,
 }: FetchBillingOptions): Promise<BillingRecord> {
     loadDotEnvIfPresent();
-  const resolvedUrl = url ?? firstNonEmptyEnv('BILLING_API_URL');
+  const resolvedUrl = url ?? firstNonEmptyEnv('BILLING_BASE_URL');
   const resolvedBearerToken =
-    bearerToken ?? firstNonEmptyEnv('BILLING_BEARER_TOKEN');
+    bearerToken ?? firstNonEmptyEnv('BILLING_API_KEY');
 
   if (!resolvedUrl) {
-    throw new Error('missing billing url (pass url or set BILLING_API_URL)');
+    throw new Error('missing billing url (pass url or set BILLING_BASE_URL)');
   }
   if (!resolvedBearerToken) {
-    throw new Error('missing billing bearer token (pass bearerToken or set BILLING_BEARER_TOKEN)');
+    throw new Error('missing billing bearer token (pass bearerToken or set BILLING_API_KEY)');
   }
   assertUnixTimeSeconds('startTime', startTime);
   assertUnixTimeSeconds('endTime', endTime);
