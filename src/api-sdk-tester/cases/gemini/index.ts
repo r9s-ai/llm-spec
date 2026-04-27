@@ -8,10 +8,12 @@ import {
 
 import type { GoogleGenAI } from '@google/genai';
 
+import { recordUsageCapture } from '../../../audit/usageCapture';
 import type { GeminiProviderConfig } from '../../environment';
 import { summarizeGeminiResponse, truncate } from '../runtime';
 import type { TestCase } from '../types';
 import { defineCases } from '../define-cases';
+import { fixtures } from '../fixtures';
 
 export const GEMINI_GENERATE_CONTENT_PARAMS = [
   'model',
@@ -77,6 +79,15 @@ function resolveGeminiModelScope(caseId: string): string {
   if (caseId === 'audio_modality') {
     return 'audio';
   }
+  if (caseId === 'audit_audio_input') {
+    return 'audio';
+  }
+  if (caseId === 'audit_image_input') {
+    return 'image';
+  }
+  if (caseId === 'audit_video_input') {
+    return 'video';
+  }
   if (caseId === 'image_config') {
     return 'image';
   }
@@ -127,6 +138,123 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
           model: config.model,
           contents: 'Reply with exactly: ok',
         });
+        return summarizeGeminiResponse(response);
+      },
+    },
+    'audit_audio_input': {
+      description: 'audit: audio input usage capture',
+      covers: ['model', 'contents'],
+      run: async () => {
+        const model = config.audioModel ?? config.model;
+        const response = await ai.models.generateContent({
+          model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: '这个音频里有什么内容？请简要描述。',
+                },
+                {
+                  inlineData: {
+                    mimeType: fixtures.audio.response2second.mimeType,
+                    data: fixtures.audio.response2second.base64(),
+                  },
+                },
+              ],
+            },
+          ],
+          config: {
+            maxOutputTokens: 64,
+          },
+        });
+
+        if (response.usageMetadata) {//收集usage
+          recordUsageCapture({
+            provider: 'gemini',
+            model,
+            usage: response.usageMetadata,
+          });
+        }
+
+        return summarizeGeminiResponse(response);
+      },
+    },
+    'audit_image_input': {
+      description: 'audit: image input usage capture',
+      covers: ['model', 'contents'],
+      run: async () => {
+        const model = config.model;
+        const response = await ai.models.generateContent({
+          model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: '这个图片展示了什么？请简要描述。',
+                },
+                {
+                  inlineData: {
+                    mimeType: fixtures.images.hamburger.mimeType,
+                    data: fixtures.images.hamburger.base64(),
+                  },
+                },
+              ],
+            },
+          ],
+          config: {
+            maxOutputTokens: 64,
+          },
+        });
+
+        if (response.usageMetadata) {//收集usage
+          recordUsageCapture({
+            provider: 'gemini',
+            model,
+            usage: response.usageMetadata,
+          });
+        }
+
+        return summarizeGeminiResponse(response);
+      },
+    },
+    'audit_video_input': {
+      description: 'audit: video input usage capture',
+      covers: ['model', 'contents'],
+      run: async () => {
+        const model = config.model;
+        const response = await ai.models.generateContent({
+          model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: '这个视频展示了什么？请简要描述。',
+                },
+                {
+                  inlineData: {
+                    mimeType: fixtures.video.office.mimeType,
+                    data: fixtures.video.office.base64(),
+                  },
+                },
+              ],
+            },
+          ],
+          config: {
+            maxOutputTokens: 64,
+          },
+        });
+
+        if (response.usageMetadata) {//收集usage
+          recordUsageCapture({
+            provider: 'gemini',
+            model,
+            usage: response.usageMetadata,
+          });
+        }
+
         return summarizeGeminiResponse(response);
       },
     },
