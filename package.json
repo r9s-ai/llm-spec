@@ -1,34 +1,28 @@
 {
-  "name": "llm-spec",
+  "name": "llm-spec-monorepo",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "packageManager": "pnpm@9.15.1",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --format=esm --sourcemap --packages=external",
-    "build:watch": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --format=esm --sourcemap --watch --packages=external",
-    "build:scripts": "esbuild scripts/*.ts --bundle --platform=node --target=node20 --outdir=dist/scripts --format=esm --sourcemap --out-extension:.js=.mjs",
-    "type-check": "tsc --noEmit",
-    "clean": "rm -rf dist",
-    "dev": "node --watch dist/index.js",
-    "test:sdk": "node dist/index.js",
-    "fetch-docs": "node dist/scripts/fetch-docs.mjs"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "LLM specification testing and validation tool",
-  "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.114",
-    "@anthropic-ai/sdk": "^0.90.0",
-    "@google/genai": "^1.47.0",
-    "@openai/codex-sdk": "^0.117.0",
-    "openai": "^6.33.0"
+    "build": "pnpm -r build",
+    "type-check": "pnpm -r type-check",
+    "lint": "pnpm --filter @llm-spec/reporter lint",
+    "clean": "pnpm -r clean",
+    "dev": "concurrently -n watch,backend,reporter -c cyan,blue,green \"pnpm --filter llm-spec build:watch\" \"pnpm --filter llm-spec dev:server\" \"pnpm --filter @llm-spec/reporter dev\"",
+    "dev:backend": "pnpm --filter llm-spec dev:server",
+    "dev:reporter": "pnpm --filter @llm-spec/reporter dev",
+    "start:server": "pnpm --filter llm-spec start:server",
+    "test:sdk": "pnpm --filter llm-spec test:sdk",
+    "fetch-docs": "pnpm --filter llm-spec build:scripts && pnpm --filter llm-spec fetch-docs"
   },
   "devDependencies": {
-    "@types/node": "^22.13.10",
-    "esbuild": "^0.25.1",
-    "typescript": "^5.8.2",
-    "undici": "^7.22.0"
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -32,8 +32,56 @@ cp .env.example .env
 
 ```bash
 pnpm build
-node dist/index.js
+pnpm test:sdk
 ```
+
+## 平台模式
+
+项目现在可以作为自部署平台运行，分为两个服务：
+
+- 前端：`packages/reporter/`，负责配置测试、浏览报告、普通 API 的浏览器直连测试。
+- 后端：`packages/llm-spec/dist/server.js`，负责代理/执行不适合浏览器直连的普通 API 测试，以及所有 Agent 测试。
+
+### 启动后端
+
+```bash
+pnpm build
+LLM_SPEC_BACKEND_PORT=8788 pnpm start:server
+```
+
+后端接口：
+
+- `GET /api/health`
+- `POST /api/run`
+
+后端默认允许跨域访问。可通过 `LLM_SPEC_CORS_ORIGIN` 收紧来源。
+
+### 启动前端
+
+```bash
+pnpm dev:reporter
+```
+
+前端默认连接 `http://localhost:8788`，也可以在构建/运行前设置：
+
+```bash
+VITE_LLM_SPEC_BACKEND_URL=http://your-backend:8788 pnpm --filter @llm-spec/reporter build
+```
+
+### 执行策略
+
+- 普通 API 测试默认在浏览器端运行，直接使用 `fetch` 请求目标 API，并生成与 CLI 一致的报告结构。
+- 普通 API 测试可以切换为后端运行，用于目标 API 不支持 CORS、需要私网访问或需要集中保管密钥的场景。
+- `claude-agent` / `codex` 等 Agent 测试只能通过后端运行；前端负责填写 API key、base URL、工作目录、用例过滤等配置。
+
+### 站点 Profile 与测试矩阵
+
+平台前端将配置拆成两层：
+
+- 站点 Profile：保存低频变化的连接信息，例如 API key、base URL、custom headers、backend URL、Agent 工作目录等。
+- Test Matrix：保存本次运行要测的目标行，每一行可以独立选择 API/Agent、model、case filter，并可在执行前快速增删改。
+
+执行时前端会按 Test Matrix 逐行调用现有运行接口并合并报告。报告中会带上 `runSnapshot`，记录本次实际执行的站点、模型、用例过滤和执行方式。
 
 ## 运行方式
 
@@ -46,7 +94,7 @@ TEST_API_TYPE=openai.chat \
 TEST_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/ \
 TEST_API_KEY=your_gemini_key_here \
 TEST_MODEL=gemini-2.5-flash \
-node dist/index.js
+pnpm test:sdk
 ```
 
 支持的 `TEST_API_TYPE`：
@@ -64,36 +112,37 @@ TEST_API_KEY=your_openai_key_here \
 TEST_API_BASE_URL=https://api.openai.com/v1 \
 TEST_MODEL=gpt-4o-mini \
 TARGET_CASES=openai.responses:responses_* \
-node dist/index.js
+pnpm test:sdk
 ```
 
 ```bash
 TEST_API_TYPE=anthropic.messages \
 TEST_API_KEY=your_anthropic_key_here \
 TEST_MODEL=claude-3-5-haiku-latest \
-node dist/index.js
+pnpm test:sdk
 ```
 
 ```bash
 TEST_API_TYPE=gemini.generateContent \
 TEST_API_KEY=your_gemini_key_here \
 TEST_MODEL=gemini-2.5-flash \
-node dist/index.js
+pnpm test:sdk
 ```
 
 - 运行全部 provider（默认）：`openai,anthropic,gemini`
 - 指定 provider：
 
 ```bash
-TARGET_PROVIDERS=openai node dist/index.js
-TARGET_PROVIDERS=anthropic,gemini node dist/index.js
+TARGET_PROVIDERS=openai pnpm test:sdk
+TARGET_PROVIDERS=anthropic,gemini pnpm test:sdk
+TARGET_PROVIDERS=claude-agent pnpm test:sdk
 ```
 
 - 只运行指定测试用例（逗号分隔）：
 
 ```bash
-TARGET_CASES=basic,stream node dist/index.js
-TARGET_CASES=claude-agent:basic_prompt,openai:responses_* node dist/index.js
+TARGET_CASES=basic,stream pnpm test:sdk
+TARGET_CASES=claude-agent:basic_prompt,openai:responses_* pnpm test:sdk
 ```
 
 说明：
@@ -105,13 +154,13 @@ TARGET_CASES=claude-agent:basic_prompt,openai:responses_* node dist/index.js
 - 失败即停：
 
 ```bash
-FAIL_FAST=true node dist/index.js
+FAIL_FAST=true pnpm test:sdk
 ```
 
 - 输出报告（JSON + HTML + 纯文本）：
 
 ```bash
-REPORT_FILE=./report.json node dist/index.js
+REPORT_FILE=./report.json pnpm test:sdk
 ```
 
 会生成：
@@ -157,7 +206,6 @@ REPORT_FILE=./report.json node dist/index.js
 - `ANTHROPIC_API_KEY`
 - `ANTHROPIC_API_BASE_URL`
 - `ANTHROPIC_MODEL`
-- `ANTHROPIC_CONTAINER`（启用 container 参数测试）
 - `ANTHROPIC_INFERENCE_GEO`（启用 inference_geo 参数测试）
 
 ### Claude Agent
@@ -199,14 +247,23 @@ REPORT_FILE=./report.json node dist/index.js
 
 ## 代码结构
 
+项目现在使用 pnpm workspace 组织：
+
+- `packages/llm-spec/`
+  - Node CLI、backend server、SDK/Agent 测试运行器
+- `packages/reporter/`
+  - Vite + React 报告和平台前端
+- `docs/`
+  - API reference 文档快照
+
 测试执行代码按两部分组织：
 
-- `src/api-sdk-tester/environment/`
+- `packages/llm-spec/src/api-sdk-tester/environment/`
   - 运行时环境解析
   - `.env` 加载和 provider 配置
   - `TARGET_CASES` 过滤
   - HTTP 请求日志和 provider 上下文
-- `src/api-sdk-tester/cases/`
+- `packages/llm-spec/src/api-sdk-tester/cases/`
   - 各 provider/agent 的测试用例定义
   - `TestCase` 类型和用例执行器
   - provider 级别的覆盖率统计和执行摘要

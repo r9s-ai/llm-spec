@@ -1,0 +1,47 @@
+import { Codex } from '@openai/codex-sdk';
+
+import type { ProviderSummary, RunProgressHandler } from '../types';
+import { buildCodexCases, CODEX_PARAMS } from '../api-sdk-tester/cases/codex';
+import type { CodexProviderConfig } from '../api-sdk-tester/environment';
+import {
+  setCurrentProvider,
+} from '../api-sdk-tester/environment';
+import { createSetupSkippedSummary, executeProviderCases } from '../api-sdk-tester/cases/runtime';
+
+export async function runCodexCases(
+  config: CodexProviderConfig,
+  failFast: boolean,
+  concurrency: number = 1,
+  onProgress?: RunProgressHandler,
+): Promise<ProviderSummary> {
+  setCurrentProvider('codex');
+
+  if (!config.apiKey) {
+    return createSetupSkippedSummary(
+      'codex',
+      'agent',
+      config.apiBaseUrl,
+      CODEX_PARAMS,
+      'missing API key (set CODEX_API_KEY, OPENAI_API_KEY, or API_KEY)',
+      onProgress,
+    );
+  }
+
+  const client = new Codex({
+    apiKey: config.apiKey,
+    baseUrl: config.apiBaseUrl,
+  });
+
+  const cases = buildCodexCases({ client, config });
+
+  return executeProviderCases(
+    'codex',
+    'agent',
+    config.apiBaseUrl,
+    CODEX_PARAMS,
+    cases,
+    failFast,
+    concurrency,
+    onProgress,
+  );
+}
