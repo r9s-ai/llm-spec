@@ -25,7 +25,8 @@ import respx
 
 from llm_spec.adapters.base import ProviderAdapter
 from llm_spec.execute.runners import TestRunner
-from llm_spec.suites import ExecutableCase, SuiteSpec, build_executable_cases, load_SuiteSpecs
+from llm_spec.suites.registry import build_executable_cases, load_SuiteSpecs
+from llm_spec.suites.types import ExecutableCase, SuiteSpec
 from llm_spec_mock_server.mock_loader import MockDataLoader
 
 if TYPE_CHECKING:

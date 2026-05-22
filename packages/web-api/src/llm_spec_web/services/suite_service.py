@@ -6,7 +6,8 @@ import time
 from pathlib import Path
 from threading import Lock
 
-from llm_spec.suites import Registry, SuiteSpec
+from llm_spec.suites.registry import Registry
+from llm_spec.suites.types import SuiteSpec
 from llm_spec_web.core.exceptions import NotFoundError
 
 

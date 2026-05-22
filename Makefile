@@ -1,4 +1,4 @@
-.PHONY: help pre-commit-install pre-commit pre-commit-all pre-commit-files pre-commit-update \
+.PHONY: help install pre-commit-install pre-commit pre-commit-all pre-commit-files pre-commit-update \
 	test-core test-integration test-mock-all test-mock-openai test-mock-anthropic \
 	web-backend web-frontend
 
@@ -6,6 +6,7 @@ PRE_COMMIT ?= pre-commit
 
 help:
 	@echo "Targets:"
+	@echo "  install             Install Python and Node dependencies"
 	@echo "  pre-commit-install  Install git hooks"
 	@echo "  pre-commit          Run hooks on staged files"
 	@echo "  pre-commit-all      Run hooks on all files"
@@ -19,6 +20,10 @@ help:
 	@echo "  test-integration       Run integration tests under packages/core/tests/integration"
 	@echo "  web-backend            Start FastAPI backend from packages/web-api"
 	@echo "  web-frontend           Start frontend dev server from packages/web"
+
+install:
+	uv sync --all-extras --dev --frozen
+	pnpm install
 
 pre-commit-install:
 	@$(PRE_COMMIT) install

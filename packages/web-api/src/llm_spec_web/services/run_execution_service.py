@@ -25,7 +25,7 @@ from llm_spec.execute.executor import (
     run_suites_with_cancellation,
 )
 from llm_spec.execute.types import TestVerdict
-from llm_spec.suites import ExecutableCase
+from llm_spec.suites.types import ExecutableCase
 from llm_spec_web.config import settings
 from llm_spec_web.core.event_bus import event_bus
 from llm_spec_web.core.exceptions import ConfigurationError, NotFoundError, ValidationError
