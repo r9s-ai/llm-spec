@@ -3,6 +3,9 @@
 	web-backend web-frontend
 
 PRE_COMMIT ?= pre-commit
+LLM_SPEC_WEB_PORT ?= 8000
+LLM_SPEC_WEB_FRONTEND_PORT ?= 5173
+VITE_API_BASE_URL ?= http://localhost:$(LLM_SPEC_WEB_PORT)
 
 help:
 	@echo "Targets:"
@@ -18,8 +21,8 @@ help:
 	@echo "  test-mock-anthropic    Run Anthropic integration tests in mock mode"
 	@echo "  test-core              Run unit tests under packages/core/tests/unit"
 	@echo "  test-integration       Run integration tests under packages/core/tests/integration"
-	@echo "  web-backend            Start FastAPI backend from packages/web-api"
-	@echo "  web-frontend           Start frontend dev server from packages/web"
+	@echo "  web-backend            Start FastAPI backend (LLM_SPEC_WEB_PORT=8000)"
+	@echo "  web-frontend           Start frontend dev server (LLM_SPEC_WEB_FRONTEND_PORT=5173)"
 
 install:
 	uv sync --all-extras --dev --frozen
@@ -57,7 +60,7 @@ test-mock-anthropic:
 
 # --- Web backend helpers ---
 web-backend:
-	uv run python -m llm_spec_web.main
+	LLM_SPEC_WEB_PORT=$(LLM_SPEC_WEB_PORT) uv run python -m llm_spec_web.main
 
 web-frontend:
-	cd packages/web && pnpm dev
+	cd packages/web && VITE_API_BASE_URL=$(VITE_API_BASE_URL) pnpm dev -- --host 0.0.0.0 --port $(LLM_SPEC_WEB_FRONTEND_PORT)

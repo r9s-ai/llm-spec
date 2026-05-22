@@ -11,6 +11,7 @@ class WebSettings(BaseSettings):
     database_url: str = "sqlite:///./packages/web-api/src/llm_spec_web/llm_spec_web.db"
     app_toml_path: str = "llm-spec.toml"
     auto_init_db: bool = True
+    port: int = 8000
     suite_registry_cache_ttl_seconds: float = 2.0
     cors_origins: list[str] = ["*"]
 
