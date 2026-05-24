@@ -6,5 +6,5 @@
   "reportMissingTypeStubs": "none",
   "include": ["packages/core/src", "packages/core/tests", "packages/web-api/src"],
   "extraPaths": ["packages/core/src", "packages/web-api/src"],
-  "exclude": ["**/__pycache__", "temp", "logs", "reports", ".venv"]
+  "exclude": ["**/__pycache__", "temp", "logs", "reports", ".venv", "**/node_modules", "**/.*"]
 }
