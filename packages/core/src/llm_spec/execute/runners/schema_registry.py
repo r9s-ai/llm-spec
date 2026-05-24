@@ -19,17 +19,14 @@ def _init_registry() -> None:
         return
 
     # Import all schemas
-    from llm_spec.schemas.anthropic import (
+    from llm_spec.schemas.anthropic.messages import (
         AnthropicStreamChunk,
         MessagesResponse,
     )
-    from llm_spec.schemas.gemini import (
-        BatchCreateResponse,
-        CountTokensResponse,
-        EmbedContentResponse,
-        GeminiStreamChunk,
-        GenerateContentResponse,
-    )
+    from llm_spec.schemas.gemini.batch_generate_content import BatchCreateResponse
+    from llm_spec.schemas.gemini.embeddings import EmbedContentResponse
+    from llm_spec.schemas.gemini.generate_content import GeminiStreamChunk, GenerateContentResponse
+    from llm_spec.schemas.gemini.tokens import CountTokensResponse
     from llm_spec.schemas.openai.audio import (
         AudioStreamEvent,
         AudioTranscriptionResponse,
@@ -45,9 +42,6 @@ def _init_registry() -> None:
     )
     from llm_spec.schemas.openai.images import ImageResponse, ImageStreamEvent
     from llm_spec.schemas.openai.responses import ResponseObject, ResponsesStreamEvent
-    from llm_spec.schemas.xai import (
-        ChatCompletionResponse as XAIChatResponse,
-    )
 
     # Register OpenAI schemas
     _REGISTRY["openai.ChatCompletionResponse"] = ChatCompletionResponse
@@ -72,11 +66,6 @@ def _init_registry() -> None:
     # Register Anthropic schemas
     _REGISTRY["anthropic.MessagesResponse"] = MessagesResponse
     _REGISTRY["anthropic.AnthropicStreamChunk"] = AnthropicStreamChunk
-
-    # Register xAI schemas
-    _REGISTRY["xai.ChatCompletionResponse"] = XAIChatResponse
-    # xAI uses OpenAI-compatible format; streaming schema is the same as OpenAI.
-    _REGISTRY["xai.ChatCompletionChunkResponse"] = ChatCompletionChunkResponse
 
     _INITIALIZED = True
 
