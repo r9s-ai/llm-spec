@@ -75,6 +75,13 @@ repos:
   # Local hooks for project-specific checks
   - repo: local
     hooks:
+      - id: check-sensitive-files
+        name: Block runtime databases and LLM API keys
+        entry: python scripts/check_sensitive_files.py
+        language: python
+        types: [file]
+        pass_filenames: true
+
       # Check that llm-spec.toml.example exists and is valid
       - id: check-example-config
         name: Check example config exists
