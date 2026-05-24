@@ -107,4 +107,3 @@ packages/web/.env.*
 # Web API (local data)
 packages/web-api/src/llm_spec_web/.data/
 packages/web-api/src/llm_spec_web/llm_spec_web.db
-packages/web-api/src/llm_spec_web/llm_spec_web.db
