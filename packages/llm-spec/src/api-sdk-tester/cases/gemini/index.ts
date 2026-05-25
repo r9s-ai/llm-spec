@@ -66,6 +66,23 @@ function isGemini25FlashModel(model: string): boolean {
   return normalizeGeminiModelName(model).startsWith('gemini-2.5-flash');
 }
 
+const GEMINI_SAFETY_SETTING_CATEGORIES = [
+  HarmCategory.HARM_CATEGORY_UNSPECIFIED,
+  HarmCategory.HARM_CATEGORY_HARASSMENT,
+  HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+  HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+  HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+  HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY,
+] as const;
+
+const GEMINI_SAFETY_SETTING_THRESHOLDS = [
+  HarmBlockThreshold.BLOCK_NONE,
+  HarmBlockThreshold.BLOCK_ONLY_HIGH,
+  HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+  HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+  HarmBlockThreshold.HARM_BLOCK_THRESHOLD_UNSPECIFIED,
+] as const;
+
 function resolveGeminiModelScope(caseId: string): string {
   if (
     caseId === 'labels' ||
@@ -162,6 +179,22 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
           },
         });
         return summarizeGeminiResponse(response);
+      },
+    },
+    'candidate_count_multiple': {
+      description: 'candidateCount multiple candidates',
+      covers: ['candidateCount'],
+      run: async () => {
+        const response = await ai.models.generateContent({
+          model: config.model,
+          contents: 'Return two short alternative greetings.',
+          config: {
+            candidateCount: 2,
+            maxOutputTokens: 32,
+          },
+        });
+        const candidateCount = (response as { candidates?: unknown[] }).candidates?.length ?? 0;
+        return `candidates=${candidateCount}, ${summarizeGeminiResponse(response)}`;
       },
     },
     'penalties': {
@@ -287,6 +320,34 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
         return summarizeGeminiResponse(response);
       },
     },
+    'safety_settings_variants': {
+      description: 'safetySettings category and threshold variants',
+      covers: ['safetySettings'],
+      run: async () => {
+        const results: string[] = [];
+
+        for (const category of GEMINI_SAFETY_SETTING_CATEGORIES) {
+          for (const threshold of GEMINI_SAFETY_SETTING_THRESHOLDS) {
+            const response = await ai.models.generateContent({
+              model: config.model,
+              contents: 'Say hello politely.',
+              config: {
+                safetySettings: [
+                  {
+                    category,
+                    threshold,
+                  },
+                ],
+                maxOutputTokens: 16,
+              },
+            });
+            results.push(`${category}:${threshold}:${summarizeGeminiResponse(response)}`);
+          }
+        }
+
+        return results.join(' | ');
+      },
+    },
     'tools_and_tool_config': {
       description: 'function tools + toolConfig.functionCallingConfig',
       covers: ['tools', 'toolConfig'],
@@ -310,6 +371,53 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
         }
 
         return summarizeGeminiResponse(response);
+      },
+    },
+    'tool_config_mode_variants': {
+      description: 'toolConfig.functionCallingConfig mode ANY/NONE variants',
+      covers: ['tools', 'toolConfig'],
+      run: async () => {
+        const results: string[] = [];
+        const variants = [
+          {
+            label: 'any',
+            mode: FunctionCallingConfigMode.ANY,
+            prompt: 'Call echoText with text "any". Return only the tool call.',
+          },
+          {
+            label: 'none',
+            mode: FunctionCallingConfigMode.NONE,
+            prompt: 'Do not call tools. Reply with exactly: no-tool',
+          },
+        ] as const;
+
+        for (const variant of variants) {
+          const response = await ai.models.generateContent({
+            model: config.model,
+            contents: variant.prompt,
+            config: {
+              tools: [{ functionDeclarations: [functionDeclaration] }],
+              toolConfig: {
+                functionCallingConfig: {
+                  mode: variant.mode,
+                  allowedFunctionNames:
+                    variant.mode === FunctionCallingConfigMode.ANY ? ['echoText'] : undefined,
+                },
+              },
+              maxOutputTokens: 64,
+            },
+          });
+          const functionCalls = countGeminiFunctionCalls(response);
+          if (variant.mode === FunctionCallingConfigMode.ANY && functionCalls <= 0) {
+            throw new Error('expected ANY mode to produce a function call');
+          }
+          if (variant.mode === FunctionCallingConfigMode.NONE && functionCalls > 0) {
+            throw new Error('expected NONE mode to suppress function calls');
+          }
+          results.push(`${variant.label}:${functionCalls}`);
+        }
+
+        return results.join(', ');
       },
     },
     'automatic_function_calling': {
@@ -455,6 +563,32 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
           }
         }
         return `chunks=${chunkCount}, text="${truncate(text)}"`;
+      },
+    },
+    'candidate_count_multiple_stream': {
+      description: 'candidateCount multiple candidates (streaming)',
+      covers: ['candidateCount'],
+      run: async () => {
+        const stream = await ai.models.generateContentStream({
+          model: config.model,
+          contents: 'Return two short alternative greetings.',
+          config: {
+            candidateCount: 2,
+            maxOutputTokens: 32,
+          },
+        });
+        let chunkCount = 0;
+        const candidateIndexes = new Set<number>();
+        for await (const chunk of stream) {
+          chunkCount += 1;
+          const candidates = (chunk as { candidates?: Array<{ index?: number }> }).candidates ?? [];
+          for (const candidate of candidates) {
+            if (typeof candidate.index === 'number') {
+              candidateIndexes.add(candidate.index);
+            }
+          }
+        }
+        return `chunks=${chunkCount}, candidate_indexes=${candidateIndexes.size}`;
       },
     },
     'penalties_stream': {

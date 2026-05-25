@@ -200,14 +200,16 @@ REPORT_FILE=./report.json pnpm test:sdk
 - `OPENAI_AUDIO_MODEL`（启用音频模态测试）
 - `OPENAI_REASONING_MODEL`（启用 Responses API 的 reasoning 参数测试）
 - `OPENAI_RESPONSES_PROMPT_ID`（启用 Responses API 的 prompt 参数测试）
+- `OPENAI_INCLUDE_MODEL_CATALOG_CASES`（启用 GPT/OpenAI 模型目录 smoke 测试；设置 `TARGET_CASES` 时也会自动加载这些可筛选用例）
 
 ### Anthropic
 
 - `ANTHROPIC_API_KEY`
 - `ANTHROPIC_API_BASE_URL`
 - `ANTHROPIC_MODEL`
-- `ANTHROPIC_HAIKU_MODEL` / `ANTHROPIC_FAST_MODE_MODEL`（可选；未设置时相关用例使用 `ANTHROPIC_MODEL`）
+- `ANTHROPIC_OPUS_MODEL` / `ANTHROPIC_HAIKU_MODEL` / `ANTHROPIC_FAST_MODE_MODEL`（可选；未设置时相关用例使用 `ANTHROPIC_MODEL`）
 - `ANTHROPIC_INFERENCE_GEO`（启用 inference_geo 参数测试）
+- `ANTHROPIC_INCLUDE_MODEL_CATALOG_CASES`（启用 Claude Messages 模型目录 smoke 测试；设置 `TARGET_CASES` 时也会自动加载这些可筛选用例）
 
 ### Claude Agent
 

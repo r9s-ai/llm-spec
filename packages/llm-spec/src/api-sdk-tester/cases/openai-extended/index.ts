@@ -1,8 +1,7 @@
-import { Buffer, File } from 'node:buffer';
-
 import type OpenAI from 'openai';
 
 import type { OpenAIProviderConfig } from '../../environment';
+import { createFixtureFile } from '../../fixtures';
 import { defineCases } from '../define-cases';
 import { truncate } from '../runtime';
 import type { TestCase } from '../types';
@@ -46,37 +45,12 @@ export interface OpenAIExtendedCaseContext {
   config: OpenAIProviderConfig;
 }
 
-const ONE_BY_ONE_PNG =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
-
-function createPngFile(name: string): File {
-  return new File([Buffer.from(ONE_BY_ONE_PNG, 'base64')], name, { type: 'image/png' });
+function createPngFile(name: string) {
+  return createFixtureFile(`images/${name}`, name, 'image/png');
 }
 
-function createSilentWavFile(name: string): File {
-  const sampleRate = 16_000;
-  const channelCount = 1;
-  const bitsPerSample = 16;
-  const sampleCount = sampleRate;
-  const bytesPerSample = bitsPerSample / 8;
-  const dataSize = sampleCount * channelCount * bytesPerSample;
-  const buffer = Buffer.alloc(44 + dataSize);
-
-  buffer.write('RIFF', 0, 'ascii');
-  buffer.writeUInt32LE(36 + dataSize, 4);
-  buffer.write('WAVE', 8, 'ascii');
-  buffer.write('fmt ', 12, 'ascii');
-  buffer.writeUInt32LE(16, 16);
-  buffer.writeUInt16LE(1, 20);
-  buffer.writeUInt16LE(channelCount, 22);
-  buffer.writeUInt32LE(sampleRate, 24);
-  buffer.writeUInt32LE(sampleRate * channelCount * bytesPerSample, 28);
-  buffer.writeUInt16LE(channelCount * bytesPerSample, 32);
-  buffer.writeUInt16LE(bitsPerSample, 34);
-  buffer.write('data', 36, 'ascii');
-  buffer.writeUInt32LE(dataSize, 40);
-
-  return new File([buffer], name, { type: 'audio/wav' });
+function createSilentWavFile(name: string) {
+  return createFixtureFile(`audio/${name}`, name, 'audio/wav');
 }
 
 function summarizeObject(value: unknown): string {

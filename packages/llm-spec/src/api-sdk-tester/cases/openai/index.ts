@@ -14,7 +14,9 @@ import {
   isOSeriesModel,
   isOpenAICompatibilityGateway,
   isReasoningModel,
+  OPENAI_IMAGE_DATA_URI_FIXTURES,
   resolveChatCompletionOutputLimit,
+  resolveOpenAIChatSamplingParams,
   resolveReasoningEffort,
   withPromptCacheRetentionFallback,
 } from './shared';
@@ -44,6 +46,44 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
           return summarizeOpenAIResponse(response);
         },
       },
+      'input_text_image': {
+        description: 'messages text + image_url data URI variants',
+        covers: ['messages', 'messages[0].content.image.format'],
+        precondition: () =>
+          isGeminiOpenAICompatibilityTarget(config.model)
+            ? 'Gemini OpenAI compatibility image input is covered by gemini_multimodal_image_input'
+            : undefined,
+        run: async () => {
+          const results: string[] = [];
+
+          for (const fixture of OPENAI_IMAGE_DATA_URI_FIXTURES) {
+            const response = await client.chat.completions.create({
+              model: config.model,
+              messages: [
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'text',
+                      text: 'Describe the attached image in one short sentence.',
+                    },
+                    {
+                      type: 'image_url',
+                      image_url: {
+                        url: fixture.dataUri,
+                      },
+                    },
+                  ],
+                },
+              ] as never,
+              max_completion_tokens: outputLimit(32),
+            });
+            results.push(`${fixture.format}:${summarizeOpenAIResponse(response)}`);
+          }
+
+          return results.join(' | ');
+        },
+      },
       'sampling_and_max_completion': {
         description: 'temperature/top_p/penalties/max_completion_tokens',
         covers: [
@@ -57,10 +97,7 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
           const response = await client.chat.completions.create({
             model: config.model,
             messages: [...baseMessages],
-            temperature: 0.2,
-            top_p: 0.9,
-            presence_penalty: 0.1,
-            frequency_penalty: 0.1,
+            ...resolveOpenAIChatSamplingParams(config.model),
             max_completion_tokens: outputLimit(32),
           });
           return summarizeOpenAIResponse(response);
@@ -445,10 +482,7 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
           const stream = await client.chat.completions.create({
             model: config.model,
             messages: [...baseMessages],
-            temperature: 0.2,
-            top_p: 0.9,
-            presence_penalty: 0.1,
-            frequency_penalty: 0.1,
+            ...resolveOpenAIChatSamplingParams(config.model),
             max_completion_tokens: outputLimit(32),
             stream: true,
             stream_options: chatStreamOptions,

@@ -20,7 +20,6 @@ import {
   Save,
   Search,
   Server,
-  ServerCrash,
   Settings2,
   Trash2,
   Upload,
@@ -48,7 +47,9 @@ import {
 } from '@/lib/browser-runner'
 import {
   checkBackendHealth,
+  createBackendJob,
   listBackendRunHistory,
+  loadBackendJobStatus,
   loadBackendRunHistoryReport,
   runBackendCases,
   saveBackendRunReport,
@@ -57,6 +58,8 @@ import { formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type {
   AgentProvider,
+  BackendJobRequest,
+  BackendJobStatusResponse,
   BackendRunHistoryEntry,
   PlatformRunConfig,
   RunProgressEvent,
@@ -110,6 +113,11 @@ interface RunSettings {
 interface RunDraft {
   targets: RunTarget[]
   settings: RunSettings
+}
+
+interface ActiveBackendJob {
+  id: string
+  backendUrl: string
 }
 
 interface PlatformConsoleProps {
@@ -626,6 +634,7 @@ const SITE_STORAGE_KEY = 'llm-spec-site-profiles'
 const RUN_DRAFT_STORAGE_KEY = 'llm-spec-run-draft'
 const LAST_SITE_NAME_STORAGE_KEY = 'llm-spec-last-site-name'
 const LAST_SITE_CONFIG_STORAGE_KEY = 'llm-spec-last-site'
+const ACTIVE_BACKEND_JOB_STORAGE_KEY = 'llm-spec-active-backend-job'
 const LEGACY_PROFILE_STORAGE_KEY = 'llm-spec-profiles'
 const LEGACY_LAST_PROFILE_STORAGE_KEY = 'llm-spec-last-profile'
 
@@ -940,6 +949,34 @@ function loadRunDraft(): RunDraft {
   }
 
   return createDefaultRunDraft()
+}
+
+function loadActiveBackendJob(): ActiveBackendJob | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_BACKEND_JOB_STORAGE_KEY)
+    if (!raw) {
+      return null
+    }
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object') {
+      return null
+    }
+    const value = parsed as { id?: unknown; backendUrl?: unknown }
+    if (typeof value.id !== 'string' || typeof value.backendUrl !== 'string') {
+      return null
+    }
+    return { id: value.id, backendUrl: value.backendUrl }
+  } catch {
+    return null
+  }
+}
+
+function saveActiveBackendJob(job: ActiveBackendJob | null): void {
+  if (!job) {
+    localStorage.removeItem(ACTIVE_BACKEND_JOB_STORAGE_KEY)
+    return
+  }
+  localStorage.setItem(ACTIVE_BACKEND_JOB_STORAGE_KEY, JSON.stringify(job))
 }
 
 function parseCustomHeaders(value: string): Record<string, string> | undefined {
@@ -1553,6 +1590,44 @@ function buildRunSnapshot(
   }
 }
 
+function buildBackendJobRequest(
+  siteName: string | null,
+  site: SiteProfileConfig,
+  activeTargets: RunTarget[],
+  headers: Record<string, string> | undefined,
+  timeoutMs: number,
+  concurrency: number,
+  runSnapshot: RunSnapshot,
+): BackendJobRequest {
+  return {
+    apiKey: emptyToUndefined(site.apiKey),
+    apiBaseUrl: emptyToUndefined(site.apiBaseUrl),
+    backendUrl: emptyToUndefined(site.backendUrl),
+    standardExecution: site.standardExecution,
+    timeoutMs,
+    concurrency,
+    customHeaders: headers,
+    apiVersion: emptyToUndefined(site.apiVersion),
+    workingDirectory: emptyToUndefined(site.workingDirectory),
+    skipGitRepoCheck: site.skipGitRepoCheck,
+    testImagePath: emptyToUndefined(site.testImagePath),
+    persistResult: true,
+    runSnapshot: {
+      ...runSnapshot,
+      siteName: siteName ?? undefined,
+    },
+    targets: activeTargets.map((target) => ({
+      id: target.id,
+      kind: target.kind,
+      enabled: target.enabled,
+      apiType: target.kind === 'standard' ? target.apiType : undefined,
+      agentProvider: target.kind === 'agent' ? target.agentProvider : undefined,
+      model: emptyToUndefined(getRunTargetModel(target)),
+      targetCases: emptyToUndefined(target.targetCases),
+    })),
+  }
+}
+
 function formatHistoryTitle(entry: BackendRunHistoryEntry): string {
   if (entry.siteName) {
     return entry.siteName
@@ -1656,6 +1731,16 @@ function summarizeProgress(targets: readonly TargetProgressState[]): RunProgress
   }
 }
 
+function isBackendJobTerminal(job: BackendJobStatusResponse): boolean {
+  return job.status === 'completed' || job.status === 'failed'
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
+
 export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, error }: PlatformConsoleProps) {
   const [profiles, setProfiles] = useState<SavedProfile[]>(() => loadProfiles())
   const [profileName, setProfileName] = useState('')
@@ -1669,6 +1754,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
   const [editingProfileName, setEditingProfileName] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [runProgress, setRunProgress] = useState<RunProgressState>(EMPTY_RUN_PROGRESS)
+  const [activeBackendJob, setActiveBackendJob] = useState<ActiveBackendJob | null>(() => loadActiveBackendJob())
   const [localError, setLocalError] = useState<string | null>(null)
   const [backendStatus, setBackendStatus] = useState<string | null>(null)
   const [historyItems, setHistoryItems] = useState<BackendRunHistoryEntry[]>([])
@@ -1676,6 +1762,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
   const [historyError, setHistoryError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const initialProfileLoadedRef = useRef(false)
+  const backendJobPollingRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (initialProfileLoadedRef.current) {
@@ -1719,12 +1806,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
     () => runDraft.targets.filter((target) => target.enabled),
     [runDraft.targets],
   )
-  const standardTargetCount = activeTargets.filter((target) => target.kind === 'standard').length
   const agentTargetCount = activeTargets.filter((target) => target.kind === 'agent').length
-  const selectedCaseCount = runDraft.targets.reduce(
-    (sum, target) => sum + parseTargetCaseValue(target.targetCases).length,
-    0,
-  )
   const requiresBackend = siteConfig.standardExecution === 'backend' || agentTargetCount > 0
   const executionSummary = (() => {
     if (siteConfig.standardExecution === 'backend') {
@@ -1918,6 +2000,62 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
     }
   }, [])
 
+  const waitForBackendJob = useCallback(async (
+    jobRef: ActiveBackendJob,
+    initialJob?: BackendJobStatusResponse,
+  ) => {
+    if (backendJobPollingRef.current === jobRef.id) {
+      return
+    }
+
+    backendJobPollingRef.current = jobRef.id
+    setRunning(true)
+    setLocalError(null)
+
+    try {
+      let job = initialJob ?? await loadBackendJobStatus(jobRef.backendUrl, jobRef.id)
+      setRunProgress(job.progress)
+
+      while (!isBackendJobTerminal(job)) {
+        await delay(1000)
+        job = await loadBackendJobStatus(jobRef.backendUrl, jobRef.id)
+        setRunProgress(job.progress)
+      }
+
+      if (job.status === 'completed') {
+        if (job.summary) {
+          onReport(job.summary)
+        }
+        setBackendStatus(`Backend job ${job.id} complete`)
+        try {
+          setHistoryItems(await listBackendRunHistory(jobRef.backendUrl))
+          setHistoryError(null)
+        } catch (historyErrorValue) {
+          setHistoryError(historyErrorValue instanceof Error ? historyErrorValue.message : String(historyErrorValue))
+        }
+      } else {
+        setLocalError(job.error ?? `Backend job ${job.id} failed`)
+      }
+
+      saveActiveBackendJob(null)
+      setActiveBackendJob(null)
+    } catch (jobError) {
+      setLocalError(jobError instanceof Error ? jobError.message : String(jobError))
+    } finally {
+      if (backendJobPollingRef.current === jobRef.id) {
+        backendJobPollingRef.current = null
+      }
+      setRunning(false)
+    }
+  }, [onReport])
+
+  useEffect(() => {
+    if (!activeBackendJob) {
+      return
+    }
+    void waitForBackendJob(activeBackendJob)
+  }, [activeBackendJob, waitForBackendJob])
+
   const handleRun = useCallback(async () => {
     setRunning(true)
     setLocalError(null)
@@ -1934,6 +2072,24 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
       const runUsesBackend = activeTargets.some((target) => (
         target.kind === 'agent' || siteConfig.standardExecution === 'backend'
       ))
+
+      if (siteConfig.standardExecution === 'backend') {
+        const initialJob = await createBackendJob(siteConfig.backendUrl, buildBackendJobRequest(
+          selectedProfileName,
+          siteConfig,
+          activeTargets,
+          headers,
+          timeoutMs,
+          concurrency,
+          runSnapshot,
+        ))
+        const jobRef = { id: initialJob.id, backendUrl: siteConfig.backendUrl }
+        saveActiveBackendJob(jobRef)
+        setActiveBackendJob(jobRef)
+        await waitForBackendJob(jobRef, initialJob)
+        return
+      }
+
       const summaries: RunSummary[] = []
       const progressTargets = activeTargets.map(createTargetProgress)
       const progressByTargetId = new Map(progressTargets.map((target) => [target.id, target]))
@@ -2016,20 +2172,18 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
               runSnapshot,
             }
 
-            const report = siteConfig.standardExecution === 'backend'
-              ? await runBackendCases(siteConfig.backendUrl, config, { onProgress: progressHandlerFor(target) })
-              : await runBrowserStandardCases({
-                apiType: target.apiType,
-                apiKey: config.apiKey,
-                apiBaseUrl: config.apiBaseUrl,
-                model,
-                timeoutMs,
-                targetCases: config.targetCases,
-                customHeaders: headers,
-                apiVersion: config.apiVersion,
-                failFast: false,
-                onProgress: progressHandlerFor(target),
-              })
+            const report = await runBrowserStandardCases({
+              apiType: target.apiType,
+              apiKey: config.apiKey,
+              apiBaseUrl: config.apiBaseUrl,
+              model,
+              timeoutMs,
+              targetCases: config.targetCases,
+              customHeaders: headers,
+              apiVersion: config.apiVersion,
+              failFast: false,
+              onProgress: progressHandlerFor(target),
+            })
             summaries.push(report)
             completeTarget(target)
           } else {
@@ -2074,7 +2228,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
     } finally {
       setRunning(false)
     }
-  }, [activeTargets, onReport, runDraft, selectedProfileName, siteConfig])
+  }, [activeTargets, onReport, runDraft, selectedProfileName, siteConfig, waitForBackendJob])
 
   const handleCheckBackend = useCallback(async () => {
     setBackendStatus(null)
@@ -2161,26 +2315,51 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                   muted={!selectedProfile}
                 />
                 <SummaryField
-                  label="Targets"
-                  value={`${activeTargets.length} enabled / ${runDraft.targets.length} total`}
-                  muted={activeTargets.length === 0}
-                />
-                <SummaryField
-                  label="Model Rows"
-                  value={`${standardTargetCount} API, ${agentTargetCount} agent`}
-                />
-                <SummaryField label="Execution" value={executionSummary} />
-                <SummaryField
-                  label="Target Cases"
-                  value={selectedCaseCount > 0 ? `${selectedCaseCount} filters` : 'All cases'}
-                  muted={selectedCaseCount === 0}
-                />
-                <SummaryField
                   label="Endpoint"
                   value={siteConfig.apiBaseUrl || 'Provider default'}
                   muted={!siteConfig.apiBaseUrl}
                 />
+                <SummaryField label="Execution" value={executionSummary} />
               </dl>
+
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-12">
+                <div className="md:col-span-3">
+                  <Field
+                    label="Timeout Ms"
+                    value={runDraft.settings.timeoutMs}
+                    onChange={(value) => { updateRunSettings({ timeoutMs: value }) }}
+                    type="number"
+                  />
+                </div>
+                <div className="md:col-span-3">
+                  <Field
+                    label="Concurrency"
+                    value={runDraft.settings.concurrency}
+                    onChange={(value) => { updateRunSettings({ concurrency: value }) }}
+                    type="number"
+                  />
+                </div>
+                <div className="md:col-span-6">
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-semibold text-slate-700">Backend</label>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <div className="flex h-10 min-w-0 flex-1 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600">
+                        <span className="truncate">
+                          {requiresBackend ? siteConfig.backendUrl : 'Standard API targets run from browser'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="flex h-10 w-full shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-50 sm:w-auto"
+                        onClick={handleCheckBackend}
+                        disabled={running || !requiresBackend}
+                      >
+                        Check
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2285,52 +2464,18 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                   </div>
                 </div>
               </div>
-
-              <div className="grid grid-cols-1 gap-5 border-t border-slate-100 pt-5 md:grid-cols-12">
-                <div className="md:col-span-3">
-                  <Field
-                    label="Timeout Ms"
-                    value={runDraft.settings.timeoutMs}
-                    onChange={(value) => { updateRunSettings({ timeoutMs: value }) }}
-                    type="number"
-                  />
-                </div>
-                <div className="md:col-span-3">
-                  <Field
-                    label="Concurrency"
-                    value={runDraft.settings.concurrency}
-                    onChange={(value) => { updateRunSettings({ concurrency: value }) }}
-                    type="number"
-                  />
-                </div>
-              </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 bg-slate-50/50 px-6 py-4">
-              <div className="text-sm text-slate-500">
-                {requiresBackend ? `Backend: ${siteConfig.backendUrl}` : 'Standard API targets will run from the browser'}
-              </div>
-
-              <div className="flex w-full items-center gap-3 sm:w-auto">
-                <button
-                  type="button"
-                  className="flex flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-50 sm:flex-none"
-                  onClick={handleCheckBackend}
-                  disabled={running || !requiresBackend}
-                >
-                  <ServerCrash className="mr-2 h-4 w-4 text-slate-400" />
-                  Check Backend
-                </button>
-                <button
-                  type="button"
-                  className="flex flex-1 transform items-center justify-center rounded-lg bg-slate-900 px-6 py-2 text-sm font-semibold text-white shadow-md transition-all duration-150 hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-lg disabled:pointer-events-none disabled:opacity-50 sm:flex-none"
-                  onClick={handleRun}
-                  disabled={running || loading}
-                >
-                  {running ? <RotateCcw className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" fill="currentColor" />}
-                  {running ? 'Running...' : 'Run Tests'}
-                </button>
-              </div>
+            <div className="flex flex-wrap items-center justify-end gap-4 border-t border-slate-100 bg-slate-50/50 px-6 py-4">
+              <button
+                type="button"
+                className="flex w-full transform items-center justify-center rounded-lg bg-slate-900 px-6 py-2 text-sm font-semibold text-white shadow-md transition-all duration-150 hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-lg disabled:pointer-events-none disabled:opacity-50 sm:w-auto"
+                onClick={handleRun}
+                disabled={running || loading}
+              >
+                {running ? <RotateCcw className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" fill="currentColor" />}
+                {running ? 'Running...' : 'Run Tests'}
+              </button>
             </div>
 
             {backendStatus && (
@@ -2505,6 +2650,12 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                     {requiresBackend ? <Server className="h-3 w-3 text-slate-400" /> : <Wifi className="h-3 w-3 text-slate-400" />}
                     {executionSummary}
                   </div>
+                  {activeBackendJob && (
+                    <div className="flex items-center gap-2">
+                      <Server className="h-3 w-3 text-slate-400" />
+                      Job {activeBackendJob.id}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

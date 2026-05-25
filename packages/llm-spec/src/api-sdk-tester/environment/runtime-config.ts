@@ -28,6 +28,7 @@ export interface AnthropicProviderConfig {
   apiKey?: string;
   apiBaseUrl?: string;
   model: string;
+  opusModel?: string;
   haikuModel?: string;
   fastModeModel?: string;
   timeoutMs: number;
@@ -455,6 +456,7 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     apiKey: firstNonEmptyEnv('ANTHROPIC_API_KEY', 'API_KEY'),
     apiBaseUrl: firstNonEmptyEnv('ANTHROPIC_API_BASE_URL', 'ANTHROPIC_BASE_URL', 'API_BASE_URL'),
     model: firstNonEmptyEnv('ANTHROPIC_MODEL') ?? 'claude-3-5-haiku-latest',
+    opusModel: firstNonEmptyEnv('ANTHROPIC_OPUS_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL'),
     haikuModel: firstNonEmptyEnv('ANTHROPIC_HAIKU_MODEL'),
     fastModeModel: firstNonEmptyEnv('ANTHROPIC_FAST_MODE_MODEL', 'ANTHROPIC_OPUS_MODEL'),
     timeoutMs: parseNumber(firstNonEmptyEnv('ANTHROPIC_TIMEOUT_MS'), defaultTimeoutMs),

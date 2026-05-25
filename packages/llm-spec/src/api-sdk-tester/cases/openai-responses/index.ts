@@ -6,6 +6,8 @@ import {
   type PromptCacheRetentionValue,
   isOpenAICompatibilityGateway,
   isReasoningModel,
+  OPENAI_IMAGE_DATA_URI_FIXTURES,
+  resolveOpenAIResponsesSamplingParams,
   resolveReasoningEffort,
   withPromptCacheRetentionFallback,
 } from '../openai/shared';
@@ -102,6 +104,40 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
           return summarizeOpenAIResponses(response);
         },
       },
+      'responses_input_text_image': {
+        description: 'responses input text + input_image data URI variants',
+        covers: ['input', 'input_image.format'],
+        run: async () => {
+          const results: string[] = [];
+
+          for (const fixture of OPENAI_IMAGE_DATA_URI_FIXTURES) {
+            const response = await client.responses.create(
+              {
+                model: config.model,
+                input: [
+                  {
+                    role: 'user',
+                    content: [
+                      {
+                        type: 'input_text',
+                        text: 'Describe the attached image in one short sentence.',
+                      },
+                      {
+                        type: 'input_image',
+                        image_url: fixture.dataUri,
+                      },
+                    ],
+                  },
+                ],
+                max_output_tokens: 64,
+              } as never,
+            );
+            results.push(`${fixture.format}:${summarizeOpenAIResponses(response)}`);
+          }
+
+          return results.join(' | ');
+        },
+      },
       'responses_sampling_and_limits': {
         description: 'responses temperature/top_p/max_output_tokens',
         covers: ['temperature', 'top_p', 'max_output_tokens'],
@@ -109,8 +145,7 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
           const response = await client.responses.create({
             model: config.model,
             input: 'Reply with exactly one short word.',
-            temperature: 0.2,
-            top_p: 0.9,
+            ...resolveOpenAIResponsesSamplingParams(config.model),
             max_output_tokens: 32,
           });
           return summarizeOpenAIResponses(response);
@@ -598,8 +633,7 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
           const stream = await client.responses.create({
             model: config.model,
             input: 'Reply with exactly one short word.',
-            temperature: 0.2,
-            top_p: 0.9,
+            ...resolveOpenAIResponsesSamplingParams(config.model),
             max_output_tokens: 32,
             stream: true,
             stream_options: {

@@ -8,7 +8,9 @@ import {
   isLikelyAudioOutputModel,
   isReasoningModel,
   resolveChatCompletionOutputLimit,
+  resolveOpenAINChoices,
   resolveReasoningEffort,
+  skipGpt5NanoNChoiceFanout,
   withPromptCacheRetentionFallback,
 } from './shared';
 import { buildOpenAIChatServedModelCases } from './models';
@@ -41,7 +43,8 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
         description: 'n parameter for multiple choices',
         covers: ['n'],
         precondition: () =>
-          skipOpenAIOnlyCaseOnGemini('n>1 fan-out generation on chat.completions'),
+          skipOpenAIOnlyCaseOnGemini('n>1 fan-out generation on chat.completions') ??
+          skipGpt5NanoNChoiceFanout(config.model, 'n>1 fan-out generation on chat.completions'),
         run: async () => {
           const response = await client.chat.completions.create({
             model: config.model,
@@ -91,7 +94,7 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
                 seed: 7,
                 service_tier: 'auto',
                 store: true,
-                n: 2,
+                n: resolveOpenAINChoices(config.model, 2),
               } as never,
             ),
             preferredRetention,
@@ -334,7 +337,11 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
         description: 'n parameter for multiple choices (streaming)',
         covers: ['n', 'stream', 'stream_options'],
         precondition: () =>
-          skipOpenAIOnlyCaseOnGemini('n>1 fan-out generation on streamed chat.completions'),
+          skipOpenAIOnlyCaseOnGemini('n>1 fan-out generation on streamed chat.completions') ??
+          skipGpt5NanoNChoiceFanout(
+            config.model,
+            'n>1 fan-out generation on streamed chat.completions',
+          ),
         run: async () => {
           const stream = await client.chat.completions.create({
             model: config.model,
@@ -403,7 +410,7 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
                   seed: 7,
                   service_tier: 'auto',
                   store: true,
-                  n: 2,
+                  n: resolveOpenAINChoices(config.model, 2),
                   stream: true,
                   stream_options: chatStreamOptions,
                 } as never,

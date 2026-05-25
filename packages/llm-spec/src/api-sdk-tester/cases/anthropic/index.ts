@@ -16,9 +16,11 @@ import type {
   TestCaseHttpTrace,
 } from '../../../types';
 import type { AnthropicProviderConfig, ClaudeAgentProviderConfig } from '../../environment';
+import { IMAGE_INPUT_FIXTURES, readFixtureBase64 } from '../../fixtures';
 import { formatError, summarizeAnthropicResponse, truncate } from '../runtime';
 import type { TestCase } from '../types';
 import { defineCases } from '../define-cases';
+import { buildAnthropicMessageServedModelCases } from './models';
 
 export const ANTHROPIC_MESSAGE_PARAMS = [
   'max_tokens',
@@ -100,6 +102,9 @@ function supportsExtendedThinking(model: string): boolean {
 }
 
 function resolveAnthropicMessageModelScope(caseId: string, config: AnthropicProviderConfig): string {
+  if (caseId.startsWith('different_model_opus')) {
+    return config.opusModel ?? config.model;
+  }
   if (caseId.startsWith('different_model_haiku')) {
     return config.haikuModel ?? config.model;
   }
@@ -140,6 +145,7 @@ export function getClaudeAgentCaseHttpTrace(caseId: string): TestCaseHttpTrace |
 }
 
 export function buildAnthropicCases({ client, config }: AnthropicCaseContext): TestCase[] {
+  const opusModel = config.opusModel ?? config.model;
   const haikuModel = config.haikuModel ?? config.model;
   const fastModeModel = config.fastModeModel ?? config.model;
   const baseMessages = [{ role: 'user', content: 'Reply with exactly: ok' }] as const;
@@ -161,24 +167,12 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
       additionalProperties: false,
     },
   };
-  const imageMediaTypeFixtures = [
-    {
-      mediaType: 'image/jpeg',
-      data: '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSEUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqGhcSlhY2iicKj8lJ4eXm5jpSFhoeIiZqSlsrFi5v0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD5/ooooA//2Q=',
-    },
-    {
-      mediaType: 'image/png',
-      data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
-    },
-    {
-      mediaType: 'image/gif',
-      data: 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
-    },
-    {
-      mediaType: 'image/webp',
-      data: 'UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4H',
-    },
-  ] as const;
+  const imageMediaTypeFixtures = IMAGE_INPUT_FIXTURES
+    .filter((fixture) => fixture.format !== 'jpg')
+    .map((fixture) => ({
+      mediaType: fixture.mimeType,
+      data: readFixtureBase64(fixture.fileName),
+    }));
   const createMessageUnsafe = client.messages.create.bind(client.messages) as unknown as (
     body: Record<string, unknown>,
     options?: Record<string, unknown>,
@@ -224,6 +218,18 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
           messages: [...baseMessages],
         });
         return `model=${haikuModel}, ${summarizeAnthropicResponse(response)}`;
+      },
+    },
+    'different_model_opus': {
+      description: 'different model: configured Opus model slot',
+      covers: ['model'],
+      run: async () => {
+        const response = await createMessage({
+          model: opusModel,
+          max_tokens: 64,
+          messages: [...baseMessages],
+        });
+        return `model=${opusModel}, ${summarizeAnthropicResponse(response)}`;
       },
     },
     'sampling_and_stop': {
@@ -273,7 +279,7 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
     },
     'image_source_media_type': {
       description: 'image source media_type variants',
-      covers: ['messages'],
+      covers: ['messages', 'image.source.media_type'],
       run: async () => {
         const results: string[] = [];
 
@@ -307,6 +313,35 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
         return results.join(' | ');
       },
     },
+    'image_source_type_url': {
+      description: 'image source URL variant',
+      covers: ['messages', 'image.source.type'],
+      run: async () => {
+        const response = await createMessage({
+          model: config.model,
+          max_tokens: 64,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: {
+                    type: 'url',
+                    url: 'https://upload.wikimedia.org/wikipedia/commons/a/a7/Camponotus_flavomarginatus_ant.jpg',
+                  },
+                },
+                {
+                  type: 'text',
+                  text: 'What is in the above image? Reply briefly.',
+                },
+              ],
+            },
+          ],
+        });
+        return summarizeAnthropicResponse(response);
+      },
+    },
     'output_config_json_schema': {
       description: 'output_config with structured output schema',
       covers: ['output_config'],
@@ -336,6 +371,26 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
           },
         });
         return summarizeAnthropicResponse(response);
+      },
+    },
+    'service_tier_variants': {
+      description: 'service_tier auto/standard_only variants',
+      covers: ['service_tier'],
+      run: async () => {
+        const results: string[] = [];
+        const serviceTiers = ['auto', 'standard_only'] as const;
+
+        for (const serviceTier of serviceTiers) {
+          const response = await createMessage({
+            model: config.model,
+            max_tokens: 64,
+            service_tier: serviceTier,
+            messages: [...baseMessages],
+          });
+          results.push(`${serviceTier}:${summarizeAnthropicResponse(response)}`);
+        }
+
+        return results.join(' | ');
       },
     },
     'tools_auto_choice': {
@@ -380,6 +435,43 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
           },
         });
         return summarizeAnthropicResponse(response);
+      },
+    },
+    'tool_choice_any_none_variants': {
+      description: 'tool_choice any/none variants',
+      covers: ['tools', 'tool_choice'],
+      run: async () => {
+        const results: string[] = [];
+        const choices = [
+          {
+            label: 'any',
+            value: { type: 'any' },
+            prompt: 'Use the echo tool and pass {"text":"any"}.',
+          },
+          {
+            label: 'none',
+            value: { type: 'none' },
+            prompt: 'Do not use tools. Reply with exactly: no-tool',
+          },
+        ] as const;
+
+        for (const choice of choices) {
+          const response = await createMessage({
+            model: config.model,
+            max_tokens: 128,
+            messages: [
+              {
+                role: 'user',
+                content: choice.prompt,
+              },
+            ],
+            tools: [echoTool],
+            tool_choice: choice.value,
+          });
+          results.push(`${choice.label}:${summarizeAnthropicResponse(response)}`);
+        }
+
+        return results.join(' | ');
       },
     },
     'stream': {
@@ -705,6 +797,42 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
           }
         }
         return `events=${eventCount}, text="${truncate(text)}"`;
+      },
+    },
+    'stream_tool_use_any': {
+      description: 'streaming tool use with tool_choice any',
+      covers: ['tools', 'tool_choice', 'stream'],
+      run: async () => {
+        const stream = await createMessage({
+          model: config.model,
+          max_tokens: 128,
+          stream: true,
+          messages: [
+            {
+              role: 'user',
+              content: 'Use the echo tool and pass {"text":"stream-any"}.',
+            },
+          ],
+          tools: [echoTool],
+          tool_choice: {
+            type: 'any',
+          },
+        });
+
+        let eventCount = 0;
+        let text = '';
+        let toolDeltaCount = 0;
+        for await (const event of stream) {
+          eventCount += 1;
+          const eventObj = event as { type?: string; delta?: { type?: string; text?: string } };
+          if (eventObj.type === 'content_block_delta' && eventObj.delta?.type === 'text_delta') {
+            text += eventObj.delta.text ?? '';
+          }
+          if (eventObj.type === 'content_block_delta' && eventObj.delta?.type === 'input_json_delta') {
+            toolDeltaCount += 1;
+          }
+        }
+        return `events=${eventCount}, tool_deltas=${toolDeltaCount}, text="${truncate(text)}"`;
       },
     },
     'thinking_stream': {
@@ -1358,11 +1486,14 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
     },
   });
 
-  return cases.map((testCase) => ({
-    ...testCase,
-    protocol: 'anthropic.messages',
-    modelScope: resolveAnthropicMessageModelScope(testCase.id, config),
-  }));
+  return [
+    ...cases.map((testCase) => ({
+      ...testCase,
+      protocol: 'anthropic.messages',
+      modelScope: resolveAnthropicMessageModelScope(testCase.id, config),
+    })),
+    ...buildAnthropicMessageServedModelCases({ client, config }),
+  ];
 }
 
 export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestCase[] {

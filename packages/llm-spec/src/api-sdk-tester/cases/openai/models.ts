@@ -2,6 +2,7 @@ import { defineCases } from '../define-cases';
 import { summarizeOpenAIResponse, summarizeOpenAIResponses } from '../runtime';
 import type { TestCase } from '../types';
 import {
+  OPENAI_IMAGE_DATA_URI_FIXTURES,
   createBaseMessages,
   isOpenAICompatibilityGateway,
   type OpenAICaseContext,
@@ -18,19 +19,15 @@ export const OPENAI_CHAT_SERVED_MODEL_IDS = [
   'gpt-5.4-mini-2026-03-17',
   'gpt-5.4-nano',
   'gpt-5.4-nano-2026-03-17',
-  'gpt-5.3-codex',
   'chat-latest',
   'gpt-5.3-chat-latest',
-  'gpt-5.2',
   'gpt-5.2-2025-12-11',
   'gpt-5.2-chat-latest',
   'gpt-5.2-pro',
   'gpt-5.2-pro-2025-12-11',
-  'gpt-5.2-codex',
   'gpt-5.1',
   'gpt-5.1-2025-11-13',
   'gpt-5.1-codex',
-  'gpt-5.1-codex-mini',
   'gpt-5.1-mini',
   'gpt-5.1-chat-latest',
   'gpt-5',
@@ -101,6 +98,10 @@ export const OPENAI_RESPONSES_ONLY_SERVED_MODEL_IDS = [
   'gpt-5.5-pro-2026-04-23',
   'gpt-5.4-pro',
   'gpt-5.4-pro-2026-03-05',
+  'gpt-5.3-codex',
+  'gpt-5.2',
+  'gpt-5.2-codex',
+  'gpt-5.1-codex-mini',
   'gpt-5-codex',
   'gpt-5-pro',
   'gpt-5-pro-2025-10-06',
@@ -158,6 +159,210 @@ function isLongRunningResponsesModel(model: string): boolean {
   return normalized.includes('-pro') || normalized.includes('deep-research');
 }
 
+function addDevelopGpt5MiniChatCatalogCases(
+  cases: Record<string, {
+    description: string;
+    covers: readonly string[];
+    precondition: () => string | undefined;
+    run: () => Promise<string>;
+  }>,
+  context: OpenAICaseContext,
+): void {
+  const { client } = context;
+  const model = 'gpt-5-mini';
+  const baseCaseId = openAIModelCatalogCaseId('model_', model);
+  const precondition = createOpenAIModelCatalogPrecondition(context, 'chat.completions');
+  const reasoningEfforts = ['none', 'minimal'] as const;
+
+  for (const fixture of OPENAI_IMAGE_DATA_URI_FIXTURES) {
+    cases[`${baseCaseId}_input_text_image_${fixture.format}`] = {
+      description: `OpenAI chat model catalog multimodal smoke (${fixture.format}): ${model}`,
+      covers: ['model', 'messages[0].content.image.format'],
+      precondition,
+      run: async () => {
+        const response = await client.chat.completions.create({
+          model,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Describe the attached image in one short sentence.',
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: fixture.dataUri,
+                  },
+                },
+              ],
+            },
+          ] as never,
+          max_completion_tokens: 1024,
+        });
+        return `model=${model}, format=${fixture.format}, ${summarizeOpenAIResponse(response)}`;
+      },
+    };
+  }
+
+  for (const effort of reasoningEfforts) {
+    cases[`${baseCaseId}_reasoning_effort_${effort}`] = {
+      description: `OpenAI chat model catalog reasoning_effort=${effort}: ${model}`,
+      covers: ['model', 'reasoning_effort'],
+      precondition,
+      run: async () => {
+        const response = await client.chat.completions.create({
+          model,
+          messages: createBaseMessages(model),
+          reasoning_effort: effort,
+          max_completion_tokens: 1024,
+        });
+        return `model=${model}, effort=${effort}, ${summarizeOpenAIResponse(response)}`;
+      },
+    };
+  }
+
+  cases[`${baseCaseId}_stream`] = {
+    description: `OpenAI chat model catalog stream smoke: ${model}`,
+    covers: ['model', 'stream'],
+    precondition,
+    run: async () => {
+      const stream = await client.chat.completions.create({
+        model,
+        messages: createBaseMessages(model),
+        max_completion_tokens: 1024,
+        stream: true,
+      });
+
+      let eventCount = 0;
+      for await (const _event of stream) {
+        eventCount += 1;
+      }
+      return `model=${model}, events=${eventCount}`;
+    },
+  };
+}
+
+function addDevelopGptResponsesCatalogCases(
+  cases: Record<string, {
+    description: string;
+    covers: readonly string[];
+    precondition: () => string | undefined;
+    run: () => Promise<string>;
+  }>,
+  context: OpenAICaseContext,
+): void {
+  const { client } = context;
+  const precondition = createOpenAIModelCatalogPrecondition(context, 'responses');
+  const instructionModels = [
+    'gpt-5-mini',
+    'gpt-5.2-codex',
+    'gpt-5.2',
+    'gpt-5.3-codex',
+  ] as const;
+  const reasoningModels = ['gpt-5-mini', 'gpt-5.2'] as const;
+  const reasoningEfforts = ['none', 'minimal'] as const;
+
+  for (const model of instructionModels) {
+    const baseCaseId = openAIModelCatalogCaseId('responses_model_', model);
+    cases[`${baseCaseId}_instructions`] = {
+      description: `OpenAI Responses model catalog instructions smoke: ${model}`,
+      covers: ['model', 'instructions'],
+      precondition,
+      run: async () => {
+        const response = await client.responses.create({
+          model,
+          input: 'Reply with exactly: ok',
+          instructions: 'You are a compatibility tester. Keep output short.',
+          max_output_tokens: 64,
+        });
+        return `model=${model}, ${summarizeOpenAIResponses(response)}`;
+      },
+    };
+  }
+
+  for (const model of reasoningModels) {
+    const baseCaseId = openAIModelCatalogCaseId('responses_model_', model);
+    for (const effort of reasoningEfforts) {
+      cases[`${baseCaseId}_reasoning_effort_${effort}`] = {
+        description: `OpenAI Responses model catalog reasoning.effort=${effort}: ${model}`,
+        covers: ['model', 'reasoning'],
+        precondition,
+        run: async () => {
+          const response = await client.responses.create({
+            model,
+            input: 'Solve 19*23 quickly, then output only the number.',
+            reasoning: {
+              effort,
+              summary: 'auto',
+            },
+            max_output_tokens: 96,
+          });
+          return `model=${model}, effort=${effort}, ${summarizeOpenAIResponses(response)}`;
+        },
+      };
+    }
+  }
+
+  const multimodalModel = 'gpt-5-mini';
+  const multimodalBaseCaseId = openAIModelCatalogCaseId('responses_model_', multimodalModel);
+  for (const fixture of OPENAI_IMAGE_DATA_URI_FIXTURES) {
+    cases[`${multimodalBaseCaseId}_input_text_image_${fixture.format}`] = {
+      description: `OpenAI Responses model catalog multimodal smoke (${fixture.format}): ${multimodalModel}`,
+      covers: ['model', 'input_image.format'],
+      precondition,
+      run: async () => {
+        const response = await client.responses.create(
+          {
+            model: multimodalModel,
+            input: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'input_text',
+                    text: 'Describe the attached image in one short sentence.',
+                  },
+                  {
+                    type: 'input_image',
+                    image_url: fixture.dataUri,
+                  },
+                ],
+              },
+            ],
+            max_output_tokens: 64,
+          } as never,
+        );
+        return `model=${multimodalModel}, format=${fixture.format}, ${summarizeOpenAIResponses(response)}`;
+      },
+    };
+  }
+
+  cases[`${multimodalBaseCaseId}_stream`] = {
+    description: `OpenAI Responses model catalog stream smoke: ${multimodalModel}`,
+    covers: ['model', 'stream'],
+    precondition,
+    run: async () => {
+      const stream = await client.responses.create({
+        model: multimodalModel,
+        input: 'Reply with exactly: ok',
+        max_output_tokens: 64,
+        stream: true,
+        stream_options: {
+          include_obfuscation: false,
+        },
+      });
+
+      let eventCount = 0;
+      for await (const _event of stream) {
+        eventCount += 1;
+      }
+      return `model=${multimodalModel}, events=${eventCount}`;
+    },
+  };
+}
+
 export function buildOpenAIChatServedModelCases(context: OpenAICaseContext): TestCase[] {
   if (!shouldIncludeOpenAIModelCatalogCases()) {
     return [];
@@ -185,6 +390,8 @@ export function buildOpenAIChatServedModelCases(context: OpenAICaseContext): Tes
       },
     };
   }
+
+  addDevelopGpt5MiniChatCatalogCases(cases, context);
 
   return defineCases(cases, {
     protocol: 'openai.chat',
@@ -221,6 +428,8 @@ export function buildOpenAIResponsesServedModelCases(context: OpenAICaseContext)
       },
     };
   }
+
+  addDevelopGptResponsesCatalogCases(cases, context);
 
   return defineCases(cases, {
     apiType: 'responses',

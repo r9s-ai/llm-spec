@@ -135,6 +135,60 @@ export interface PlatformRunConfig {
   runSnapshot?: RunSnapshot
 }
 
+export type BackendJobStatus = 'queued' | 'running' | 'completed' | 'failed'
+export type BackendJobTargetStatus = 'pending' | 'running' | 'complete'
+
+export interface BackendJobTarget {
+  id: string
+  kind: 'standard' | 'agent'
+  enabled: boolean
+  apiType?: StandardApiType
+  agentProvider?: AgentProvider
+  model?: string
+  targetCases?: string
+}
+
+export interface BackendJobRequest {
+  apiKey?: string
+  apiBaseUrl?: string
+  backendUrl?: string
+  standardExecution: 'browser' | 'backend'
+  timeoutMs: number
+  concurrency: number
+  customHeaders?: Record<string, string>
+  apiVersion?: string
+  workingDirectory?: string
+  skipGitRepoCheck?: boolean
+  testImagePath?: string
+  persistResult?: boolean
+  runSnapshot?: RunSnapshot
+  targets: BackendJobTarget[]
+}
+
+export interface BackendJobTargetProgress {
+  id: string
+  label: string
+  status: BackendJobTargetStatus
+  completed: number
+  total: number
+  passed: number
+  failed: number
+  skipped: number
+  currentCase?: string
+}
+
+export interface BackendJobProgress {
+  completed: number
+  total: number
+  percent: number
+  statusText: string
+  detailText: string
+  passed: number
+  failed: number
+  skipped: number
+  targets: BackendJobTargetProgress[]
+}
+
 export interface BackendRunHistoryEntry {
   id: string
   fileName: string
@@ -150,4 +204,16 @@ export interface BackendRunHistoryEntry {
   siteName?: string
   apiBaseUrl?: string
   backendUrl?: string
+}
+
+export interface BackendJobStatusResponse {
+  id: string
+  status: BackendJobStatus
+  createdAt: string
+  startedAt?: string
+  finishedAt?: string
+  error?: string
+  progress: BackendJobProgress
+  summary?: RunSummary
+  historyEntry?: BackendRunHistoryEntry
 }

@@ -6,7 +6,7 @@ import { basename, resolve as resolvePath } from 'node:path';
 import { formatError, resolveRuntimeConfig } from './api-sdk-tester';
 import type { RuntimeConfig, TargetApiType } from './api-sdk-tester';
 import { runRuntimeConfig } from './runner';
-import type { RunSummary, RunSnapshot } from './types';
+import type { RunProgressEvent, RunSnapshot, RunSummary } from './types';
 
 type JsonRecord = Record<string, unknown>;
 type AgentProvider = 'claude-agent' | 'codex';
@@ -16,10 +16,16 @@ const DEFAULT_BACKEND_PORT = 8788;
 const RUN_HISTORY_DIR = resolvePath(process.cwd(), process.env.LLM_SPEC_HISTORY_DIR ?? '.llm-spec-history');
 const RUN_HISTORY_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
 const RUN_HISTORY_LIST_LIMIT = 200;
+const RUN_JOB_LIST_LIMIT = 100;
+const RUN_JOB_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 const CASE_FILTER_ENV_KEYS = ['TARGET_CASES', 'TEST_CASES', 'CASE_IDS'] as const;
 
 let runQueue: Promise<void> = Promise.resolve();
+const runJobs = new Map<string, BackendRunJob>();
+
+type BackendRunJobStatus = 'queued' | 'running' | 'completed' | 'failed';
+type BackendRunTargetStatus = 'pending' | 'running' | 'complete';
 
 interface RunHistoryEntry {
   id: string;
@@ -36,6 +42,70 @@ interface RunHistoryEntry {
   siteName?: string;
   apiBaseUrl?: string;
   backendUrl?: string;
+}
+
+interface BackendRunJobTarget {
+  id: string;
+  kind: 'standard' | 'agent';
+  enabled: boolean;
+  apiType?: string;
+  agentProvider?: AgentProvider;
+  model?: string;
+  targetCases?: string;
+}
+
+interface BackendRunJobRequest {
+  apiKey?: string;
+  apiBaseUrl?: string;
+  backendUrl?: string;
+  standardExecution: 'browser' | 'backend';
+  timeoutMs: number;
+  concurrency: number;
+  customHeaders?: Record<string, string>;
+  apiVersion?: string;
+  workingDirectory?: string;
+  skipGitRepoCheck?: boolean;
+  testImagePath?: string;
+  persistResult: boolean;
+  runSnapshot?: RunSnapshot;
+  targets: BackendRunJobTarget[];
+}
+
+interface BackendRunTargetProgress {
+  id: string;
+  label: string;
+  status: BackendRunTargetStatus;
+  completed: number;
+  total: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+  currentCase?: string;
+}
+
+interface BackendRunJobProgress {
+  completed: number;
+  total: number;
+  percent: number;
+  statusText: string;
+  detailText: string;
+  passed: number;
+  failed: number;
+  skipped: number;
+  targets: BackendRunTargetProgress[];
+}
+
+interface BackendRunJob {
+  id: string;
+  status: BackendRunJobStatus;
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  request: BackendRunJobRequest;
+  progressTargets: BackendRunTargetProgress[];
+  error?: string;
+  summary?: RunSummary;
+  historyEntry?: RunHistoryEntry;
 }
 
 function getCorsHeaders(): Record<string, string> {
@@ -327,6 +397,294 @@ function buildRuntimeConfig(body: JsonRecord): RuntimeConfig {
   throw new Error('kind must be standard or agent');
 }
 
+function normalizeJobTarget(value: unknown, index: number): BackendRunJobTarget | undefined {
+  if (!isJsonRecord(value)) {
+    return undefined;
+  }
+
+  const kind = optionalString(value, 'kind') ?? 'standard';
+  const enabled = optionalBoolean(value, 'enabled') ?? true;
+  if (kind === 'standard') {
+    const apiType = normalizeTargetApiType(optionalString(value, 'apiType'));
+    return {
+      id: optionalString(value, 'id') ?? `standard-${index + 1}`,
+      kind,
+      enabled,
+      apiType,
+      model: optionalString(value, 'model'),
+      targetCases: optionalString(value, 'targetCases'),
+    };
+  }
+
+  if (kind === 'agent') {
+    const agentProvider = normalizeAgentProvider(optionalString(value, 'agentProvider') ?? optionalString(value, 'provider'));
+    return {
+      id: optionalString(value, 'id') ?? `agent-${index + 1}`,
+      kind,
+      enabled,
+      agentProvider,
+      model: optionalModel(value, 'model'),
+      targetCases: optionalString(value, 'targetCases'),
+    };
+  }
+
+  throw new Error('job target kind must be standard or agent');
+}
+
+function normalizeBackendRunJobRequest(body: JsonRecord): BackendRunJobRequest {
+  const rawTargets = Array.isArray(body.targets) ? body.targets : [];
+  const targets = rawTargets
+    .map(normalizeJobTarget)
+    .filter((target): target is BackendRunJobTarget => Boolean(target))
+    .filter((target) => target.enabled);
+
+  if (targets.length === 0) {
+    throw new Error('job requires at least one enabled target');
+  }
+
+  const standardExecution = optionalString(body, 'standardExecution') === 'browser' ? 'browser' : 'backend';
+  return {
+    apiKey: optionalString(body, 'apiKey'),
+    apiBaseUrl: optionalString(body, 'apiBaseUrl'),
+    backendUrl: optionalString(body, 'backendUrl'),
+    standardExecution,
+    timeoutMs: optionalPositiveNumber(body, 'timeoutMs') ?? 45_000,
+    concurrency: optionalPositiveNumber(body, 'concurrency') ?? 1,
+    customHeaders: optionalCustomHeaders(body),
+    apiVersion: optionalString(body, 'apiVersion'),
+    workingDirectory: optionalString(body, 'workingDirectory'),
+    skipGitRepoCheck: optionalBoolean(body, 'skipGitRepoCheck') ?? false,
+    testImagePath: optionalString(body, 'testImagePath'),
+    persistResult: optionalBoolean(body, 'persistResult') ?? true,
+    runSnapshot: optionalRunSnapshot(body),
+    targets,
+  };
+}
+
+function standardTargetLabel(apiType: string | undefined): string {
+  if (apiType === 'openai.responses') {
+    return 'OpenAI Responses';
+  }
+  if (apiType === 'anthropic.messages') {
+    return 'Anthropic Messages';
+  }
+  if (apiType === 'gemini.generateContent') {
+    return 'Gemini generateContent';
+  }
+  return 'OpenAI Chat Completions';
+}
+
+function agentTargetLabel(agentProvider: AgentProvider | undefined): string {
+  return agentProvider === 'codex' ? 'Codex' : 'Claude Agent';
+}
+
+function jobTargetLabel(target: BackendRunJobTarget): string {
+  return target.kind === 'agent' ? agentTargetLabel(target.agentProvider) : standardTargetLabel(target.apiType);
+}
+
+function jobTargetModelLabel(target: BackendRunJobTarget): string {
+  if (target.model) {
+    return target.model;
+  }
+  if (target.kind === 'standard') {
+    return defaultModelForApiType(normalizeTargetApiType(target.apiType));
+  }
+  return 'Default';
+}
+
+function createJobTargetProgress(target: BackendRunJobTarget): BackendRunTargetProgress {
+  return {
+    id: target.id,
+    label: jobTargetLabel(target),
+    status: 'pending',
+    completed: 0,
+    total: 1,
+    passed: 0,
+    failed: 0,
+    skipped: 0,
+  };
+}
+
+function summarizeJobProgress(job: BackendRunJob): BackendRunJobProgress {
+  const targets = job.progressTargets;
+  if (targets.length === 0) {
+    return {
+      completed: 0,
+      total: 0,
+      percent: 0,
+      statusText: job.status === 'queued' ? 'Queued' : 'Ready',
+      detailText: 'No test run started',
+      passed: 0,
+      failed: 0,
+      skipped: 0,
+      targets: [],
+    };
+  }
+
+  const total = targets.reduce((sum, target) => sum + Math.max(target.total, 1), 0);
+  const completed = targets.reduce((sum, target) => sum + Math.min(target.completed, Math.max(target.total, 1)), 0);
+  const passed = targets.reduce((sum, target) => sum + target.passed, 0);
+  const failed = targets.reduce((sum, target) => sum + target.failed, 0);
+  const skipped = targets.reduce((sum, target) => sum + target.skipped, 0);
+  const runningTarget = targets.find((target) => target.status === 'running');
+  const pendingTarget = targets.find((target) => target.status === 'pending');
+  const activeTarget = runningTarget ?? pendingTarget ?? targets[targets.length - 1];
+  const percent = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+  const statusText = job.status === 'failed'
+    ? 'Run failed'
+    : runningTarget
+      ? `Running ${runningTarget.label}`
+      : pendingTarget
+        ? `Queued ${pendingTarget.label}`
+        : 'Run complete';
+  const caseDetail = activeTarget?.currentCase ? ` - ${activeTarget.currentCase}` : '';
+
+  return {
+    completed,
+    total,
+    percent,
+    statusText,
+    detailText: `${completed}/${total} cases${caseDetail}`,
+    passed,
+    failed,
+    skipped,
+    targets: targets.map((target) => ({ ...target })),
+  };
+}
+
+function buildJobTargetBody(request: BackendRunJobRequest, target: BackendRunJobTarget): JsonRecord {
+  const base: JsonRecord = {
+    kind: target.kind,
+    apiKey: request.apiKey,
+    apiBaseUrl: request.apiBaseUrl,
+    model: target.model,
+    timeoutMs: request.timeoutMs,
+    targetCases: target.targetCases,
+    customHeaders: request.customHeaders,
+    apiVersion: request.apiVersion,
+    failFast: false,
+    concurrency: request.concurrency,
+    persistResult: false,
+    runSnapshot: request.runSnapshot,
+  };
+
+  if (target.kind === 'standard') {
+    return {
+      ...base,
+      apiType: target.apiType,
+    };
+  }
+
+  return {
+    ...base,
+    agentProvider: target.agentProvider,
+    workingDirectory: request.workingDirectory,
+    skipGitRepoCheck: request.skipGitRepoCheck,
+    testImagePath: request.testImagePath,
+  };
+}
+
+function mergeRunSummaries(summaries: RunSummary[]): RunSummary {
+  if (summaries.length === 0) {
+    const now = new Date().toISOString();
+    return { startedAt: now, finishedAt: now, providers: [], totalPassed: 0, totalFailed: 0, totalSkipped: 0 };
+  }
+
+  return {
+    startedAt: summaries[0]!.startedAt,
+    finishedAt: summaries[summaries.length - 1]!.finishedAt,
+    providers: summaries.flatMap((summary) => summary.providers),
+    totalPassed: summaries.reduce((sum, summary) => sum + summary.totalPassed, 0),
+    totalFailed: summaries.reduce((sum, summary) => sum + summary.totalFailed, 0),
+    totalSkipped: summaries.reduce((sum, summary) => sum + summary.totalSkipped, 0),
+  };
+}
+
+function failedRunSummary(provider: string, model: string, error: unknown): RunSummary {
+  const now = new Date().toISOString();
+  return {
+    startedAt: now,
+    finishedAt: now,
+    providers: [{
+      provider,
+      model,
+      startedAt: now,
+      finishedAt: now,
+      passed: 0,
+      failed: 1,
+      skipped: 0,
+      caseResults: [{
+        id: 'run_error',
+        description: `Failed to run ${provider}`,
+        status: 'failed',
+        durationMs: 0,
+        coveredParams: [],
+        error: formatError(error),
+      }],
+      allParams: [],
+      coveredParams: [],
+      untestedParams: [],
+    }],
+    totalPassed: 0,
+    totalFailed: 1,
+    totalSkipped: 0,
+  };
+}
+
+function findJobProgress(job: BackendRunJob, target: BackendRunJobTarget): BackendRunTargetProgress | undefined {
+  return job.progressTargets.find((progress) => progress.id === target.id);
+}
+
+function completeJobTarget(job: BackendRunJob, target: BackendRunJobTarget): void {
+  const progress = findJobProgress(job, target);
+  if (!progress) {
+    return;
+  }
+  progress.status = 'complete';
+  progress.total = Math.max(progress.total, 1);
+  progress.completed = progress.total;
+}
+
+function failJobTarget(job: BackendRunJob, target: BackendRunJobTarget, error: unknown): void {
+  const progress = findJobProgress(job, target);
+  if (!progress) {
+    return;
+  }
+  progress.status = 'complete';
+  progress.total = Math.max(progress.total, 1);
+  progress.completed = progress.total;
+  progress.failed += 1;
+  progress.currentCase = formatError(error);
+}
+
+function applyJobProgressEvent(job: BackendRunJob, target: BackendRunJobTarget, event: RunProgressEvent): void {
+  const progress = findJobProgress(job, target);
+  if (!progress) {
+    return;
+  }
+  progress.status = event.phase === 'provider-complete' ? 'complete' : 'running';
+  progress.total = Math.max(event.total, 1);
+  progress.completed = event.phase === 'provider-complete'
+    ? progress.total
+    : Math.min(event.completed, progress.total);
+  if (event.phase === 'case-start') {
+    progress.currentCase = event.caseId ?? event.description;
+  }
+  if (event.phase === 'case-complete') {
+    progress.currentCase = event.caseId ?? event.description;
+    if (event.status === 'passed') {
+      progress.passed += 1;
+    } else if (event.status === 'failed') {
+      progress.failed += 1;
+    } else if (event.status === 'skipped') {
+      progress.skipped += 1;
+    }
+  }
+  if (event.phase === 'provider-complete') {
+    progress.currentCase = `${event.provider} complete`;
+  }
+}
+
 function isRunSummary(value: unknown): value is RunSummary {
   if (!isJsonRecord(value)) {
     return false;
@@ -440,6 +798,99 @@ async function listRunHistory(): Promise<RunHistoryEntry[]> {
     .slice(0, RUN_HISTORY_LIST_LIMIT);
 }
 
+function serializeRunJob(job: BackendRunJob, includeSummary = true): JsonRecord {
+  return {
+    id: job.id,
+    status: job.status,
+    createdAt: job.createdAt,
+    startedAt: job.startedAt,
+    finishedAt: job.finishedAt,
+    error: job.error,
+    progress: summarizeJobProgress(job),
+    summary: includeSummary ? job.summary : undefined,
+    historyEntry: job.historyEntry,
+  };
+}
+
+function pruneRunJobs(): void {
+  const now = Date.now();
+  const jobs = Array.from(runJobs.values())
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+
+  for (const job of jobs) {
+    const isTerminal = job.status === 'completed' || job.status === 'failed';
+    const timestamp = Date.parse(job.finishedAt ?? job.createdAt);
+    const expired = isTerminal && Number.isFinite(timestamp) && now - timestamp > RUN_JOB_RETENTION_MS;
+    const overLimit = jobs.indexOf(job) >= RUN_JOB_LIST_LIMIT;
+    if (expired || overLimit) {
+      runJobs.delete(job.id);
+    }
+  }
+}
+
+function createBackendRunJob(request: BackendRunJobRequest): BackendRunJob {
+  pruneRunJobs();
+  const id = randomUUID();
+  const job: BackendRunJob = {
+    id,
+    status: 'queued',
+    createdAt: new Date().toISOString(),
+    request,
+    progressTargets: request.targets.map(createJobTargetProgress),
+  };
+  runJobs.set(id, job);
+  void runBackendRunJob(job);
+  return job;
+}
+
+async function runBackendRunJob(job: BackendRunJob): Promise<void> {
+  try {
+    await withRunLock(async () => {
+      const summaries: RunSummary[] = [];
+
+      for (const target of job.request.targets) {
+        try {
+          const body = buildJobTargetBody(job.request, target);
+          const config = buildRuntimeConfig(body);
+          const summary = await withCaseFilterEnv(config.targetCases, () => runRuntimeConfig(config, {
+            onProgress: (event) => { applyJobProgressEvent(job, target, event); },
+          }));
+          summaries.push(summary);
+          completeJobTarget(job, target);
+        } catch (targetError: unknown) {
+          failJobTarget(job, target, targetError);
+          summaries.push(failedRunSummary(jobTargetLabel(target), jobTargetModelLabel(target), targetError));
+        }
+      }
+
+      const merged = mergeRunSummaries(summaries);
+      if (job.request.runSnapshot) {
+        merged.runSnapshot = job.request.runSnapshot;
+      }
+      job.summary = merged;
+
+      if (job.request.persistResult) {
+        try {
+          job.historyEntry = await persistRunSummary(merged);
+        } catch (historyError: unknown) {
+          job.error = `Failed to save backend run history: ${formatError(historyError)}`;
+          console.error(job.error);
+        }
+      }
+
+      job.status = 'completed';
+      job.finishedAt = new Date().toISOString();
+    }, () => {
+      job.status = 'running';
+      job.startedAt = new Date().toISOString();
+    });
+  } catch (error: unknown) {
+    job.status = 'failed';
+    job.error = formatError(error);
+    job.finishedAt = new Date().toISOString();
+  }
+}
+
 function applyRequestRunSnapshot(summary: RunSummary, rawBody: JsonRecord): void {
   const runSnapshot = optionalRunSnapshot(rawBody);
   if (runSnapshot) {
@@ -451,7 +902,7 @@ function shouldPersistRunResult(rawBody: JsonRecord): boolean {
   return optionalBoolean(rawBody, 'persistResult') ?? true;
 }
 
-async function withRunLock<T>(action: () => Promise<T>): Promise<T> {
+async function withRunLock<T>(action: () => Promise<T>, onAcquired?: () => void): Promise<T> {
   const previous = runQueue.catch(() => undefined);
   let release!: () => void;
   runQueue = new Promise<void>((resolve) => {
@@ -459,6 +910,7 @@ async function withRunLock<T>(action: () => Promise<T>): Promise<T> {
   });
 
   await previous;
+  onAcquired?.();
   try {
     return await action();
   } finally {
@@ -538,6 +990,34 @@ async function handleRunStream(request: IncomingMessage, response: ServerRespons
   }
 }
 
+async function handleCreateJob(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  const rawBody = await readJsonBody(request);
+  if (!isJsonRecord(rawBody)) {
+    throw new Error('request body must be a JSON object');
+  }
+
+  const job = createBackendRunJob(normalizeBackendRunJobRequest(rawBody));
+  sendJson(response, 202, serializeRunJob(job, false));
+}
+
+async function handleListJobs(response: ServerResponse): Promise<void> {
+  pruneRunJobs();
+  const items = Array.from(runJobs.values())
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .slice(0, RUN_JOB_LIST_LIMIT)
+    .map((job) => serializeRunJob(job, false));
+  sendJson(response, 200, { items });
+}
+
+async function handleReadJob(response: ServerResponse, id: string): Promise<void> {
+  const job = runJobs.get(id);
+  if (!job) {
+    sendJson(response, 404, { error: 'job not found' });
+    return;
+  }
+  sendJson(response, 200, serializeRunJob(job));
+}
+
 async function handlePersistHistory(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const rawBody = await readJsonBody(request);
   const summary = parseRunSummary(rawBody);
@@ -570,6 +1050,21 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   if (request.method === 'GET' && (url.pathname === '/api/history' || url.pathname === '/api/history/')) {
     sendJson(response, 200, { items: await listRunHistory() });
+    return;
+  }
+
+  if (request.method === 'GET' && (url.pathname === '/api/jobs' || url.pathname === '/api/jobs/')) {
+    await handleListJobs(response);
+    return;
+  }
+
+  if (request.method === 'POST' && (url.pathname === '/api/jobs' || url.pathname === '/api/jobs/')) {
+    await handleCreateJob(request, response);
+    return;
+  }
+
+  if (request.method === 'GET' && url.pathname.startsWith('/api/jobs/')) {
+    await handleReadJob(response, decodeURIComponent(url.pathname.slice('/api/jobs/'.length)));
     return;
   }
 

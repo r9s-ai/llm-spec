@@ -1,6 +1,7 @@
 import type OpenAI from 'openai';
 
 import type { OpenAIProviderConfig } from '../../environment';
+import { IMAGE_INPUT_FIXTURES, createFixtureDataUri } from '../../fixtures';
 import { formatError } from '../runtime';
 
 export const OPENAI_CHAT_PARAMS = [
@@ -63,6 +64,10 @@ export function isGpt5SeriesModel(model: string): boolean {
   return normalizeModelName(model).startsWith('gpt-5');
 }
 
+export function isGpt5NanoModel(model: string): boolean {
+  return /^gpt-5(?:\.\d+)?-nano(?:-|$)/.test(normalizeModelName(model));
+}
+
 export function isGpt4oOrNewerModel(model: string): boolean {
   const normalized = normalizeModelName(model);
   return (
@@ -80,6 +85,44 @@ export function isReasoningModel(model: string): boolean {
 export function resolveChatCompletionOutputLimit(_model: string, requested: number): number {
   // Keep chat.completions budgets high enough that visible output survives internal reasoning/planning token spend.
   return Math.max(requested, 1024);
+}
+
+export function resolveOpenAIChatSamplingParams(model: string) {
+  return isGpt5NanoModel(model)
+    ? {
+        temperature: 1,
+        top_p: 1,
+        presence_penalty: 0,
+        frequency_penalty: 0,
+      }
+    : {
+        temperature: 0.2,
+        top_p: 0.9,
+        presence_penalty: 0.1,
+        frequency_penalty: 0.1,
+      };
+}
+
+export function resolveOpenAIResponsesSamplingParams(model: string) {
+  return isGpt5NanoModel(model)
+    ? {
+        temperature: 1,
+        top_p: 1,
+      }
+    : {
+        temperature: 0.2,
+        top_p: 0.9,
+      };
+}
+
+export function resolveOpenAINChoices(model: string, requested: number): number {
+  return isGpt5NanoModel(model) ? 1 : requested;
+}
+
+export function skipGpt5NanoNChoiceFanout(model: string, feature: string): string | undefined {
+  return isGpt5NanoModel(model)
+    ? `model ${model} has fixed beta sampling limits with n=1; skip ${feature}`
+    : undefined;
 }
 
 function isGpt5ProModel(model: string): boolean {
@@ -112,6 +155,13 @@ export function isGeminiOpenAICompatibilityTarget(model: string): boolean {
 }
 
 export type PromptCacheRetentionValue = 'in-memory' | 'in_memory';
+
+export const OPENAI_IMAGE_DATA_URI_FIXTURES = IMAGE_INPUT_FIXTURES.map((fixture) => ({
+  ...fixture,
+  get dataUri() {
+    return createFixtureDataUri(fixture.mimeType, fixture.fileName);
+  },
+}));
 
 function isPromptCacheRetentionValueError(error: unknown): boolean {
   const message = formatError(error).toLowerCase();

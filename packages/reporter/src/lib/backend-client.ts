@@ -1,4 +1,6 @@
 import type {
+  BackendJobRequest,
+  BackendJobStatusResponse,
   BackendRunHistoryEntry,
   PlatformRunConfig,
   RunProgressEvent,
@@ -137,6 +139,73 @@ export async function runBackendCases(
     throw new Error(`Backend run failed: ${message}`)
   }
   return parseReport(payload)
+}
+
+function isBackendJobStatus(value: unknown): value is BackendJobStatusResponse {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const job = value as Record<string, unknown>
+  const progress = job.progress
+  return (
+    typeof job.id === 'string' &&
+    typeof job.status === 'string' &&
+    typeof job.createdAt === 'string' &&
+    Boolean(progress) &&
+    typeof progress === 'object'
+  )
+}
+
+function normalizeBackendJobStatus(value: unknown): BackendJobStatusResponse {
+  if (!isBackendJobStatus(value)) {
+    throw new Error('Backend job returned an invalid payload')
+  }
+
+  const job = value as BackendJobStatusResponse
+  return {
+    ...job,
+    summary: job.summary ? parseReport(job.summary) : undefined,
+  }
+}
+
+export async function createBackendJob(
+  rawUrl: string,
+  request: BackendJobRequest,
+): Promise<BackendJobStatusResponse> {
+  const backendUrl = normalizeBackendUrl(rawUrl)
+  const response = await fetch(`${backendUrl}/api/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+
+  const payload = await response.json().catch(() => undefined) as unknown
+  if (!response.ok) {
+    const message = payload && typeof payload === 'object' && 'error' in payload
+      ? String((payload as { error: unknown }).error)
+      : `${response.status} ${response.statusText}`
+    throw new Error(`Backend job failed: ${message}`)
+  }
+
+  return normalizeBackendJobStatus(payload)
+}
+
+export async function loadBackendJobStatus(
+  rawUrl: string,
+  id: string,
+): Promise<BackendJobStatusResponse> {
+  const backendUrl = normalizeBackendUrl(rawUrl)
+  const response = await fetch(`${backendUrl}/api/jobs/${encodeURIComponent(id)}`)
+  const payload = await response.json().catch(() => undefined) as unknown
+  if (!response.ok) {
+    const message = payload && typeof payload === 'object' && 'error' in payload
+      ? String((payload as { error: unknown }).error)
+      : `${response.status} ${response.statusText}`
+    throw new Error(`Backend job status failed: ${message}`)
+  }
+
+  return normalizeBackendJobStatus(payload)
 }
 
 function isBackendRunHistoryEntry(value: unknown): value is BackendRunHistoryEntry {
