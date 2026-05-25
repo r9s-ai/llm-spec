@@ -33,3 +33,4 @@ llm-api-feature-report
 
 # Trace 文件 (per-test NDJSON)
 .llm-spec-traces/
+.llm-spec-history/

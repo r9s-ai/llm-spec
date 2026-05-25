@@ -131,4 +131,23 @@ export interface PlatformRunConfig {
   workingDirectory?: string
   skipGitRepoCheck?: boolean
   testImagePath?: string
+  persistResult?: boolean
+  runSnapshot?: RunSnapshot
+}
+
+export interface BackendRunHistoryEntry {
+  id: string
+  fileName: string
+  createdAt: string
+  startedAt: string
+  finishedAt: string
+  providerCount: number
+  providers: string[]
+  models: string[]
+  totalPassed: number
+  totalFailed: number
+  totalSkipped: number
+  siteName?: string
+  apiBaseUrl?: string
+  backendUrl?: string
 }

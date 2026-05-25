@@ -161,8 +161,8 @@ TARGET_PROVIDERS=claude-agent,codex pnpm test:sdk
 **模型和配置测试**:
 | 测试ID | 描述 | 覆盖参数 |
 |--------|------|----------|
-| `different_model_opus` | 测试 Claude Opus 4.6 模型 | model |
-| `different_model_haiku` | 测试 Claude Haiku 4.5 模型 | model |
+| `different_model_opus` | 测试配置的 Opus 模型槽位 | model |
+| `different_model_haiku` | 测试配置的 Haiku 模型槽位 | model |
 | `custom_executable_node` | 自定义可执行文件：node | executable |
 
 **权限模式测试**:
@@ -227,14 +227,14 @@ TARGET_PROVIDERS=claude-agent,codex pnpm test:sdk
 | `api_base_url_priority` | API Base URL 环境变量优先级测试 | env |
 | `env_inheritance` | 环境变量继承测试 | env |
 
-**Beta 功能测试** (28个):
+**Beta 功能测试** (23个静态用例；另有 26 个 `beta_catalog_*` 目录覆盖用例):
 | 测试ID | 描述 | 覆盖参数 |
 |--------|------|----------|
-| `beta_context_1m_basic` | Beta: 启用 1M 上下文窗口 (Sonnet 4.6) | betas, model, prompt |
+| `beta_context_1m_basic` | Beta: 启用 1M 上下文窗口 | betas, model, prompt |
 | `beta_context_1m_with_session` | Beta: 在会话中使用 1M 上下文窗口 | betas, model, prompt, streaming |
 | `beta_context_1m_system_message` | Beta: 验证系统消息中显示 beta 功能 | betas, model, prompt |
-| `beta_context_1m_opus` | Beta: Opus 4.6 与 1M 上下文 (兼容性测试) | betas, model, prompt |
-| `beta_context_1m_haiku` | Beta: Haiku 4.5 与 1M 上下文 (兼容性测试) | betas, model, prompt |
+| `beta_context_1m_opus` | Beta: Opus 模型槽位与 1M 上下文 (兼容性测试) | betas, model, prompt |
+| `beta_context_1m_haiku` | Beta: Haiku 模型槽位与 1M 上下文 (兼容性测试) | betas, model, prompt |
 | `beta_invalid_feature` | Beta: 测试无效的 beta 功能错误处理 | betas, model, prompt |
 | `beta_empty_array` | Beta: 测试空 beta 数组 | betas, model, prompt |
 | `beta_with_tools` | Beta: Beta 功能与工具组合测试 | betas, model, prompt, allowedTools |
@@ -248,13 +248,13 @@ TARGET_PROVIDERS=claude-agent,codex pnpm test:sdk
 | `beta_thinking_disabled` | Beta: Disabled thinking | model, prompt, thinking |
 | `beta_effort_low` | Beta: Effort=low (触发 effort beta) | model, prompt, effort |
 | `beta_effort_high` | Beta: Effort=high | model, prompt, effort |
-| `beta_effort_max` | Beta: Effort=max (仅 Opus 4.6) | model, prompt, effort |
+| `beta_effort_max` | Beta: Effort=max | model, prompt, effort |
 | `beta_effort_with_thinking` | Beta: Effort + Thinking 组合 | model, prompt, effort, thinking |
 | `beta_mcp_servers_config` | Beta: MCP 服务器配置 (触发 mcp beta) | model, prompt, mcpServers |
 | `beta_context_1m_with_effort` | Beta: 1M 上下文 + Effort 组合 | betas, model, prompt, effort |
 | `beta_thinking_effort_context_1m` | Beta: Thinking + Effort + 1M 三重组合 | betas, model, prompt, thinking, effort |
 
-**总计**: 74个测试用例 (8个原有 + 38个新增 + 28个 beta 测试)
+**总计**: 68个 Claude Agent 测试用例 (42个静态用例 + 26个 `beta_catalog_*` 目录覆盖用例)
 
 ## Beta 功能触发说明
 
@@ -294,18 +294,18 @@ TARGET_PROVIDERS=claude-agent,codex pnpm test:sdk
 
 | 测试ID | 描述 | 覆盖参数 |
 |--------|------|----------|
-| `basic_thread` | 创建并运行基础thread | prompt, workingDirectory |
-| `basic_thread_streaming` | 创建并运行基础thread (streaming) | prompt, workingDirectory, streaming |
-| `structured_output` | 使用structured output输出JSON | prompt, outputSchema |
-| `structured_output_streaming` | 使用structured output输出JSON (streaming) | prompt, outputSchema, streaming |
-| `multi_turn_conversation` | 多轮对话 | prompt |
-| `image_input` | 图片输入测试 | prompt |
-| `resume_thread` | 恢复已存在的thread | prompt |
-| `config_override` | 使用config覆盖 | config |
-| `env_control` | 控制环境变量 | env |
-| `abort_signal` | 使用AbortSignal取消操作 | prompt |
-| `thread_events` | 监听thread事件 | prompt, streaming |
-| `usage_tracking` | 追踪token使用情况 | prompt |
+| `basic_thread` | 创建并运行基础thread | model, prompt, workingDirectory |
+| `basic_thread_streaming` | 创建并运行基础thread (streaming) | model, prompt, workingDirectory, streaming |
+| `structured_output` | 使用structured output输出JSON | model, prompt, outputSchema |
+| `structured_output_streaming` | 使用structured output输出JSON (streaming) | model, prompt, outputSchema, streaming |
+| `multi_turn_conversation` | 多轮对话 | model, prompt |
+| `image_input` | 图片输入测试 | model, prompt |
+| `resume_thread` | 恢复已存在的thread | model, prompt |
+| `config_override` | 使用config覆盖 | model, config |
+| `env_control` | 控制环境变量 | model, env |
+| `abort_signal` | 使用AbortSignal取消操作 | model, prompt |
+| `thread_events` | 监听thread事件 | model, prompt, streaming |
+| `usage_tracking` | 追踪token使用情况 | model, prompt |
 
 ## 测试报告
 
@@ -516,7 +516,7 @@ if (result.type === 'result') {
 #### 3. 工具控制
 ```typescript
 const options: SDKSessionOptions = {
-  model: 'claude-sonnet-4-6',
+  model: process.env.CLAUDE_AGENT_MODEL,
   allowedTools: ['Read', 'Glob'],  // 只允许这些工具
   disallowedTools: ['Bash'],       // 明确禁用这些工具
 };
@@ -525,7 +525,7 @@ const options: SDKSessionOptions = {
 #### 4. 环境变量配置
 ```typescript
 const options: SDKSessionOptions = {
-  model: 'claude-sonnet-4-6',
+  model: process.env.CLAUDE_AGENT_MODEL,
   env: {
     ...process.env,
     ANTHROPIC_API_KEY: apiKey,
@@ -536,7 +536,7 @@ const options: SDKSessionOptions = {
 
 ### 测试覆盖统计
 
-- **总测试用例数**: 37个
+- **总测试用例数**: 68个
 - **参数覆盖率**: 9/13 (69%)
 - **Beta 特性覆盖**: 高
 - **错误场景覆盖**: 良好
@@ -596,7 +596,7 @@ SDK 默认继承 `process.env` 中的所有环境变量：
 
 ```typescript
 const options: SDKSessionOptions = {
-  model: 'claude-sonnet-4-6',
+  model: process.env.CLAUDE_AGENT_MODEL,
   env: {
     ...process.env,  // 继承所有环境变量
     ANTHROPIC_API_KEY: apiKey,
@@ -610,7 +610,7 @@ const options: SDKSessionOptions = {
 
 ```typescript
 const options: SDKSessionOptions = {
-  model: 'claude-sonnet-4-6',
+  model: process.env.CLAUDE_AGENT_MODEL,
   env: {
     ...process.env,
     ANTHROPIC_API_KEY: apiKey,
@@ -626,7 +626,7 @@ const options: SDKSessionOptions = {
 
 ```typescript
 const options: SDKSessionOptions = {
-  model: 'claude-sonnet-4-6',
+  model: process.env.CLAUDE_AGENT_MODEL,
   env: {
     ...process.env,
     ANTHROPIC_API_KEY: apiKey,

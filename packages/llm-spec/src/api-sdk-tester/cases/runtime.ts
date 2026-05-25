@@ -128,12 +128,24 @@ export function summarizeGeminiResponse(response: unknown): string {
   const obj = response as {
     text?: string;
     functionCalls?: unknown[];
-    candidates?: unknown[];
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{
+          inlineData?: unknown;
+          fileData?: unknown;
+        }>;
+      };
+    }>;
   };
   const text = typeof obj.text === 'string' ? obj.text : '';
   const functionCalls = Array.isArray(obj.functionCalls) ? obj.functionCalls.length : 0;
   const candidates = Array.isArray(obj.candidates) ? obj.candidates.length : 0;
-  return `candidates=${candidates}, function_calls=${functionCalls}, text="${truncate(text)}"`;
+  const mediaParts =
+    obj.candidates?.reduce((total, candidate) => {
+      const parts = candidate.content?.parts ?? [];
+      return total + parts.filter((part) => part.inlineData !== undefined || part.fileData !== undefined).length;
+    }, 0) ?? 0;
+  return `candidates=${candidates}, function_calls=${functionCalls}, media_parts=${mediaParts}, text="${truncate(text)}"`;
 }
 
 function sanitizeCaseIdPart(value: string): string {
@@ -269,7 +281,7 @@ export async function executeProviderCases(
   apiBaseUrl: string | undefined,
   allParams: readonly string[],
   cases: readonly TestCase[],
-  failFast: boolean,
+  _failFast: boolean,
   concurrency: number = 1,
   onProgress?: RunProgressHandler,
 ): Promise<ProviderSummary> {
@@ -366,45 +378,18 @@ export async function executeProviderCases(
       });
 
       logCaseResult(provider, result);
-
-      if (failFast && result.status === 'failed') {
-        console.log(`[${provider}] fail-fast enabled, stop remaining cases.`);
-        break;
-      }
     }
   } else {
-    let stopped = false;
     let nextIndex = 0;
 
     const worker = async (): Promise<void> => {
-      while (nextIndex < filteredCases.length && !stopped) {
+      while (nextIndex < filteredCases.length) {
         const index = nextIndex++;
         if (index >= filteredCases.length) {
           break;
         }
 
         const testCase = filteredCases[index]!;
-        if (stopped) {
-          caseResults[index] = {
-            id: testCase.id,
-            description: testCase.description,
-            status: 'skipped',
-            durationMs: 0,
-            coveredParams: [...testCase.covers],
-            detail: 'skipped due to fail-fast',
-          };
-          completedCases += 1;
-          onProgress?.({
-            phase: 'case-complete',
-            provider,
-            caseId: testCase.id,
-            description: testCase.description,
-            status: 'skipped',
-            completed: completedCases,
-            total: progressTotal,
-          });
-          continue;
-        }
 
         console.log(`[${provider}] running ${testCase.id} - ${testCase.description}`);
         onProgress?.({
@@ -429,11 +414,6 @@ export async function executeProviderCases(
         });
 
         logCaseResult(provider, result);
-
-        if (failFast && result.status === 'failed') {
-          stopped = true;
-          console.log(`[${provider}] fail-fast enabled, stop remaining cases.`);
-        }
       }
     };
 

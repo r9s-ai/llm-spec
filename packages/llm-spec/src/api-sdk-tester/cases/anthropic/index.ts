@@ -99,50 +99,31 @@ function supportsExtendedThinking(model: string): boolean {
   );
 }
 
-function supportsFastMode(model: string): boolean {
-  const normalized = normalizeModelName(model);
-  // Fast mode is only supported on Claude Opus 4.6
-  return normalized === 'claude-opus-4-6';
-}
-
-const CLAUDE_AGENT_OPUS_MODEL = process.env.ANTHROPIC_DEFAULT_OPUS_MODEL || 'claude-opus-4-6';
-const CLAUDE_AGENT_SONNET_MODEL = process.env.ANTHROPIC_DEFAULT_SONNET_MODEL || 'claude-sonnet-4-6';
-const CLAUDE_AGENT_HAIKU_MODEL = process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL || 'claude-haiku-4-5-20251001';
-
-function remapClaudeAgentModel(model: string | undefined): string | undefined {
-  if (!model) return model;
-  const normalized = normalizeModelName(model);
-  if (['claude-opus-4-7', 'claude-opus-4-6'].includes(normalized)) return CLAUDE_AGENT_OPUS_MODEL;
-  if (['claude-sonnet-4-6', 'claude-sonnet-4-5'].includes(normalized)) return CLAUDE_AGENT_SONNET_MODEL;
-  if (['claude-haiku-4-5', 'claude-haiku-4-5-20251001'].includes(normalized)) return CLAUDE_AGENT_HAIKU_MODEL;
-  return model;
-}
-
-function resolveAnthropicMessageModelScope(caseId: string): string {
+function resolveAnthropicMessageModelScope(caseId: string, config: AnthropicProviderConfig): string {
   if (caseId.startsWith('different_model_haiku')) {
-    return 'claude-haiku-4-5';
+    return config.haikuModel ?? config.model;
   }
   if (caseId === 'thinking' || caseId === 'thinking_stream') {
-    return 'claude-4+';
+    return config.model;
   }
   if (caseId === 'fast_mode_basic' || caseId === 'fast_mode_stream' || caseId === 'fast_mode_with_tools' || caseId === 'fast_mode_with_thinking' || caseId === 'beta_fast_mode') {
-    return 'claude-opus-4-6';
+    return config.fastModeModel ?? config.model;
   }
   return 'default';
 }
 
-function resolveClaudeAgentModelScope(caseId: string): string {
+function resolveClaudeAgentModelScope(caseId: string, config: ClaudeAgentProviderConfig): string {
   if (caseId.startsWith('different_model_opus')) {
-    return CLAUDE_AGENT_OPUS_MODEL;
+    return config.opusModel ?? config.model;
   }
   if (caseId.startsWith('different_model_haiku')) {
-    return CLAUDE_AGENT_HAIKU_MODEL;
+    return config.haikuModel ?? config.model;
   }
   if (caseId.includes('effort')) {
-    return CLAUDE_AGENT_OPUS_MODEL;
+    return config.opusModel ?? config.model;
   }
   if (caseId.includes('context_1m') || caseId.includes('thinking') || caseId.includes('mcp')) {
-    return CLAUDE_AGENT_SONNET_MODEL;
+    return config.sonnetModel ?? config.model;
   }
   return 'default';
 }
@@ -159,6 +140,8 @@ export function getClaudeAgentCaseHttpTrace(caseId: string): TestCaseHttpTrace |
 }
 
 export function buildAnthropicCases({ client, config }: AnthropicCaseContext): TestCase[] {
+  const haikuModel = config.haikuModel ?? config.model;
+  const fastModeModel = config.fastModeModel ?? config.model;
   const baseMessages = [{ role: 'user', content: 'Reply with exactly: ok' }] as const;
   const cacheProbeMessages = [
     {
@@ -214,15 +197,15 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
       },
     },
     'different_model_haiku': {
-      description: 'different model: Claude Haiku 4.5',
+      description: 'different model: configured Haiku model slot',
       covers: ['model'],
       run: async () => {
         const response = await createMessage({
-          model: 'claude-haiku-4-5',
+          model: haikuModel,
           max_tokens: 64,
           messages: [...baseMessages],
         });
-        return `model=claude-haiku-4-5, ${summarizeAnthropicResponse(response)}`;
+        return `model=${haikuModel}, ${summarizeAnthropicResponse(response)}`;
       },
     },
     'sampling_and_stop': {
@@ -765,7 +748,7 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
       run: async () => {
         const response = await createMessage(
           {
-            model: config.model,
+            model: fastModeModel,
             max_tokens: 64,
             messages: [...baseMessages],
           },
@@ -1114,14 +1097,10 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
     'fast_mode_basic': {
       description: 'fast mode with speed parameter',
       covers: ['speed', 'betas'],
-      precondition: () =>
-        supportsFastMode(config.model)
-          ? undefined
-          : `fast mode requires claude-opus-4-6; current=${config.model}`,
       run: async () => {
         const response = await createMessage(
           {
-            model: config.model,
+            model: fastModeModel,
             max_tokens: 1024,
             messages: [
               {
@@ -1141,14 +1120,10 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
     'fast_mode_stream': {
       description: 'fast mode with streaming',
       covers: ['speed', 'betas', 'stream'],
-      precondition: () =>
-        supportsFastMode(config.model)
-          ? undefined
-          : `fast mode requires claude-opus-4-6; current=${config.model}`,
       run: async () => {
         const stream = await createMessage(
           {
-            model: config.model,
+            model: fastModeModel,
             max_tokens: 1024,
             stream: true,
             messages: [
@@ -1179,14 +1154,10 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
     'fast_mode_with_tools': {
       description: 'fast mode with tools',
       covers: ['speed', 'betas', 'tools', 'tool_choice'],
-      precondition: () =>
-        supportsFastMode(config.model)
-          ? undefined
-          : `fast mode requires claude-opus-4-6; current=${config.model}`,
       run: async () => {
         const response = await createMessage(
           {
-            model: config.model,
+            model: fastModeModel,
             max_tokens: 128,
             messages: [
               {
@@ -1208,14 +1179,10 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
     'fast_mode_with_thinking': {
       description: 'fast mode with extended thinking',
       covers: ['speed', 'betas', 'thinking'],
-      precondition: () =>
-        supportsFastMode(config.model)
-          ? undefined
-          : `fast mode requires claude-opus-4-6; current=${config.model}`,
       run: async () => {
         const response = await createMessage(
           {
-            model: config.model,
+            model: fastModeModel,
             max_tokens: 1200,
             messages: [
               {
@@ -1340,12 +1307,15 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
   return cases.map((testCase) => ({
     ...testCase,
     protocol: 'anthropic.messages',
-    modelScope: resolveAnthropicMessageModelScope(testCase.id),
+    modelScope: resolveAnthropicMessageModelScope(testCase.id, config),
   }));
 }
 
 export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestCase[] {
   const defaultModel = config.model;
+  const opusModel = config.opusModel ?? defaultModel;
+  const sonnetModel = config.sonnetModel ?? defaultModel;
+  const haikuModel = config.haikuModel ?? defaultModel;
 
   function parseCustomHeadersObject(
     raw: string | undefined,
@@ -1596,7 +1566,7 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
 
     return {
       ...restOptions,
-      model: remapClaudeAgentModel(restOptions.model),
+      model: restOptions.model,
       env: normalizedEnv,
     } as ClaudeAgentSessionOptions;
   }
@@ -2207,28 +2177,28 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
     context_1m: {
       prompt: 'Reply with exactly: beta context 1m ok',
       overrides: {
-        model: 'claude-sonnet-4-6',
+        model: sonnetModel,
         betas: ['context-1m-2025-08-07'],
       } as Partial<ClaudeAgentSessionOptions>,
     },
     thinking: {
       prompt: 'Solve 12 + 30 and reply with only the number.',
       overrides: {
-        model: 'claude-sonnet-4-6',
+        model: sonnetModel,
         thinking: { type: 'adaptive' },
       } as Partial<ClaudeAgentSessionOptions>,
     },
     effort: {
       prompt: 'Reply with exactly: effort probe ok',
       overrides: {
-        model: 'claude-opus-4-6',
+        model: opusModel,
         effort: 'high',
       } as Partial<ClaudeAgentSessionOptions>,
     },
     mcp: {
       prompt: 'Reply with exactly: mcp probe ok',
       overrides: {
-        model: 'claude-sonnet-4-6',
+        model: sonnetModel,
         mcpServers: {
           'beta-probe-server': {
             command: 'echo',
@@ -2240,7 +2210,7 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
     structured_output: {
       prompt: 'Return status=ok and reason=structured.',
       overrides: {
-        model: 'claude-sonnet-4-6',
+        model: sonnetModel,
         outputFormat: {
           type: 'json_schema',
           schema: {
@@ -2491,36 +2461,36 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
       },
     },
     'different_model_opus': {
-      description: '测试 Claude Opus 4.6 模型',
+      description: '测试配置的 Opus 模型槽位',
       covers: ['model', 'prompt'],
       run: async () => {
         const opusOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-opus-4-6',
+          model: opusModel,
         };
 
         const result = await unstable_v2_prompt('Reply with: opus ok', opusOptions);
 
         if (result.type === 'result' && result.subtype === 'success') {
-          return `model=${CLAUDE_AGENT_OPUS_MODEL}, result="${truncate(result.result)}"`;
+          return `model=${opusModel}, result="${truncate(result.result)}"`;
         } else {
           return `error: ${result.subtype}`;
         }
       },
     },
     'different_model_haiku': {
-      description: '测试 Claude Haiku 4.5 模型',
+      description: '测试配置的 Haiku 模型槽位',
       covers: ['model', 'prompt'],
       run: async () => {
         const haikuOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-haiku-4-5-20251001',
+          model: haikuModel,
         };
 
         const result = await unstable_v2_prompt('Reply with: haiku ok', haikuOptions);
 
         if (result.type === 'result' && result.subtype === 'success') {
-          return `model=${CLAUDE_AGENT_HAIKU_MODEL}, result="${truncate(result.result)}"`;
+          return `model=${haikuModel}, result="${truncate(result.result)}"`;
         } else {
           return `error: ${result.subtype}`;
         }
@@ -2806,13 +2776,13 @@ Please proceed.`,
     // ========================================
 
     'beta_context_1m_basic': {
-      description: 'Beta: 启用 1M 上下文窗口 (Sonnet 4.6)',
+      description: 'Beta: 启用 1M 上下文窗口',
       covers: ['model', 'prompt', 'betas'],
       run: async () => {
         const context = 'beta_context_1m_basic';
         const betaOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           betas: ['context-1m-2025-08-07'],
         };
 
@@ -2838,7 +2808,7 @@ Please proceed.`,
         const context = 'beta_context_1m_with_session';
         const betaSessionOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           betas: ['context-1m-2025-08-07'],
         };
 
@@ -2865,7 +2835,7 @@ Please proceed.`,
         const context = 'beta_context_1m_system_message';
         const betaOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           betas: ['context-1m-2025-08-07'],
         };
 
@@ -2885,13 +2855,13 @@ Please proceed.`,
     },
 
     'beta_context_1m_opus': {
-      description: 'Beta: Opus 4.6 与 1M 上下文 (兼容性测试)',
+      description: 'Beta: Opus 模型槽位与 1M 上下文 (兼容性测试)',
       covers: ['model', 'prompt', 'betas'],
       run: async () => {
         const context = 'beta_context_1m_opus';
         const betaOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-opus-4-6',
+          model: opusModel,
           betas: ['context-1m-2025-08-07'],
         };
 
@@ -2904,18 +2874,18 @@ Please proceed.`,
         }
 
         const requestBetas = assertRequestHasBetas(requests, ['context-1m-2025-08-07'], context);
-        return `model=${CLAUDE_AGENT_OPUS_MODEL}, subtype=${result.subtype}, request_betas=${requestBetas.join(',')}`;
+        return `model=${opusModel}, subtype=${result.subtype}, request_betas=${requestBetas.join(',')}`;
       },
     },
 
     'beta_context_1m_haiku': {
-      description: 'Beta: Haiku 4.5 与 1M 上下文 (兼容性测试)',
+      description: 'Beta: Haiku 模型槽位与 1M 上下文 (兼容性测试)',
       covers: ['model', 'prompt', 'betas'],
       run: async () => {
         const context = 'beta_context_1m_haiku';
         const betaOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-haiku-4-5-20251001',
+          model: haikuModel,
           betas: ['context-1m-2025-08-07'],
         };
 
@@ -2928,7 +2898,7 @@ Please proceed.`,
         }
 
         const requestBetas = assertRequestHasBetas(requests, ['context-1m-2025-08-07'], context);
-        return `model=${CLAUDE_AGENT_HAIKU_MODEL}, subtype=${result.subtype}, request_betas=${requestBetas.join(',')}`;
+        return `model=${haikuModel}, subtype=${result.subtype}, request_betas=${requestBetas.join(',')}`;
       },
     },
 
@@ -2939,7 +2909,7 @@ Please proceed.`,
         const context = 'beta_invalid_feature';
         const invalidBetaOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           betas: ['invalid-beta-feature-xyz'],
         };
 
@@ -2965,7 +2935,7 @@ Please proceed.`,
         const context = 'beta_empty_array';
         const emptyBetaOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           betas: [],
         };
 
@@ -2995,7 +2965,7 @@ Please proceed.`,
         const context = 'beta_with_tools';
         const betaWithToolsOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           betas: ['context-1m-2025-08-07'],
           allowedTools: ['Read'],
         };
@@ -3048,7 +3018,7 @@ Please proceed.`,
         const context = 'beta_context_1m_streaming';
         const betaStreamingOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           betas: ['context-1m-2025-08-07'],
         };
 
@@ -3074,7 +3044,7 @@ Please proceed.`,
         const context = 'beta_context_1m_multi_turn';
         const betaOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           betas: ['context-1m-2025-08-07'],
         };
 
@@ -3104,7 +3074,7 @@ Please proceed.`,
         const context = 'beta_context_1m_resume_session';
         const betaOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           betas: ['context-1m-2025-08-07'],
         };
 
@@ -3144,7 +3114,7 @@ Please proceed.`,
         const context = 'beta_context_1m_with_custom_env';
         const betaWithEnvOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           betas: ['context-1m-2025-08-07'],
           env: {
             ...baseOptions.env!,
@@ -3175,7 +3145,7 @@ Please proceed.`,
         const context = 'beta_context_1m_error_recovery';
         const betaOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           betas: ['context-1m-2025-08-07'],
         };
 
@@ -3209,7 +3179,7 @@ Please proceed.`,
         const context = 'beta_thinking_adaptive';
         const thinkingOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           thinking: { type: 'adaptive' },
         };
 
@@ -3235,7 +3205,7 @@ Please proceed.`,
         const context = 'beta_thinking_enabled';
         const thinkingOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           thinking: { type: 'enabled', budgetTokens: 1000 },
         };
 
@@ -3261,7 +3231,7 @@ Please proceed.`,
         const context = 'beta_thinking_disabled';
         const noThinkingOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           thinking: { type: 'disabled' },
         };
 
@@ -3295,7 +3265,7 @@ Please proceed.`,
         const context = 'beta_effort_low';
         const lowEffortOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-opus-4-6',
+          model: opusModel,
           effort: 'low',
         };
 
@@ -3321,7 +3291,7 @@ Please proceed.`,
         const context = 'beta_effort_high';
         const highEffortOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-opus-4-6',
+          model: opusModel,
           effort: 'high',
         };
 
@@ -3341,13 +3311,13 @@ Please proceed.`,
     },
 
     'beta_effort_max': {
-      description: 'Beta: Effort=max (最大努力,仅 Opus 4.6)',
+      description: 'Beta: Effort=max (最大努力)',
       covers: ['model', 'prompt', 'effort'],
       run: async () => {
         const context = 'beta_effort_max';
         const maxEffortOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-opus-4-6',
+          model: opusModel,
           effort: 'max',
         };
 
@@ -3373,7 +3343,7 @@ Please proceed.`,
         const context = 'beta_effort_with_thinking';
         const combinedOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-opus-4-6',
+          model: opusModel,
           effort: 'high',
           thinking: { type: 'adaptive' },
         };
@@ -3405,7 +3375,7 @@ Please proceed.`,
         const context = 'beta_mcp_servers_config';
         const mcpOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           betas: ['mcp-client-2025-11-20', 'mcp-servers-2025-12-04'],
           mcpServers: {
             'test-server': {
@@ -3442,7 +3412,7 @@ Please proceed.`,
         const context = 'beta_context_1m_with_effort';
         const combinedOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           betas: ['context-1m-2025-08-07'],
           effort: 'high',
         };
@@ -3470,7 +3440,7 @@ Please proceed.`,
         const context = 'beta_thinking_effort_context_1m';
         const tripleOptions: ClaudeAgentSessionOptions = {
           ...baseOptions,
-          model: 'claude-sonnet-4-6',
+          model: sonnetModel,
           betas: ['context-1m-2025-08-07'],
           thinking: { type: 'adaptive' },
           effort: 'high',
@@ -3505,7 +3475,7 @@ Please proceed.`,
   return cases.map((testCase) => ({
     ...testCase,
     protocol: 'claude-agent',
-    modelScope: resolveClaudeAgentModelScope(testCase.id),
+    modelScope: resolveClaudeAgentModelScope(testCase.id, config),
     run: async () => {
       const testId = createClaudeAgentTestId(testCase.id);
       let detail: string | undefined;

@@ -29,10 +29,21 @@ export async function runClaudeAgentCases(
   if (!config.apiKey) {
     return createSetupSkippedSummary(
       'claude-agent',
-      'agent',
+      config.model || 'agent',
       config.apiBaseUrl,
       CLAUDE_AGENT_PARAMS,
       'missing API key (set CLAUDE_AGENT_API_KEY, ANTHROPIC_API_KEY, or API_KEY)',
+      onProgress,
+    );
+  }
+
+  if (!config.model) {
+    return createSetupSkippedSummary(
+      'claude-agent',
+      'agent',
+      config.apiBaseUrl,
+      CLAUDE_AGENT_PARAMS,
+      'missing model (set CLAUDE_AGENT_MODEL or ANTHROPIC_MODEL, or pass model from the UI)',
       onProgress,
     );
   }

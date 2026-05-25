@@ -20,6 +20,8 @@ export interface AnthropicProviderConfig {
   apiKey?: string;
   apiBaseUrl?: string;
   model: string;
+  haikuModel?: string;
+  fastModeModel?: string;
   timeoutMs: number;
   container?: string;
   inferenceGeo?: string;
@@ -46,6 +48,9 @@ export interface ClaudeAgentProviderConfig {
   apiKey?: string;
   apiBaseUrl?: string;
   model: string;
+  opusModel?: string;
+  sonnetModel?: string;
+  haikuModel?: string;
   workingDirectory: string;
   skipGitRepoCheck: boolean;
   testImagePath?: string;
@@ -57,6 +62,7 @@ export interface CodexProviderConfig {
   provider: 'codex';
   apiKey?: string;
   apiBaseUrl?: string;
+  model?: string;
   workingDirectory: string;
   skipGitRepoCheck: boolean;
   testImagePath?: string;
@@ -202,6 +208,18 @@ function parseCustomHeaders(value: string | undefined): Record<string, string> |
     // invalid JSON, ignore
   }
   return undefined;
+}
+
+function normalizeOptionalModel(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  if (!normalized || normalized.toLowerCase() === 'default') {
+    return undefined;
+  }
+  return normalized;
 }
 
 function normalizeProviderName(raw: string): ProviderName | undefined {
@@ -398,7 +416,7 @@ export function resolveRuntimeConfig(): RuntimeConfig {
 
   const rawTargetApiType = firstNonEmptyEnv('TEST_API_TYPE', 'API_TYPE');
   const targetCases = firstNonEmptyEnv('TARGET_CASES', 'TEST_CASES', 'CASE_IDS');
-  const failFast = parseBoolean(firstNonEmptyEnv('FAIL_FAST'), false);
+  const failFast = false;
   const concurrency = parseNumber(firstNonEmptyEnv('SDK_CONCURRENCY'), 1);
   const reportFile = firstNonEmptyEnv('REPORT_FILE');
 
@@ -421,6 +439,8 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     apiKey: firstNonEmptyEnv('ANTHROPIC_API_KEY', 'API_KEY'),
     apiBaseUrl: firstNonEmptyEnv('ANTHROPIC_API_BASE_URL', 'ANTHROPIC_BASE_URL', 'API_BASE_URL'),
     model: firstNonEmptyEnv('ANTHROPIC_MODEL') ?? 'claude-3-5-haiku-latest',
+    haikuModel: firstNonEmptyEnv('ANTHROPIC_HAIKU_MODEL'),
+    fastModeModel: firstNonEmptyEnv('ANTHROPIC_FAST_MODE_MODEL', 'ANTHROPIC_OPUS_MODEL'),
     timeoutMs: parseNumber(firstNonEmptyEnv('ANTHROPIC_TIMEOUT_MS'), defaultTimeoutMs),
     container: firstNonEmptyEnv('ANTHROPIC_CONTAINER'),
     inferenceGeo: firstNonEmptyEnv('ANTHROPIC_INFERENCE_GEO'),
@@ -451,7 +471,10 @@ export function resolveRuntimeConfig(): RuntimeConfig {
       'ANTHROPIC_BASE_URL',
       'API_BASE_URL',
     ),
-    model: firstNonEmptyEnv('CLAUDE_AGENT_MODEL', 'ANTHROPIC_MODEL') ?? 'claude-sonnet-4-6',
+    model: firstNonEmptyEnv('CLAUDE_AGENT_MODEL', 'ANTHROPIC_MODEL') ?? '',
+    opusModel: firstNonEmptyEnv('CLAUDE_AGENT_OPUS_MODEL', 'ANTHROPIC_OPUS_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL'),
+    sonnetModel: firstNonEmptyEnv('CLAUDE_AGENT_SONNET_MODEL', 'ANTHROPIC_SONNET_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL'),
+    haikuModel: firstNonEmptyEnv('CLAUDE_AGENT_HAIKU_MODEL', 'ANTHROPIC_HAIKU_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL'),
     workingDirectory: resolveWorkingDirectory('CLAUDE_AGENT_WORKING_DIRECTORY'),
     skipGitRepoCheck: parseBoolean(firstNonEmptyEnv('CLAUDE_AGENT_SKIP_GIT_REPO_CHECK'), true),
     testImagePath: firstNonEmptyEnv('CLAUDE_AGENT_TEST_IMAGE_PATH'),
@@ -470,6 +493,7 @@ export function resolveRuntimeConfig(): RuntimeConfig {
       'OPENAI_BASE_URL',
       'API_BASE_URL',
     ),
+    model: normalizeOptionalModel(firstNonEmptyEnv('CODEX_MODEL')),
     workingDirectory: resolveWorkingDirectory('CODEX_WORKING_DIRECTORY'),
     skipGitRepoCheck: parseBoolean(firstNonEmptyEnv('CODEX_SKIP_GIT_REPO_CHECK'), true),
     testImagePath: firstNonEmptyEnv('CODEX_TEST_IMAGE_PATH'),

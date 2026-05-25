@@ -9,10 +9,13 @@ import {
   Eye,
   EyeOff,
   FileJson,
+  FolderOpen,
+  History,
   Layers,
   Pencil,
   Play,
   Plus,
+  RefreshCw,
   RotateCcw,
   Save,
   Search,
@@ -38,14 +41,23 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
+  GEMINI_GENERATE_CONTENT_SERVED_MODEL_IDS,
   OPENAI_CHAT_SERVED_MODEL_IDS,
   OPENAI_RESPONSES_SERVED_MODEL_IDS,
   runBrowserStandardCases,
 } from '@/lib/browser-runner'
-import { checkBackendHealth, runBackendCases } from '@/lib/backend-client'
+import {
+  checkBackendHealth,
+  listBackendRunHistory,
+  loadBackendRunHistoryReport,
+  runBackendCases,
+  saveBackendRunReport,
+} from '@/lib/backend-client'
+import { formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type {
   AgentProvider,
+  BackendRunHistoryEntry,
   PlatformRunConfig,
   RunProgressEvent,
   RunProgressHandler,
@@ -125,6 +137,7 @@ interface TargetCaseOption {
   value: string
   label: string
   group: string
+  requiredModels?: readonly string[]
 }
 
 const STANDARD_API_OPTIONS: StandardApiOption[] = [
@@ -158,7 +171,7 @@ const AGENT_OPTIONS: AgentOption[] = [
   {
     value: 'claude-agent',
     label: 'Claude Agent',
-    defaultModel: 'claude-sonnet-4-6',
+    defaultModel: '',
   },
   {
     value: 'codex',
@@ -200,10 +213,7 @@ const STANDARD_TARGET_CASES: Record<StandardApiType, TargetCaseOption[]> = {
       'web_search_options',
       'audio_modalities',
     ]),
-    ...caseOptions(
-      'OpenAI model catalog',
-      OPENAI_CHAT_SERVED_MODEL_IDS.map((model) => modelCatalogCaseId('model_', model)),
-    ),
+    ...modelCatalogCaseOptions('OpenAI model catalog', 'model_', OPENAI_CHAT_SERVED_MODEL_IDS),
     ...caseOptions('Gemini compatibility', [
       'gemini_message_roles_and_name',
       'gemini_multimodal_image_input',
@@ -217,35 +227,39 @@ const STANDARD_TARGET_CASES: Record<StandardApiType, TargetCaseOption[]> = {
       'gemini_response_envelope_and_usage',
     ]),
   ],
-  'openai.responses': caseOptions('Responses', [
-    'responses_basic',
-    'responses_sampling_and_limits',
-    'responses_background_and_instructions',
-    'responses_identity_and_cache',
-    'responses_prompt_cache_round_trip',
-    'responses_context_include_truncation',
-    'responses_text_json_schema',
-    'responses_tools',
-    'responses_previous_response_id',
-    'responses_conversation',
-    'responses_stream_and_options',
-    'responses_basic_stream',
-    'responses_sampling_and_limits_stream',
-    'responses_background_and_instructions_stream',
-    'responses_identity_and_cache_stream',
-    'responses_context_include_truncation_stream',
-    'responses_text_json_schema_stream',
-    'responses_tools_stream',
-    'responses_previous_response_id_stream',
-    'responses_conversation_stream',
-    'responses_reasoning',
-    'responses_reasoning_stream',
-    'responses_prompt',
-    'responses_prompt_stream',
-    ...OPENAI_RESPONSES_SERVED_MODEL_IDS.map((model) =>
-      modelCatalogCaseId('responses_model_', model),
+  'openai.responses': [
+    ...caseOptions('Responses', [
+      'responses_basic',
+      'responses_sampling_and_limits',
+      'responses_background_and_instructions',
+      'responses_identity_and_cache',
+      'responses_prompt_cache_round_trip',
+      'responses_context_include_truncation',
+      'responses_text_json_schema',
+      'responses_tools',
+      'responses_previous_response_id',
+      'responses_conversation',
+      'responses_stream_and_options',
+      'responses_basic_stream',
+      'responses_sampling_and_limits_stream',
+      'responses_background_and_instructions_stream',
+      'responses_identity_and_cache_stream',
+      'responses_context_include_truncation_stream',
+      'responses_text_json_schema_stream',
+      'responses_tools_stream',
+      'responses_previous_response_id_stream',
+      'responses_conversation_stream',
+      'responses_reasoning',
+      'responses_reasoning_stream',
+      'responses_prompt',
+      'responses_prompt_stream',
+    ]),
+    ...modelCatalogCaseOptions(
+      'OpenAI Responses model catalog',
+      'responses_model_',
+      OPENAI_RESPONSES_SERVED_MODEL_IDS,
     ),
-  ]),
+  ],
   'anthropic.messages': [
     ...caseOptions('Messages', [
       'basic',
@@ -340,8 +354,42 @@ const STANDARD_TARGET_CASES: Record<StandardApiType, TargetCaseOption[]> = {
       'cached_content_stream',
       'routing_and_model_selection_stream',
     ]),
+    ...modelCatalogCaseOptions(
+      'Gemini model catalog',
+      'model_',
+      GEMINI_GENERATE_CONTENT_SERVED_MODEL_IDS,
+    ),
   ],
 }
+
+const CLAUDE_AGENT_BETA_CATALOG_BETAS = [
+  'vertex-2023-10-16',
+  'bedrock-2023-05-31',
+  'web-search-2025-03-05',
+  'files-api-2025-04-14',
+  'oauth-2025-04-20',
+  'interleaved-thinking-2025-05-14',
+  'context-management-2025-06-27',
+  'ccr-byoc-2025-07-29',
+  'context-1m-2025-08-07',
+  'environments-2025-11-01',
+  'effort-2025-11-24',
+  'token-counting-2024-11-01',
+  'message-batches-2024-09-24',
+  'skills-2025-10-02',
+  'tool-search-tool-2025-10-19',
+  'tool-examples-2025-10-29',
+  'advanced-tool-use-2025-11-20',
+  'mcp-client-2025-11-20',
+  'structured-outputs-2025-11-13',
+  'structured-outputs-2025-12-15',
+  'mcp-servers-2025-12-04',
+  'compact-2026-01-12',
+  'prompt-caching-scope-2026-01-05',
+  'afk-mode-2026-01-31',
+  'fast-mode-2026-02-01',
+  'redact-thinking-2026-02-12',
+] as const
 
 const AGENT_TARGET_CASES: Record<AgentProvider, TargetCaseOption[]> = {
   'claude-agent': [
@@ -351,22 +399,57 @@ const AGENT_TARGET_CASES: Record<AgentProvider, TargetCaseOption[]> = {
       'streaming_session',
       'multi_turn_conversation',
       'structured_output_json',
+      'empty_and_special_prompts',
+      'streaming_message_types',
       'prompt_with_context',
+      'assistant_message_streaming',
+      'large_prompt_handling',
+    ]),
+    ...caseOptions('Model And Metadata', [
+      'different_model_opus',
+      'different_model_haiku',
+      'system_message_analysis',
+      'result_message_metadata',
     ]),
     ...caseOptions('Tools', [
       'tool_combination',
       'tool_execution_with_session',
       'multiple_tools_different_types',
     ]),
-    ...caseOptions('Beta', [
+    ...caseOptions('Errors', [
+      'error_handling_invalid_model',
+      'error_during_execution_handling',
+    ]),
+    ...caseOptions('Beta Context', [
       'beta_context_1m_basic',
       'beta_context_1m_with_session',
+      'beta_context_1m_system_message',
+      'beta_context_1m_opus',
+      'beta_context_1m_haiku',
+      'beta_invalid_feature',
+      'beta_empty_array',
+      'beta_with_tools',
+      'beta_context_1m_streaming',
+      'beta_context_1m_multi_turn',
+      'beta_context_1m_resume_session',
+      'beta_context_1m_with_custom_env',
+      'beta_context_1m_error_recovery',
+      'beta_context_1m_with_effort',
+    ]),
+    ...caseOptions('Beta Thinking And Effort', [
       'beta_thinking_adaptive',
       'beta_thinking_enabled',
+      'beta_thinking_disabled',
       'beta_effort_low',
       'beta_effort_high',
+      'beta_effort_max',
+      'beta_effort_with_thinking',
+      'beta_thinking_effort_context_1m',
+    ]),
+    ...caseOptions('Beta MCP', [
       'beta_mcp_servers_config',
     ]),
+    ...betaCatalogCaseOptions('Beta Catalog', CLAUDE_AGENT_BETA_CATALOG_BETAS),
   ],
   codex: caseOptions('Thread', [
     'basic_thread',
@@ -384,16 +467,64 @@ const AGENT_TARGET_CASES: Record<AgentProvider, TargetCaseOption[]> = {
   ]),
 }
 
-function caseOptions(group: string, values: string[]): TargetCaseOption[] {
+const LEGACY_CLAUDE_AGENT_SELECTED_CASES = new Set([
+  'basic_prompt',
+  'basic_session',
+  'streaming_session',
+  'multi_turn_conversation',
+  'structured_output_json',
+  'prompt_with_context',
+  'tool_combination',
+  'tool_execution_with_session',
+  'multiple_tools_different_types',
+  'beta_context_1m_basic',
+  'beta_context_1m_with_session',
+  'beta_thinking_adaptive',
+  'beta_thinking_enabled',
+  'beta_effort_low',
+  'beta_effort_high',
+  'beta_mcp_servers_config',
+])
+
+function caseOptions(
+  group: string,
+  values: readonly string[],
+  modelRequirements: Record<string, readonly string[]> = {},
+): TargetCaseOption[] {
   return values.map((value) => ({
     value,
     label: formatCaseLabel(value),
     group,
+    requiredModels: modelRequirements[value],
   }))
+}
+
+function modelCatalogCaseOptions(
+  group: string,
+  prefix: 'model_' | 'responses_model_',
+  models: readonly string[],
+): TargetCaseOption[] {
+  return models.map((model) => {
+    const value = modelCatalogCaseId(prefix, model)
+    return {
+      value,
+      label: formatCaseLabel(value),
+      group,
+      requiredModels: [model],
+    }
+  })
 }
 
 function modelCatalogCaseId(prefix: 'model_' | 'responses_model_', model: string): string {
   return `${prefix}${model.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`
+}
+
+function betaCatalogCaseOptions(group: string, betas: readonly string[]): TargetCaseOption[] {
+  return betas.map((beta) => ({
+    value: `beta_catalog_${beta.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`,
+    label: formatCaseLabel(`beta_catalog_${beta}`),
+    group,
+  }))
 }
 
 function formatCaseLabel(value: string): string {
@@ -411,6 +542,19 @@ function parseTargetCaseValue(value: string): string[] {
 
 function serializeTargetCaseValue(values: string[]): string {
   return Array.from(new Set(values)).join(',')
+}
+
+function normalizeAgentTargetCases(agentProvider: AgentProvider, targetCases: string): string {
+  const selected = parseTargetCaseValue(targetCases)
+  if (agentProvider !== 'claude-agent' || selected.length === 0) {
+    return targetCases
+  }
+
+  const looksLikeLegacyFullSelection =
+    selected.length >= 9
+    && selected.every((caseId) => LEGACY_CLAUDE_AGENT_SELECTED_CASES.has(caseId))
+
+  return looksLikeLegacyFullSelection ? '' : targetCases
 }
 
 function selectedStandardOption(apiType: StandardApiType): StandardApiOption {
@@ -446,14 +590,28 @@ function isGeminiOpenAICompatibilityModel(value: string): boolean {
   return value.trim().toLowerCase().startsWith('gemini-')
 }
 
+function normalizeModelName(value: string): string {
+  return value.trim().toLowerCase()
+}
+
+function matchesRequiredModel(option: TargetCaseOption, model: string): boolean {
+  if (!option.requiredModels || option.requiredModels.length === 0) {
+    return true
+  }
+  const normalizedModel = normalizeModelName(model)
+  return option.requiredModels.some((requiredModel) => normalizeModelName(requiredModel) === normalizedModel)
+}
+
 function getTargetCaseOptions(apiType: StandardApiType, model: string): TargetCaseOption[] {
   const options = STANDARD_TARGET_CASES[apiType]
-  if (apiType !== 'openai.chat') {
-    return options
-  }
-
   const geminiCompatibility = isGeminiOpenAICompatibilityModel(model)
   return options.filter((option) => {
+    if (!matchesRequiredModel(option, model)) {
+      return false
+    }
+    if (apiType !== 'openai.chat') {
+      return true
+    }
     if (option.group === 'Gemini compatibility') {
       return geminiCompatibility
     }
@@ -522,9 +680,9 @@ function createDefaultSiteConfig(): SiteProfileConfig {
 
 function createDefaultRunSettings(): RunSettings {
   return {
-    timeoutMs: '45000',
+    timeoutMs: '600000',
     concurrency: '1',
-    failFast: true,
+    failFast: false,
   }
 }
 
@@ -587,7 +745,7 @@ function normalizeRunSettings(value: unknown): RunSettings {
   return {
     timeoutMs: stringValue(value.timeoutMs, defaults.timeoutMs),
     concurrency: stringValue(value.concurrency, defaults.concurrency),
-    failFast: booleanValue(value.failFast, defaults.failFast),
+    failFast: false,
   }
 }
 
@@ -603,7 +761,7 @@ function normalizeRunTarget(value: unknown): RunTarget | undefined {
   if (value.kind === 'agent') {
     const agentProvider = isAgentProvider(value.agentProvider) ? value.agentProvider : 'claude-agent'
     const option = AGENT_OPTIONS.find((item) => item.value === agentProvider) ?? AGENT_OPTIONS[0]
-    return {
+    const target: AgentRunTarget = {
       id,
       kind: 'agent',
       enabled,
@@ -611,17 +769,25 @@ function normalizeRunTarget(value: unknown): RunTarget | undefined {
       model: stringValue(value.model, option.defaultModel),
       targetCases,
     }
+    return {
+      ...target,
+      targetCases: normalizeAgentTargetCases(agentProvider, pruneHiddenTargetCases(target)),
+    }
   }
 
   const apiType = isStandardApiType(value.apiType) ? value.apiType : 'openai.chat'
   const option = selectedStandardOption(apiType)
-  return {
+  const target: StandardRunTarget = {
     id,
     kind: 'standard',
     enabled,
     apiType,
     model: stringValue(value.model, option.defaultModel),
     targetCases,
+  }
+  return {
+    ...target,
+    targetCases: pruneHiddenTargetCases(target),
   }
 }
 
@@ -1296,16 +1462,39 @@ function getRunTargetLabel(target: RunTarget): string {
 
 function getRunTargetModel(target: RunTarget): string {
   if (target.kind === 'agent') {
-    return target.model.trim() || getAgentOption(target.agentProvider).defaultModel || 'Default'
+    return target.model.trim() || getAgentOption(target.agentProvider).defaultModel
   }
   return target.model.trim() || selectedStandardOption(target.apiType).defaultModel
 }
 
-function getRunTargetCaseOptions(target: RunTarget): TargetCaseOption[] {
+function getRunTargetModelLabel(target: RunTarget): string {
+  return getRunTargetModel(target) || 'Default'
+}
+
+function getAllRunTargetCaseOptions(target: RunTarget): TargetCaseOption[] {
   if (target.kind === 'agent') {
     return AGENT_TARGET_CASES[target.agentProvider]
   }
-  return getTargetCaseOptions(target.apiType, target.model)
+  return STANDARD_TARGET_CASES[target.apiType]
+}
+
+function getRunTargetCaseOptions(target: RunTarget): TargetCaseOption[] {
+  if (target.kind === 'agent') {
+    const model = getRunTargetModel(target)
+    return AGENT_TARGET_CASES[target.agentProvider].filter((option) => matchesRequiredModel(option, model))
+  }
+  return getTargetCaseOptions(target.apiType, getRunTargetModel(target))
+}
+
+function pruneHiddenTargetCases(target: RunTarget): string {
+  const selected = parseTargetCaseValue(target.targetCases)
+  if (selected.length === 0) {
+    return target.targetCases
+  }
+
+  const knownOptions = new Set(getAllRunTargetCaseOptions(target).map((option) => option.value))
+  const visibleOptions = new Set(getRunTargetCaseOptions(target).map((option) => option.value))
+  return serializeTargetCaseValue(selected.filter((caseId) => !knownOptions.has(caseId) || visibleOptions.has(caseId)))
 }
 
 function failedRunSummary(provider: string, model: string, error: unknown): RunSummary {
@@ -1351,17 +1540,37 @@ function buildRunSnapshot(
     standardExecution: site.standardExecution,
     timeoutMs: parsePositiveNumber(draft.settings.timeoutMs, 45_000),
     concurrency: parsePositiveNumber(draft.settings.concurrency, 1),
-    failFast: draft.settings.failFast,
+    failFast: false,
     targets: draft.targets.map((target) => ({
       kind: target.kind,
       enabled: target.enabled,
       apiType: target.kind === 'standard' ? target.apiType : undefined,
       agentProvider: target.kind === 'agent' ? target.agentProvider : undefined,
-      model: getRunTargetModel(target),
+      model: emptyToUndefined(getRunTargetModel(target)),
       targetCases: emptyToUndefined(target.targetCases),
       execution: target.kind === 'agent' ? 'backend' : site.standardExecution,
     })),
   }
+}
+
+function formatHistoryTitle(entry: BackendRunHistoryEntry): string {
+  if (entry.siteName) {
+    return entry.siteName
+  }
+  if (entry.providers.length > 0) {
+    return Array.from(new Set(entry.providers)).join(', ')
+  }
+  return 'Backend run'
+}
+
+function formatHistorySubtitle(entry: BackendRunHistoryEntry): string {
+  const providerText = entry.providerCount === 1 ? '1 provider' : `${entry.providerCount} providers`
+  const modelText = Array.from(new Set(entry.models)).slice(0, 2).join(', ')
+  return modelText ? `${providerText} · ${modelText}` : providerText
+}
+
+function formatHistoryOutcome(entry: BackendRunHistoryEntry): string {
+  return `${entry.totalPassed} passed / ${entry.totalFailed} failed / ${entry.totalSkipped} skipped`
 }
 
 type TargetProgressStatus = 'pending' | 'running' | 'complete'
@@ -1462,6 +1671,9 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
   const [runProgress, setRunProgress] = useState<RunProgressState>(EMPTY_RUN_PROGRESS)
   const [localError, setLocalError] = useState<string | null>(null)
   const [backendStatus, setBackendStatus] = useState<string | null>(null)
+  const [historyItems, setHistoryItems] = useState<BackendRunHistoryEntry[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const initialProfileLoadedRef = useRef(false)
 
@@ -1718,6 +1930,10 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
       const headers = parseCustomHeaders(siteConfig.customHeaders)
       const timeoutMs = parsePositiveNumber(runDraft.settings.timeoutMs, 45_000)
       const concurrency = parsePositiveNumber(runDraft.settings.concurrency, 1)
+      const runSnapshot = buildRunSnapshot(selectedProfileName, siteConfig, runDraft)
+      const runUsesBackend = activeTargets.some((target) => (
+        target.kind === 'agent' || siteConfig.standardExecution === 'backend'
+      ))
       const summaries: RunSummary[] = []
       const progressTargets = activeTargets.map(createTargetProgress)
       const progressByTargetId = new Map(progressTargets.map((target) => [target.id, target]))
@@ -1781,6 +1997,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
 
       for (const target of activeTargets) {
         const model = getRunTargetModel(target)
+        const modelLabel = getRunTargetModelLabel(target)
         try {
           if (target.kind === 'standard') {
             const config: PlatformRunConfig = {
@@ -1793,8 +2010,10 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
               targetCases: emptyToUndefined(target.targetCases),
               customHeaders: headers,
               apiVersion: emptyToUndefined(siteConfig.apiVersion),
-              failFast: runDraft.settings.failFast,
+              failFast: false,
               concurrency,
+              persistResult: false,
+              runSnapshot,
             }
 
             const report = siteConfig.standardExecution === 'backend'
@@ -1808,7 +2027,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                 targetCases: config.targetCases,
                 customHeaders: headers,
                 apiVersion: config.apiVersion,
-                failFast: config.failFast,
+                failFast: false,
                 onProgress: progressHandlerFor(target),
               })
             summaries.push(report)
@@ -1819,27 +2038,36 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
               agentProvider: target.agentProvider,
               apiKey: emptyToUndefined(siteConfig.apiKey),
               apiBaseUrl: emptyToUndefined(siteConfig.apiBaseUrl),
-              model,
+              model: emptyToUndefined(model),
               timeoutMs,
               targetCases: emptyToUndefined(target.targetCases),
               customHeaders: headers,
               apiVersion: emptyToUndefined(siteConfig.apiVersion),
-              failFast: runDraft.settings.failFast,
+              failFast: false,
               concurrency,
               workingDirectory: emptyToUndefined(siteConfig.workingDirectory),
               skipGitRepoCheck: siteConfig.skipGitRepoCheck,
               testImagePath: emptyToUndefined(siteConfig.testImagePath),
+              persistResult: false,
+              runSnapshot,
             }, { onProgress: progressHandlerFor(target) }))
             completeTarget(target)
           }
         } catch (targetError) {
           failTarget(target, targetError)
-          summaries.push(failedRunSummary(getRunTargetLabel(target), model, targetError))
+          summaries.push(failedRunSummary(getRunTargetLabel(target), modelLabel, targetError))
         }
       }
 
       const merged = mergeRunSummaries(summaries)
-      merged.runSnapshot = buildRunSnapshot(selectedProfileName, siteConfig, runDraft)
+      merged.runSnapshot = runSnapshot
+      if (runUsesBackend) {
+        try {
+          await saveBackendRunReport(siteConfig.backendUrl, merged)
+        } catch (historyErrorValue) {
+          console.error('Failed to save backend run history', historyErrorValue)
+        }
+      }
       onReport(merged)
     } catch (runError) {
       setLocalError(runError instanceof Error ? runError.message : String(runError))
@@ -1858,6 +2086,36 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
       setLocalError(healthError instanceof Error ? healthError.message : String(healthError))
     }
   }, [siteConfig.backendUrl])
+
+  const handleRefreshHistory = useCallback(async () => {
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      setHistoryItems(await listBackendRunHistory(siteConfig.backendUrl))
+    } catch (historyErrorValue) {
+      setHistoryError(historyErrorValue instanceof Error ? historyErrorValue.message : String(historyErrorValue))
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [siteConfig.backendUrl])
+
+  const handleLoadHistoryReport = useCallback(async (id: string) => {
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      onReport(await loadBackendRunHistoryReport(siteConfig.backendUrl, id))
+    } catch (historyErrorValue) {
+      setHistoryError(historyErrorValue instanceof Error ? historyErrorValue.message : String(historyErrorValue))
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [onReport, siteConfig.backendUrl])
+
+  useEffect(() => {
+    if (requiresBackend) {
+      void handleRefreshHistory()
+    }
+  }, [handleRefreshHistory, requiresBackend])
 
   const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -1990,9 +2248,19 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                             className="block w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-2 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900"
                             value={target.model}
                             onChange={(event) => {
-                              updateTarget(target.id, (current) => ({ ...current, model: event.target.value }))
+                              const model = event.target.value
+                              updateTarget(target.id, (current) => {
+                                const nextTarget = { ...current, model } as RunTarget
+                                const targetCases = pruneHiddenTargetCases(nextTarget)
+                                return {
+                                  ...nextTarget,
+                                  targetCases: nextTarget.kind === 'agent'
+                                    ? normalizeAgentTargetCases(nextTarget.agentProvider, targetCases)
+                                    : targetCases,
+                                }
+                              })
                             }}
-                            placeholder={getRunTargetModel(target)}
+                            placeholder={getRunTargetModelLabel(target)}
                           />
                           <TargetCasesField
                             value={target.targetCases}
@@ -2034,15 +2302,6 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                     onChange={(value) => { updateRunSettings({ concurrency: value }) }}
                     type="number"
                   />
-                </div>
-                <div className="flex items-end md:col-span-3">
-                  <label className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700">
-                    <Checkbox
-                      checked={runDraft.settings.failFast}
-                      onCheckedChange={(checked) => { updateRunSettings({ failFast: checked === true }) }}
-                    />
-                    Fail fast
-                  </label>
                 </div>
               </div>
             </div>
@@ -2135,6 +2394,68 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                     Reset Inputs
                   </button>
                 </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)]">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="flex min-w-0 items-center text-base font-bold text-slate-800">
+                  <History className="mr-2 h-4 w-4 shrink-0 text-slate-500" />
+                  <span className="truncate">Backend History</span>
+                </h3>
+                <button
+                  type="button"
+                  className="rounded-md p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-50"
+                  onClick={() => { void handleRefreshHistory() }}
+                  disabled={historyLoading}
+                  aria-label="Refresh backend history"
+                >
+                  <RefreshCw className={cn('h-4 w-4', historyLoading && 'animate-spin')} />
+                </button>
+              </div>
+
+              {historyError && (
+                <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                  {historyError}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {historyItems.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-500">
+                    {historyLoading ? 'Loading history...' : 'No saved backend runs'}
+                  </div>
+                ) : (
+                  historyItems.slice(0, 6).map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      className="group flex w-full items-start gap-3 rounded-lg border border-slate-200 px-3 py-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-50"
+                      onClick={() => { void handleLoadHistoryReport(entry.id) }}
+                      disabled={historyLoading || running}
+                    >
+                      <FolderOpen className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 group-hover:text-slate-700" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-slate-800">
+                          {formatHistoryTitle(entry)}
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-slate-500">
+                          {formatDateTime(entry.finishedAt)}
+                        </span>
+                        <span className="mt-1 block truncate text-xs text-slate-500">
+                          {formatHistorySubtitle(entry)}
+                        </span>
+                        <span className={cn(
+                          'mt-1 block truncate text-xs font-semibold',
+                          entry.totalFailed > 0 ? 'text-rose-600' : 'text-emerald-600',
+                        )}
+                        >
+                          {formatHistoryOutcome(entry)}
+                        </span>
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
 

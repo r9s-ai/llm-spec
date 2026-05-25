@@ -1,4 +1,10 @@
-import type { PlatformRunConfig, RunProgressEvent, RunProgressHandler, RunSummary } from '@/types'
+import type {
+  BackendRunHistoryEntry,
+  PlatformRunConfig,
+  RunProgressEvent,
+  RunProgressHandler,
+  RunSummary,
+} from '@/types'
 import { parseReport } from '@/lib/data-loader'
 
 export interface BackendHealth {
@@ -131,4 +137,73 @@ export async function runBackendCases(
     throw new Error(`Backend run failed: ${message}`)
   }
   return parseReport(payload)
+}
+
+function isBackendRunHistoryEntry(value: unknown): value is BackendRunHistoryEntry {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const entry = value as Record<string, unknown>
+  return (
+    typeof entry.id === 'string' &&
+    typeof entry.fileName === 'string' &&
+    typeof entry.startedAt === 'string' &&
+    typeof entry.finishedAt === 'string' &&
+    Array.isArray(entry.providers) &&
+    Array.isArray(entry.models) &&
+    typeof entry.totalPassed === 'number' &&
+    typeof entry.totalFailed === 'number' &&
+    typeof entry.totalSkipped === 'number'
+  )
+}
+
+export async function listBackendRunHistory(rawUrl: string): Promise<BackendRunHistoryEntry[]> {
+  const backendUrl = normalizeBackendUrl(rawUrl)
+  const response = await fetch(`${backendUrl}/api/history`)
+  if (!response.ok) {
+    throw new Error(`Backend history failed: ${response.status} ${response.statusText}`)
+  }
+
+  const payload = await response.json() as unknown
+  if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { items?: unknown }).items)) {
+    throw new Error('Backend history returned an invalid payload')
+  }
+
+  return (payload as { items: unknown[] }).items.filter(isBackendRunHistoryEntry)
+}
+
+export async function loadBackendRunHistoryReport(rawUrl: string, id: string): Promise<RunSummary> {
+  const backendUrl = normalizeBackendUrl(rawUrl)
+  const response = await fetch(`${backendUrl}/api/history/${encodeURIComponent(id)}`)
+  if (!response.ok) {
+    throw new Error(`Backend history report failed: ${response.status} ${response.statusText}`)
+  }
+  return parseReport(await response.json() as unknown)
+}
+
+export async function saveBackendRunReport(
+  rawUrl: string,
+  report: RunSummary,
+): Promise<BackendRunHistoryEntry | undefined> {
+  const backendUrl = normalizeBackendUrl(rawUrl)
+  const response = await fetch(`${backendUrl}/api/history`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(report),
+  })
+
+  const payload = await response.json().catch(() => undefined) as unknown
+  if (!response.ok) {
+    const message = payload && typeof payload === 'object' && 'error' in payload
+      ? String((payload as { error: unknown }).error)
+      : `${response.status} ${response.statusText}`
+    throw new Error(`Backend history save failed: ${message}`)
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return undefined
+  }
+  const entry = (payload as { entry?: unknown }).entry
+  return isBackendRunHistoryEntry(entry) ? entry : undefined
 }

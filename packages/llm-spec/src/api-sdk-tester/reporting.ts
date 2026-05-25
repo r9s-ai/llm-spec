@@ -296,6 +296,22 @@ export function printRuntimeConfig(config: RuntimeConfig): void {
   console.log(`imageModel: ${config.gemini.imageModel ?? '(none)'}`);
   console.log(`vertexOnlyCases: ${String(config.gemini.enableVertexOnlyCases)}`);
   console.log(`timeoutMs: ${String(config.gemini.timeoutMs)}`);
+  console.log('');
+  console.log('[claude-agent]');
+  console.log(`apiKey: ${maskSecret(config.claudeAgent.apiKey)}`);
+  console.log(`apiBaseUrl: ${config.claudeAgent.apiBaseUrl ?? '(default)'}`);
+  console.log(`model: ${config.claudeAgent.model}`);
+  console.log(`workingDirectory: ${config.claudeAgent.workingDirectory}`);
+  console.log(`skipGitRepoCheck: ${String(config.claudeAgent.skipGitRepoCheck)}`);
+  console.log(`timeoutMs: ${String(config.claudeAgent.timeoutMs)}`);
+  console.log('');
+  console.log('[codex]');
+  console.log(`apiKey: ${maskSecret(config.codex.apiKey)}`);
+  console.log(`apiBaseUrl: ${config.codex.apiBaseUrl ?? '(default)'}`);
+  console.log(`model: ${config.codex.model ?? '(default)'}`);
+  console.log(`workingDirectory: ${config.codex.workingDirectory}`);
+  console.log(`skipGitRepoCheck: ${String(config.codex.skipGitRepoCheck)}`);
+  console.log(`timeoutMs: ${String(config.codex.timeoutMs)}`);
 }
 
 export function printProviderSummary(summary: ProviderSummary): void {

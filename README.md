@@ -206,6 +206,7 @@ REPORT_FILE=./report.json pnpm test:sdk
 - `ANTHROPIC_API_KEY`
 - `ANTHROPIC_API_BASE_URL`
 - `ANTHROPIC_MODEL`
+- `ANTHROPIC_HAIKU_MODEL` / `ANTHROPIC_FAST_MODE_MODEL`（可选；未设置时相关用例使用 `ANTHROPIC_MODEL`）
 - `ANTHROPIC_INFERENCE_GEO`（启用 inference_geo 参数测试）
 
 ### Claude Agent
@@ -213,6 +214,7 @@ REPORT_FILE=./report.json pnpm test:sdk
 - `CLAUDE_AGENT_API_KEY`
 - `CLAUDE_AGENT_API_BASE_URL`
 - `CLAUDE_AGENT_MODEL`
+- `CLAUDE_AGENT_OPUS_MODEL` / `CLAUDE_AGENT_SONNET_MODEL` / `CLAUDE_AGENT_HAIKU_MODEL`（可选；只在需要按模型槽位覆盖特定 Agent 用例时使用，未设置时回退到 `CLAUDE_AGENT_MODEL`）
 
 说明：使用 `CUSTOM_HEADERS` 注入 Agent 请求头，例如 `{"X-Debug-Channel-ID":"13"}`；同时兼容旧的 `CLAUDE_AGENT_CUSTOM_HEADERS` 和 `ANTHROPIC_CUSTOM_HEADERS`。
 
@@ -228,6 +230,7 @@ REPORT_FILE=./report.json pnpm test:sdk
 - `GEMINI_ENABLE_VERTEX_ONLY_CASES`（启用 routing/modelSelection 等 Vertex 偏向特性）
 - `GEMINI_MODEL_ARMOR_PROMPT_TEMPLATE`
 - `GEMINI_MODEL_ARMOR_RESPONSE_TEMPLATE`
+- `GEMINI_INCLUDE_MODEL_CATALOG_CASES`（启用 Gemini 当前仍可服务的 generateContent 模型 smoke 测试；设置 `TARGET_CASES` 时也会自动加载这些可筛选用例）
 
 ## 输出结果
 

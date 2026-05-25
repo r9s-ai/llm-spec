@@ -4,6 +4,7 @@ import {
   HarmBlockThreshold,
   HarmCategory,
   MediaResolution,
+  Modality,
 } from '@google/genai';
 
 import type { GoogleGenAI } from '@google/genai';
@@ -12,6 +13,7 @@ import type { GeminiProviderConfig } from '../../environment';
 import { summarizeGeminiResponse, truncate } from '../runtime';
 import type { TestCase } from '../types';
 import { defineCases } from '../define-cases';
+import { buildGeminiServedModelCases } from './models';
 
 export const GEMINI_GENERATE_CONTENT_PARAMS = [
   'model',
@@ -832,10 +834,15 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
           model: config.audioModel ?? config.model,
           contents: 'Say hello in one sentence.',
           config: {
-            responseModalities: ['AUDIO'],
+            responseModalities: [Modality.AUDIO],
             mediaResolution: MediaResolution.MEDIA_RESOLUTION_LOW,
             speechConfig: {
               languageCode: 'en-US',
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: 'Kore',
+                },
+              },
             },
             audioTimestamp: true,
             maxOutputTokens: 64,
@@ -854,7 +861,7 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
           model: config.imageModel ?? config.model,
           contents: 'Generate a simple landscape image.',
           config: {
-            responseModalities: ['IMAGE'],
+            responseModalities: [Modality.IMAGE],
             imageConfig: {
               aspectRatio: '1:1',
               imageSize: '1K',
@@ -912,9 +919,14 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
     },
   });
 
-  return cases.map((testCase) => ({
+  const normalizedCases = cases.map((testCase) => ({
     ...testCase,
     protocol: 'gemini.generateContent',
     modelScope: resolveGeminiModelScope(testCase.id),
   }));
+
+  return [
+    ...normalizedCases,
+    ...buildGeminiServedModelCases({ ai, config }),
+  ];
 }
