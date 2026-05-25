@@ -44,7 +44,11 @@ export const OPENAI_RESPONSES_PARAMS = [
 ] as const;
 
 function resolveOpenAIResponsesModelScope(caseId: string): string {
-  if (caseId === 'responses_reasoning' || caseId === 'responses_reasoning_stream') {
+  if (
+    caseId === 'responses_reasoning' ||
+    caseId === 'responses_reasoning_stream' ||
+    caseId === 'responses_reasoning_effort_variants'
+  ) {
     return 'reasoning';
   }
   if (caseId === 'responses_prompt' || caseId === 'responses_prompt_stream') {
@@ -56,6 +60,7 @@ function resolveOpenAIResponsesModelScope(caseId: string): string {
 export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext): TestCase[] {
   const compatibilityGateway = isOpenAICompatibilityGateway(config.apiBaseUrl);
   const responsesReasoningModel = config.reasoningModel ?? config.model;
+  const reasoningEffortVariants = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
   const promptCacheInput = `${'llm-spec responses cache prefix. '.repeat(384)}Reply with exactly: cache-ok`;
 
   const functionSchema = {
@@ -76,6 +81,23 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
           const response = await client.responses.create({
             model: config.model,
             input: 'Reply with exactly: ok',
+          });
+          return summarizeOpenAIResponses(response);
+        },
+      },
+      'responses_input_array_text': {
+        description: 'responses input array text variant',
+        covers: ['input'],
+        run: async () => {
+          const response = await client.responses.create({
+            model: config.model,
+            input: [
+              {
+                role: 'user',
+                content: 'Reply with exactly: ok',
+              },
+            ],
+            max_output_tokens: 32,
           });
           return summarizeOpenAIResponses(response);
         },
@@ -242,6 +264,39 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
           return summarizeOpenAIResponses(response);
         },
       },
+      'responses_text_format_variants': {
+        description: 'responses text.format text/json_object variants',
+        covers: ['text'],
+        run: async () => {
+          const variants = [
+            {
+              name: 'text',
+              input: 'Say hello in one short sentence.',
+              format: { type: 'text' },
+            },
+            {
+              name: 'json_object',
+              input: 'Return JSON object only: {"status":"ok"}',
+              format: { type: 'json_object' },
+            },
+          ] as const;
+          const results: string[] = [];
+
+          for (const variant of variants) {
+            const response = await client.responses.create({
+              model: config.model,
+              input: variant.input,
+              text: {
+                format: variant.format,
+              },
+              max_output_tokens: 64,
+            });
+            results.push(`${variant.name}:${summarizeOpenAIResponses(response)}`);
+          }
+
+          return results.join(' | ');
+        },
+      },
       'responses_tools': {
         description: 'responses tools + tool_choice + parallel + max_tool_calls',
         covers: ['tools', 'tool_choice', 'parallel_tool_calls', 'max_tool_calls'],
@@ -279,6 +334,160 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
             throw new Error('expected at least one function_call in responses output');
           }
 
+          return summarizeOpenAIResponses(response);
+        },
+      },
+      'responses_tool_choice_variants': {
+        description: 'responses tool_choice none/auto/required variants',
+        covers: ['tools', 'tool_choice'],
+        run: async () => {
+          const results: string[] = [];
+          const choices = ['none', 'auto', 'required'] as const;
+
+          for (const toolChoice of choices) {
+            const response = await client.responses.create(
+              {
+                model: config.model,
+                input: 'Use the echo tool with text "variant" if tools are allowed.',
+                tools: [
+                  {
+                    type: 'function',
+                    name: 'echo',
+                    description: 'Echo back input',
+                    parameters: functionSchema,
+                    strict: true,
+                  },
+                ],
+                tool_choice: toolChoice,
+                max_output_tokens: 128,
+              } as never,
+            );
+            const output = (response as { output?: Array<{ type?: string }> }).output ?? [];
+            const functionCallCount = output.filter((item) => item.type === 'function_call').length;
+            if (toolChoice === 'none' && functionCallCount > 0) {
+              throw new Error('expected tool_choice=none to suppress function calls');
+            }
+            if (toolChoice === 'required' && functionCallCount === 0) {
+              throw new Error('expected tool_choice=required to produce a function call');
+            }
+            results.push(`${toolChoice}:${functionCallCount}`);
+          }
+
+          return results.join(', ');
+        },
+      },
+      'responses_parallel_tool_calls_enabled': {
+        description: 'responses parallel_tool_calls true',
+        covers: ['tools', 'parallel_tool_calls', 'max_tool_calls'],
+        run: async () => {
+          const response = await client.responses.create(
+            {
+              model: config.model,
+              input: 'Call both echo and echo_extra with short text.',
+              tools: [
+                {
+                  type: 'function',
+                  name: 'echo',
+                  description: 'Echo back input',
+                  parameters: functionSchema,
+                  strict: true,
+                },
+                {
+                  type: 'function',
+                  name: 'echo_extra',
+                  description: 'Echo back extra input',
+                  parameters: functionSchema,
+                  strict: true,
+                },
+              ],
+              tool_choice: 'required',
+              parallel_tool_calls: true,
+              max_tool_calls: 2,
+              max_output_tokens: 128,
+            } as never,
+          );
+          const output = (response as { output?: Array<{ type?: string }> }).output ?? [];
+          const functionCallCount = output.filter((item) => item.type === 'function_call').length;
+          if (functionCallCount === 0) {
+            throw new Error('expected at least one function_call with parallel_tool_calls=true');
+          }
+          return `function_calls=${functionCallCount}, ${summarizeOpenAIResponses(response)}`;
+        },
+      },
+      'responses_tool_web_search': {
+        description: 'responses web_search tool variant',
+        covers: ['tools'],
+        precondition: () =>
+          compatibilityGateway
+            ? `web_search tool is not reliably supported on compatibility gateways: ${config.apiBaseUrl ?? '(unknown)'}`
+            : undefined,
+        run: async () => {
+          const response = await client.responses.create(
+            {
+              model: config.model,
+              input: 'Search the web and answer briefly: what is OpenAI?',
+              tools: [
+                {
+                  type: 'web_search',
+                  search_context_size: 'low',
+                },
+              ],
+              max_output_tokens: 128,
+            } as never,
+          );
+          return summarizeOpenAIResponses(response);
+        },
+      },
+      'responses_tool_code_interpreter': {
+        description: 'responses code_interpreter tool variant',
+        covers: ['tools'],
+        precondition: () =>
+          compatibilityGateway
+            ? `code_interpreter tool is not reliably supported on compatibility gateways: ${config.apiBaseUrl ?? '(unknown)'}`
+            : undefined,
+        run: async () => {
+          const response = await client.responses.create(
+            {
+              model: config.model,
+              input: 'Use code to calculate 15 * 27 and return only the number.',
+              tools: [
+                {
+                  type: 'code_interpreter',
+                },
+              ],
+              include: ['code_interpreter_call.outputs'],
+              max_output_tokens: 128,
+            } as never,
+          );
+          return summarizeOpenAIResponses(response);
+        },
+      },
+      'responses_tool_file_search': {
+        description: 'responses file_search tool variant',
+        covers: ['tools'],
+        precondition: () => {
+          if (compatibilityGateway) {
+            return `file_search tool is not reliably supported on compatibility gateways: ${config.apiBaseUrl ?? '(unknown)'}`;
+          }
+          return config.fileSearchVectorStoreId
+            ? undefined
+            : 'set OPENAI_FILE_SEARCH_VECTOR_STORE_ID to enable file_search tool test';
+        },
+        run: async () => {
+          const response = await client.responses.create(
+            {
+              model: config.model,
+              input: 'Search the provided vector store for documentation and answer briefly.',
+              tools: [
+                {
+                  type: 'file_search',
+                  vector_store_ids: [config.fileSearchVectorStoreId],
+                },
+              ],
+              include: ['file_search_call.results'],
+              max_output_tokens: 128,
+            } as never,
+          );
           return summarizeOpenAIResponses(response);
         },
       },
@@ -774,6 +983,45 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
               summary: 'auto',
             },
             max_output_tokens: 96,
+          });
+          return summarizeOpenAIResponses(response);
+        },
+      },
+      'responses_reasoning_effort_variants': {
+        description: 'responses reasoning.effort all documented variants',
+        covers: ['reasoning'],
+        precondition: () =>
+          isReasoningModel(responsesReasoningModel)
+            ? undefined
+            : `reasoning is documented for gpt-5/o-series models; current=${responsesReasoningModel}. set OPENAI_REASONING_MODEL to a supported model`,
+        run: async () => {
+          const results: string[] = [];
+
+          for (const effort of reasoningEffortVariants) {
+            const response = await client.responses.create({
+              model: responsesReasoningModel,
+              input: 'Solve 19*23 quickly, then output only the number.',
+              reasoning: {
+                effort,
+                summary: 'auto',
+              },
+              max_output_tokens: 96,
+            });
+            results.push(`${effort}:${summarizeOpenAIResponses(response)}`);
+          }
+
+          return results.join(' | ');
+        },
+      },
+      'responses_store_false': {
+        description: 'responses store=false variant',
+        covers: ['store'],
+        run: async () => {
+          const response = await client.responses.create({
+            model: config.model,
+            input: 'Reply with exactly: ok',
+            store: false,
+            max_output_tokens: 32,
           });
           return summarizeOpenAIResponses(response);
         },

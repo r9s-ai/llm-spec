@@ -26,6 +26,7 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
   } = createOpenAIChatSharedState({ client, config });
   const outputLimit = (requested: number, model = config.model) =>
     resolveChatCompletionOutputLimit(model, requested);
+  const reasoningEffortVariants = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
   const promptCacheMessages = [
     {
       role: (isReasoningModel(config.model) ? 'developer' : 'system') as 'developer' | 'system',
@@ -161,6 +162,29 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
           return summarizeOpenAIResponse(response);
         },
       },
+      'top_logprobs_variants': {
+        description: 'top_logprobs 1/5/10 variants',
+        covers: ['logprobs', 'top_logprobs'],
+        precondition: () =>
+          skipOpenAIOnlyCaseOnGemini('top_logprobs variants on chat.completions'),
+        run: async () => {
+          const results: string[] = [];
+          const variants = [1, 5, 10] as const;
+
+          for (const topLogprobs of variants) {
+            const response = await client.chat.completions.create({
+              model: config.model,
+              messages: [...baseMessages],
+              max_completion_tokens: outputLimit(16),
+              logprobs: true,
+              top_logprobs: topLogprobs,
+            });
+            results.push(`${topLogprobs}:${response.choices?.[0]?.logprobs ? 'ok' : 'missing'}`);
+          }
+
+          return results.join(', ');
+        },
+      },
       'logit_bias': {
         description: 'logit_bias',
         covers: ['logit_bias'],
@@ -281,6 +305,29 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
             max_completion_tokens: outputLimit(128, chatReasoningModel),
           });
           return summarizeOpenAIResponse(response);
+        },
+      },
+      'reasoning_effort_variants': {
+        description: 'reasoning_effort all documented variants',
+        covers: ['reasoning_effort'],
+        precondition: () =>
+          isReasoningModel(chatReasoningModel)
+            ? undefined
+            : `reasoning_effort is documented for gpt-5/o-series models; current=${chatReasoningModel}`,
+        run: async () => {
+          const results: string[] = [];
+
+          for (const effort of reasoningEffortVariants) {
+            const response = await client.chat.completions.create({
+              model: chatReasoningModel,
+              messages: [...chatReasoningMessages],
+              reasoning_effort: effort,
+              max_completion_tokens: outputLimit(128, chatReasoningModel),
+            });
+            results.push(`${effort}:${response.choices?.length ?? 0}`);
+          }
+
+          return results.join(', ');
         },
       },
       'n_choices_stream': {

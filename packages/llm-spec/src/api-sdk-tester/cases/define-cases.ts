@@ -5,13 +5,13 @@ export interface TestCaseDefinition {
   covers?: readonly string[];
   precondition?: () => string | undefined;
   run: () => Promise<string | undefined>;
-  apiType?: 'chatCompletions' | 'responses';
+  apiType?: 'chatCompletions' | 'responses' | 'embeddings' | 'audio' | 'images';
   protocol?: string;
   modelScope?: string;
 }
 
 export interface DefineCasesDefaults {
-  apiType?: 'chatCompletions' | 'responses';
+  apiType?: 'chatCompletions' | 'responses' | 'embeddings' | 'audio' | 'images';
   protocol?: string;
   modelScope?: string;
 }

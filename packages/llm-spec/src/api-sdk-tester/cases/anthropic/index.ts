@@ -161,6 +161,24 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
       additionalProperties: false,
     },
   };
+  const imageMediaTypeFixtures = [
+    {
+      mediaType: 'image/jpeg',
+      data: '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSEUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqGhcSlhY2iicKj8lJ4eXm5jpSFhoeIiZqSlsrFi5v0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD5/ooooA//2Q=',
+    },
+    {
+      mediaType: 'image/png',
+      data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
+    },
+    {
+      mediaType: 'image/gif',
+      data: 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+    },
+    {
+      mediaType: 'image/webp',
+      data: 'UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4H',
+    },
+  ] as const;
   const createMessageUnsafe = client.messages.create.bind(client.messages) as unknown as (
     body: Record<string, unknown>,
     options?: Record<string, unknown>,
@@ -251,6 +269,42 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
           messages: [...baseMessages],
         });
         return summarizeAnthropicResponse(response);
+      },
+    },
+    'image_source_media_type': {
+      description: 'image source media_type variants',
+      covers: ['messages'],
+      run: async () => {
+        const results: string[] = [];
+
+        for (const fixture of imageMediaTypeFixtures) {
+          const response = await createMessage({
+            model: config.model,
+            max_tokens: 64,
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'image',
+                    source: {
+                      type: 'base64',
+                      media_type: fixture.mediaType,
+                      data: fixture.data,
+                    },
+                  },
+                  {
+                    type: 'text',
+                    text: 'Describe this image in a few words.',
+                  },
+                ],
+              },
+            ],
+          });
+          results.push(`${fixture.mediaType}:${summarizeAnthropicResponse(response)}`);
+        }
+
+        return results.join(' | ');
       },
     },
     'output_config_json_schema': {

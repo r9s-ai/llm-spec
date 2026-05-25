@@ -15,6 +15,10 @@ import {
   OPENAI_RESPONSES_PARAMS,
 } from './cases/openai-responses';
 import {
+  buildOpenAIExtendedCases,
+  OPENAI_EXTENDED_PARAMS,
+} from './cases/openai-extended';
+import {
   createLoggingFetch,
   setCurrentProvider,
 } from './environment';
@@ -114,6 +118,49 @@ export async function runOpenAIResponsesCases(
   );
 }
 
+export async function runOpenAIExtendedCases(
+  config: OpenAIProviderConfig,
+  failFast: boolean,
+  concurrency: number = 1,
+  onProgress?: RunProgressHandler,
+): Promise<ProviderSummary> {
+  if (!config.apiKey) {
+    return createSetupSkippedSummary(
+      'openai(extended)',
+      config.model,
+      config.apiBaseUrl,
+      OPENAI_EXTENDED_PARAMS,
+      'missing API key (set OPENAI_API_KEY or API_KEY)',
+      onProgress,
+    );
+  }
+
+  if (isGeminiOpenAICompatibilityTarget(config.model)) {
+    return createSetupSkippedSummary(
+      'openai(extended)',
+      config.model,
+      config.apiBaseUrl,
+      OPENAI_EXTENDED_PARAMS,
+      'Gemini OpenAI compatibility coverage only targets chat.completions',
+      onProgress,
+    );
+  }
+
+  const client = createOpenAIClient(config);
+  setCurrentProvider('openai(extended)');
+  const extendedCases = buildOpenAIExtendedCases({ client, config });
+  return executeProviderCases(
+    'openai(extended)',
+    config.model,
+    config.apiBaseUrl,
+    OPENAI_EXTENDED_PARAMS,
+    extendedCases,
+    failFast,
+    concurrency,
+    onProgress,
+  );
+}
+
 export async function runOpenAICases(
   config: OpenAIProviderConfig,
   failFast: boolean,
@@ -122,5 +169,6 @@ export async function runOpenAICases(
 ): Promise<ProviderSummary[]> {
   const chatCompletionsSummary = await runOpenAIChatCases(config, failFast, concurrency, onProgress);
   const responsesSummary = await runOpenAIResponsesCases(config, failFast, concurrency, onProgress);
-  return [chatCompletionsSummary, responsesSummary];
+  const extendedSummary = await runOpenAIExtendedCases(config, failFast, concurrency, onProgress);
+  return [chatCompletionsSummary, responsesSummary, extendedSummary];
 }

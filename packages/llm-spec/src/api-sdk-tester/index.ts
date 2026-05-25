@@ -1,4 +1,9 @@
-export { runOpenAICases, runOpenAIChatCases, runOpenAIResponsesCases } from './openai-provider';
+export {
+  runOpenAICases,
+  runOpenAIChatCases,
+  runOpenAIExtendedCases,
+  runOpenAIResponsesCases,
+} from './openai-provider';
 export { runAnthropicCases } from './anthropic-provider';
 export { runGeminiCases } from './gemini-provider';
 export { runClaudeAgentCases } from '../agents/claude-agent-provider';

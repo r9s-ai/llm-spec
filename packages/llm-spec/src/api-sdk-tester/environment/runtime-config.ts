@@ -9,8 +9,16 @@ export interface OpenAIProviderConfig {
   apiBaseUrl?: string;
   model: string;
   audioModel?: string;
+  speechModel?: string;
+  transcriptionModel?: string;
+  translationModel?: string;
+  embeddingModel?: string;
+  imageModel?: string;
+  imageEditModel?: string;
+  dalleModel?: string;
   reasoningModel?: string;
   responsesPromptId?: string;
+  fileSearchVectorStoreId?: string;
   customHeaders?: Record<string, string>;
   timeoutMs: number;
 }
@@ -428,8 +436,16 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     apiBaseUrl: firstNonEmptyEnv('OPENAI_API_BASE_URL', 'OPENAI_BASE_URL', 'API_BASE_URL'),
     model: firstNonEmptyEnv('OPENAI_MODEL') ?? 'gpt-4o-mini',
     audioModel: firstNonEmptyEnv('OPENAI_AUDIO_MODEL'),
+    speechModel: firstNonEmptyEnv('OPENAI_SPEECH_MODEL') ?? 'gpt-4o-mini-tts',
+    transcriptionModel: firstNonEmptyEnv('OPENAI_TRANSCRIPTION_MODEL') ?? 'gpt-4o-mini-transcribe',
+    translationModel: firstNonEmptyEnv('OPENAI_TRANSLATION_MODEL') ?? 'whisper-1',
+    embeddingModel: firstNonEmptyEnv('OPENAI_EMBEDDING_MODEL') ?? 'text-embedding-3-small',
+    imageModel: firstNonEmptyEnv('OPENAI_IMAGE_MODEL') ?? 'gpt-image-1.5',
+    imageEditModel: firstNonEmptyEnv('OPENAI_IMAGE_EDIT_MODEL') ?? 'gpt-image-1.5',
+    dalleModel: firstNonEmptyEnv('OPENAI_DALLE_MODEL') ?? 'dall-e-3',
     reasoningModel: firstNonEmptyEnv('OPENAI_REASONING_MODEL'),
     responsesPromptId: firstNonEmptyEnv('OPENAI_RESPONSES_PROMPT_ID'),
+    fileSearchVectorStoreId: firstNonEmptyEnv('OPENAI_FILE_SEARCH_VECTOR_STORE_ID'),
     customHeaders: parseCustomHeaders(firstNonEmptyEnv('CUSTOM_HEADERS', 'OPENAI_CUSTOM_HEADERS')),
     timeoutMs: parseNumber(firstNonEmptyEnv('OPENAI_TIMEOUT_MS'), defaultTimeoutMs),
   };

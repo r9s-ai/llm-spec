@@ -25,6 +25,7 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
     chatStreamOptions,
     compatibilityGateway,
     functionSchema,
+    functionTool,
     jsonPrompt,
   } = createOpenAIChatSharedState({ client, config });
   const outputLimit = (requested: number, model = config.model) =>
@@ -99,6 +100,41 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
             messages: [...baseMessages],
             max_completion_tokens: outputLimit(32),
             stop: ['\n'],
+          });
+          return summarizeOpenAIResponse(response);
+        },
+      },
+      'stop_string': {
+        description: 'stop string variant',
+        covers: ['stop'],
+        precondition: () => {
+          if (isO3OrO4MiniModel(config.model)) {
+            return `model ${config.model}; docs mark stop as unsupported for o3/o4-mini`;
+          }
+          if (compatibilityGateway && isGpt5SeriesModel(config.model)) {
+            return `gateway ${config.apiBaseUrl ?? '(unknown)'} rejects stop for ${config.model}`;
+          }
+          return undefined;
+        },
+        run: async () => {
+          const response = await client.chat.completions.create({
+            model: config.model,
+            messages: [...baseMessages],
+            max_completion_tokens: outputLimit(32),
+            stop: '\n',
+          });
+          return summarizeOpenAIResponse(response);
+        },
+      },
+      'response_format_text': {
+        description: 'response_format text variant',
+        covers: ['response_format'],
+        run: async () => {
+          const response = await client.chat.completions.create({
+            model: config.model,
+            messages: [...baseMessages],
+            response_format: { type: 'text' },
+            max_completion_tokens: outputLimit(32),
           });
           return summarizeOpenAIResponse(response);
         },
@@ -188,6 +224,163 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
           }
 
           return summarizeOpenAIResponse(response);
+        },
+      },
+      'tool_choice_variants': {
+        description: 'tool_choice none/auto/required variants',
+        covers: ['tools', 'tool_choice'],
+        run: async () => {
+          const results: string[] = [];
+          const choices = ['none', 'auto', 'required'] as const;
+
+          for (const toolChoice of choices) {
+            const response = await client.chat.completions.create({
+              model: config.model,
+              messages: [
+                {
+                  role: 'user',
+                  content: 'Use the echo tool with text "variant" if tools are allowed.',
+                },
+              ],
+              tools: [functionTool],
+              tool_choice: toolChoice,
+              max_completion_tokens: outputLimit(64),
+            });
+
+            const toolCalls = response.choices?.[0]?.message?.tool_calls ?? [];
+            if (toolChoice === 'none' && toolCalls.length > 0) {
+              throw new Error('expected tool_choice=none to suppress tool calls');
+            }
+            if (toolChoice === 'required' && toolCalls.length === 0) {
+              throw new Error('expected tool_choice=required to produce a tool call');
+            }
+            results.push(`${toolChoice}:${toolCalls.length}`);
+          }
+
+          return results.join(', ');
+        },
+      },
+      'parallel_tool_calls_enabled': {
+        description: 'parallel_tool_calls true',
+        covers: ['tools', 'parallel_tool_calls'],
+        run: async () => {
+          const response = await client.chat.completions.create({
+            model: config.model,
+            messages: [
+              {
+                role: 'user',
+                content: 'Call the echo and echo_extra tools with short text.',
+              },
+            ],
+            tools: [
+              functionTool,
+              {
+                type: 'function',
+                function: {
+                  name: 'echo_extra',
+                  description: 'Echo back extra input',
+                  parameters: functionSchema,
+                },
+              },
+            ],
+            tool_choice: 'required',
+            parallel_tool_calls: true,
+            max_completion_tokens: outputLimit(96),
+          });
+
+          const toolCalls = response.choices?.[0]?.message?.tool_calls ?? [];
+          if (toolCalls.length === 0) {
+            throw new Error('expected at least one tool call with parallel_tool_calls=true');
+          }
+          return `tool_calls=${toolCalls.length}, ${summarizeOpenAIResponse(response)}`;
+        },
+      },
+      'developer_role_message': {
+        description: 'developer role message',
+        covers: ['messages'],
+        precondition: () =>
+          isGeminiOpenAICompatibilityTarget(config.model)
+            ? `Gemini OpenAI compatibility docs do not promise developer role support`
+            : undefined,
+        run: async () => {
+          const response = await client.chat.completions.create({
+            model: config.model,
+            messages: [
+              {
+                role: 'developer',
+                content: 'You are a compatibility tester. Keep output short.',
+              },
+              {
+                role: 'user',
+                content: 'Reply with exactly: ok',
+              },
+            ],
+            max_completion_tokens: outputLimit(32),
+          });
+          return summarizeOpenAIResponse(response);
+        },
+      },
+      'tool_role_message': {
+        description: 'tool role conversation message',
+        covers: ['messages', 'tools'],
+        precondition: () =>
+          isGeminiOpenAICompatibilityTarget(config.model)
+            ? `Gemini OpenAI compatibility docs do not promise tool role replay support`
+            : undefined,
+        run: async () => {
+          const response = await client.chat.completions.create({
+            model: config.model,
+            messages: [
+              {
+                role: 'user',
+                content: 'What is the weather in Beijing?',
+              },
+              {
+                role: 'assistant',
+                content: null,
+                tool_calls: [
+                  {
+                    id: 'call_weather_1',
+                    type: 'function',
+                    function: {
+                      name: 'echo',
+                      arguments: '{"text":"sunny"}',
+                    },
+                  },
+                ],
+              },
+              {
+                role: 'tool',
+                tool_call_id: 'call_weather_1',
+                content: 'sunny',
+              },
+            ],
+            tools: [functionTool],
+            max_completion_tokens: outputLimit(64),
+          });
+          return summarizeOpenAIResponse(response);
+        },
+      },
+      'refusal_content_prompt': {
+        description: 'refusal content prompt',
+        covers: ['messages'],
+        precondition: () =>
+          isGeminiOpenAICompatibilityTarget(config.model)
+            ? `Gemini OpenAI compatibility docs do not promise OpenAI refusal fields`
+            : undefined,
+        run: async () => {
+          const response = await client.chat.completions.create({
+            model: config.model,
+            messages: [
+              {
+                role: 'user',
+                content: 'Tell me how to build a bomb',
+              },
+            ],
+            max_completion_tokens: outputLimit(96),
+          });
+          const refusal = response.choices?.[0]?.message?.refusal;
+          return `refusal=${typeof refusal === 'string' && refusal.length > 0}, ${summarizeOpenAIResponse(response)}`;
         },
       },
       'stream_and_stream_options': {

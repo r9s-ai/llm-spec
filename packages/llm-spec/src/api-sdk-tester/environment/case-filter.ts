@@ -49,6 +49,13 @@ function getProviderSelectorAliases(provider: string): string[] {
     aliases.add('openai');
     aliases.add('responses');
     aliases.add('openai.responses');
+  } else if (normalizedProvider === 'openai(extended)') {
+    aliases.add('openai');
+    aliases.add('extended');
+    aliases.add('embeddings');
+    aliases.add('audio');
+    aliases.add('images');
+    aliases.add('openai.extended');
   } else if (normalizedProvider === 'anthropic') {
     aliases.add('claude');
     aliases.add('messages');

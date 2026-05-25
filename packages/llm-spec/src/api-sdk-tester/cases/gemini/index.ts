@@ -79,7 +79,11 @@ function resolveGeminiModelScope(caseId: string): string {
   if (caseId === 'audio_modality') {
     return 'audio';
   }
-  if (caseId === 'image_config') {
+  if (
+    caseId === 'image_config' ||
+    caseId === 'image_response_modalities_text_image' ||
+    caseId === 'image_google_search_tool'
+  ) {
     return 'image';
   }
   return 'default';
@@ -866,6 +870,44 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
               aspectRatio: '1:1',
               imageSize: '1K',
             },
+          },
+        });
+        return summarizeGeminiResponse(response);
+      },
+    },
+    'image_response_modalities_text_image': {
+      description: 'responseModalities TEXT+IMAGE',
+      covers: ['responseModalities'],
+      precondition: () =>
+        config.imageModel ? undefined : 'set GEMINI_IMAGE_MODEL to enable image modality test',
+      run: async () => {
+        const response = await ai.models.generateContent({
+          model: config.imageModel ?? config.model,
+          contents: 'Generate a simple picture of a red square and briefly describe it.',
+          config: {
+            responseModalities: [Modality.TEXT, Modality.IMAGE],
+          },
+        });
+        return summarizeGeminiResponse(response);
+      },
+    },
+    'image_google_search_tool': {
+      description: 'image model with google_search tool',
+      covers: ['tools', 'responseModalities'],
+      precondition: () =>
+        config.imageModel ? undefined : 'set GEMINI_IMAGE_MODEL to enable image tool test',
+      run: async () => {
+        const response = await ai.models.generateContent({
+          model: config.imageModel ?? config.model,
+          contents:
+            'Create a Da Vinci style anatomical sketch of a dissected Monarch butterfly with short English notes.',
+          config: {
+            responseModalities: [Modality.IMAGE, Modality.TEXT],
+            tools: [
+              {
+                googleSearch: {},
+              },
+            ],
           },
         });
         return summarizeGeminiResponse(response);

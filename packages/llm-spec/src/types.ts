@@ -66,7 +66,7 @@ export interface TestCaseResult {
   coveredParams: string[];
   detail?: string;
   error?: string;
-  apiType?: 'chatCompletions' | 'responses';
+  apiType?: 'chatCompletions' | 'responses' | 'embeddings' | 'audio' | 'images';
   protocol?: string;
   modelScope?: string;
   httpTrace?: TestCaseHttpTrace;
