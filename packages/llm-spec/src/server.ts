@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { readdir, readFile, mkdir, writeFile } from 'node:fs/promises';
+import { readdir, readFile, mkdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { basename, resolve as resolvePath } from 'node:path';
+import { basename, dirname, extname, resolve as resolvePath, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { formatError, resolveRuntimeConfig } from './api-sdk-tester';
 import type { RuntimeConfig, TargetApiType } from './api-sdk-tester';
@@ -18,6 +19,7 @@ const RUN_HISTORY_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
 const RUN_HISTORY_LIST_LIMIT = 200;
 const RUN_JOB_LIST_LIMIT = 100;
 const RUN_JOB_RETENTION_MS = 24 * 60 * 60 * 1000;
+const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
 
 const CASE_FILTER_ENV_KEYS = ['TARGET_CASES', 'TEST_CASES', 'CASE_IDS'] as const;
 
@@ -50,8 +52,18 @@ interface BackendRunJobTarget {
   enabled: boolean;
   apiType?: string;
   agentProvider?: AgentProvider;
+  apiKey?: string;
+  apiBaseUrl?: string;
   model?: string;
+  timeoutMs?: number;
+  concurrency?: number;
   targetCases?: string;
+  customHeaders?: Record<string, string>;
+  apiVersion?: string;
+  workingDirectory?: string;
+  skipGitRepoCheck?: boolean;
+  testImagePath?: string;
+  failFast?: boolean;
 }
 
 interface BackendRunJobRequest {
@@ -61,6 +73,7 @@ interface BackendRunJobRequest {
   standardExecution: 'browser' | 'backend';
   timeoutMs: number;
   concurrency: number;
+  failFast: boolean;
   customHeaders?: Record<string, string>;
   apiVersion?: string;
   workingDirectory?: string;
@@ -141,6 +154,141 @@ function startNdjson(response: ServerResponse): void {
 
 function writeNdjson(response: ServerResponse, body: unknown): void {
   response.write(`${JSON.stringify(body)}\n`);
+}
+
+function staticContentType(filePath: string): string {
+  const extension = extname(filePath).toLowerCase();
+  if (extension === '.html') {
+    return 'text/html; charset=utf-8';
+  }
+  if (extension === '.js' || extension === '.mjs') {
+    return 'text/javascript; charset=utf-8';
+  }
+  if (extension === '.css') {
+    return 'text/css; charset=utf-8';
+  }
+  if (extension === '.json' || extension === '.map') {
+    return 'application/json; charset=utf-8';
+  }
+  if (extension === '.svg') {
+    return 'image/svg+xml';
+  }
+  if (extension === '.png') {
+    return 'image/png';
+  }
+  if (extension === '.jpg' || extension === '.jpeg') {
+    return 'image/jpeg';
+  }
+  if (extension === '.webp') {
+    return 'image/webp';
+  }
+  if (extension === '.ico') {
+    return 'image/x-icon';
+  }
+  if (extension === '.wasm') {
+    return 'application/wasm';
+  }
+  return 'application/octet-stream';
+}
+
+async function directoryExists(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+async function resolveStaticRoot(): Promise<string | undefined> {
+  const candidates = [
+    process.env.LLM_SPEC_STATIC_DIR,
+    resolvePath(SERVER_DIR, 'public'),
+    resolvePath(SERVER_DIR, '../../reporter/dist'),
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    const fullPath = resolvePath(candidate);
+    if (await directoryExists(fullPath)) {
+      return fullPath;
+    }
+  }
+
+  return undefined;
+}
+
+function resolveStaticFile(root: string, pathname: string): string | undefined {
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(pathname);
+  } catch {
+    return undefined;
+  }
+
+  const relativePath = decodedPath.endsWith('/')
+    ? `${decodedPath.slice(1)}index.html`
+    : decodedPath.slice(1);
+  const candidate = resolvePath(root, relativePath || 'index.html');
+  if (candidate !== root && !candidate.startsWith(`${root}${sep}`)) {
+    return undefined;
+  }
+  return candidate;
+}
+
+async function readStaticFile(filePath: string): Promise<Buffer | undefined> {
+  try {
+    const fileStat = await stat(filePath);
+    if (!fileStat.isFile()) {
+      return undefined;
+    }
+    return await readFile(filePath);
+  } catch {
+    return undefined;
+  }
+}
+
+async function sendStaticFile(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+): Promise<boolean> {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return false;
+  }
+
+  const staticRoot = await resolveStaticRoot();
+  if (!staticRoot) {
+    return false;
+  }
+
+  const requestedFile = resolveStaticFile(staticRoot, url.pathname);
+  const fallbackFile = resolvePath(staticRoot, 'index.html');
+  const shouldFallbackToIndex = !extname(url.pathname);
+  const filePath = requestedFile
+    ? requestedFile
+    : shouldFallbackToIndex
+      ? fallbackFile
+      : undefined;
+  const body = filePath ? await readStaticFile(filePath) : undefined;
+  const fallbackBody = !body && shouldFallbackToIndex ? await readStaticFile(fallbackFile) : undefined;
+  const responseFile = body ? filePath : fallbackBody ? fallbackFile : undefined;
+  const responseBody = body ?? fallbackBody;
+
+  if (!responseFile || !responseBody) {
+    return false;
+  }
+
+  const isIndex = basename(responseFile) === 'index.html';
+  response.writeHead(200, {
+    'Content-Type': staticContentType(responseFile),
+    'Content-Length': String(responseBody.byteLength),
+    'Cache-Control': isIndex ? 'no-cache' : 'public, max-age=31536000, immutable',
+  });
+  if (request.method !== 'HEAD') {
+    response.end(responseBody);
+  } else {
+    response.end();
+  }
+  return true;
 }
 
 function isJsonRecord(value: unknown): value is JsonRecord {
@@ -308,9 +456,36 @@ function commonConfig(baseConfig: RuntimeConfig, body: JsonRecord): RuntimeConfi
   return {
     ...baseConfig,
     targetCases: optionalString(body, 'targetCases'),
-    failFast: false,
+    failFast: optionalBoolean(body, 'failFast') ?? baseConfig.failFast,
     concurrency: optionalPositiveNumber(body, 'concurrency') ?? baseConfig.concurrency,
     reportFile: undefined,
+  };
+}
+
+function normalizeRunTargetOverrides(body: JsonRecord): Pick<
+  BackendRunJobTarget,
+  | 'apiKey'
+  | 'apiBaseUrl'
+  | 'timeoutMs'
+  | 'concurrency'
+  | 'customHeaders'
+  | 'apiVersion'
+  | 'workingDirectory'
+  | 'skipGitRepoCheck'
+  | 'testImagePath'
+  | 'failFast'
+> {
+  return {
+    apiKey: optionalString(body, 'apiKey'),
+    apiBaseUrl: optionalString(body, 'apiBaseUrl'),
+    timeoutMs: optionalPositiveNumber(body, 'timeoutMs'),
+    concurrency: optionalPositiveNumber(body, 'concurrency'),
+    customHeaders: optionalCustomHeaders(body),
+    apiVersion: optionalString(body, 'apiVersion'),
+    workingDirectory: optionalString(body, 'workingDirectory'),
+    skipGitRepoCheck: optionalBoolean(body, 'skipGitRepoCheck'),
+    testImagePath: optionalString(body, 'testImagePath'),
+    failFast: optionalBoolean(body, 'failFast'),
   };
 }
 
@@ -324,9 +499,7 @@ function buildStandardRuntimeConfig(body: JsonRecord): RuntimeConfig {
     : apiType === 'gemini.generateContent'
       ? baseConfig.gemini
       : baseConfig.openai;
-  const defaultCustomHeaders = apiType === 'openai.chat' || apiType === 'openai.responses'
-    ? baseConfig.openai.customHeaders
-    : undefined;
+  const defaultCustomHeaders = providerConfig.customHeaders;
   const defaultApiVersion = apiType === 'gemini.generateContent' ? baseConfig.gemini.apiVersion : undefined;
 
   return {
@@ -404,6 +577,7 @@ function normalizeJobTarget(value: unknown, index: number): BackendRunJobTarget 
 
   const kind = optionalString(value, 'kind') ?? 'standard';
   const enabled = optionalBoolean(value, 'enabled') ?? true;
+  const overrides = normalizeRunTargetOverrides(value);
   if (kind === 'standard') {
     const apiType = normalizeTargetApiType(optionalString(value, 'apiType'));
     return {
@@ -411,6 +585,7 @@ function normalizeJobTarget(value: unknown, index: number): BackendRunJobTarget 
       kind,
       enabled,
       apiType,
+      ...overrides,
       model: optionalString(value, 'model'),
       targetCases: optionalString(value, 'targetCases'),
     };
@@ -423,6 +598,7 @@ function normalizeJobTarget(value: unknown, index: number): BackendRunJobTarget 
       kind,
       enabled,
       agentProvider,
+      ...overrides,
       model: optionalModel(value, 'model'),
       targetCases: optionalString(value, 'targetCases'),
     };
@@ -432,7 +608,7 @@ function normalizeJobTarget(value: unknown, index: number): BackendRunJobTarget 
 }
 
 function normalizeBackendRunJobRequest(body: JsonRecord): BackendRunJobRequest {
-  const rawTargets = Array.isArray(body.targets) ? body.targets : [];
+  const rawTargets = Array.isArray(body.targets) ? body.targets : [body];
   const targets = rawTargets
     .map(normalizeJobTarget)
     .filter((target): target is BackendRunJobTarget => Boolean(target))
@@ -443,18 +619,20 @@ function normalizeBackendRunJobRequest(body: JsonRecord): BackendRunJobRequest {
   }
 
   const standardExecution = optionalString(body, 'standardExecution') === 'browser' ? 'browser' : 'backend';
+  const topLevelOverrides = normalizeRunTargetOverrides(body);
   return {
-    apiKey: optionalString(body, 'apiKey'),
-    apiBaseUrl: optionalString(body, 'apiBaseUrl'),
+    apiKey: topLevelOverrides.apiKey,
+    apiBaseUrl: topLevelOverrides.apiBaseUrl,
     backendUrl: optionalString(body, 'backendUrl'),
     standardExecution,
-    timeoutMs: optionalPositiveNumber(body, 'timeoutMs') ?? 45_000,
-    concurrency: optionalPositiveNumber(body, 'concurrency') ?? 1,
-    customHeaders: optionalCustomHeaders(body),
-    apiVersion: optionalString(body, 'apiVersion'),
-    workingDirectory: optionalString(body, 'workingDirectory'),
-    skipGitRepoCheck: optionalBoolean(body, 'skipGitRepoCheck') ?? false,
-    testImagePath: optionalString(body, 'testImagePath'),
+    timeoutMs: topLevelOverrides.timeoutMs ?? 45_000,
+    concurrency: topLevelOverrides.concurrency ?? 1,
+    failFast: topLevelOverrides.failFast ?? false,
+    customHeaders: topLevelOverrides.customHeaders,
+    apiVersion: topLevelOverrides.apiVersion,
+    workingDirectory: topLevelOverrides.workingDirectory,
+    skipGitRepoCheck: topLevelOverrides.skipGitRepoCheck ?? false,
+    testImagePath: topLevelOverrides.testImagePath,
     persistResult: optionalBoolean(body, 'persistResult') ?? true,
     runSnapshot: optionalRunSnapshot(body),
     targets,
@@ -555,15 +733,15 @@ function summarizeJobProgress(job: BackendRunJob): BackendRunJobProgress {
 function buildJobTargetBody(request: BackendRunJobRequest, target: BackendRunJobTarget): JsonRecord {
   const base: JsonRecord = {
     kind: target.kind,
-    apiKey: request.apiKey,
-    apiBaseUrl: request.apiBaseUrl,
+    apiKey: target.apiKey ?? request.apiKey,
+    apiBaseUrl: target.apiBaseUrl ?? request.apiBaseUrl,
     model: target.model,
-    timeoutMs: request.timeoutMs,
+    timeoutMs: target.timeoutMs ?? request.timeoutMs,
     targetCases: target.targetCases,
-    customHeaders: request.customHeaders,
-    apiVersion: request.apiVersion,
-    failFast: false,
-    concurrency: request.concurrency,
+    customHeaders: target.customHeaders ?? request.customHeaders,
+    apiVersion: target.apiVersion ?? request.apiVersion,
+    failFast: target.failFast ?? request.failFast,
+    concurrency: target.concurrency ?? request.concurrency,
     persistResult: false,
     runSnapshot: request.runSnapshot,
   };
@@ -578,9 +756,9 @@ function buildJobTargetBody(request: BackendRunJobRequest, target: BackendRunJob
   return {
     ...base,
     agentProvider: target.agentProvider,
-    workingDirectory: request.workingDirectory,
-    skipGitRepoCheck: request.skipGitRepoCheck,
-    testImagePath: request.testImagePath,
+    workingDirectory: target.workingDirectory ?? request.workingDirectory,
+    skipGitRepoCheck: target.skipGitRepoCheck ?? request.skipGitRepoCheck,
+    testImagePath: target.testImagePath ?? request.testImagePath,
   };
 }
 
@@ -760,6 +938,23 @@ async function readHistorySummary(id: string): Promise<RunSummary> {
   return parseRunSummary(JSON.parse(raw) as unknown);
 }
 
+async function deleteHistorySummary(id: string): Promise<boolean> {
+  try {
+    await unlink(getHistoryFilePath(id));
+    return true;
+  } catch (error: unknown) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'ENOENT'
+    ) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 async function listRunHistory(): Promise<RunHistoryEntry[]> {
   let fileNames: string[];
   try {
@@ -828,6 +1023,42 @@ function pruneRunJobs(): void {
   }
 }
 
+interface ExecuteBackendRunRequestOptions {
+  onProgress?: (target: BackendRunJobTarget, event: RunProgressEvent) => void;
+  onTargetComplete?: (target: BackendRunJobTarget, summary: RunSummary) => void;
+  onTargetError?: (target: BackendRunJobTarget, error: unknown) => void;
+}
+
+async function executeBackendRunRequest(
+  request: BackendRunJobRequest,
+  options: ExecuteBackendRunRequestOptions = {},
+): Promise<RunSummary> {
+  const summaries: RunSummary[] = [];
+
+  for (const target of request.targets) {
+    try {
+      const body = buildJobTargetBody(request, target);
+      const config = buildRuntimeConfig(body);
+      const summary = await withCaseFilterEnv(config.targetCases, () => runRuntimeConfig(config, {
+        onProgress: options.onProgress
+          ? (event) => { options.onProgress?.(target, event); }
+          : undefined,
+      }));
+      summaries.push(summary);
+      options.onTargetComplete?.(target, summary);
+    } catch (targetError: unknown) {
+      options.onTargetError?.(target, targetError);
+      summaries.push(failedRunSummary(jobTargetLabel(target), jobTargetModelLabel(target), targetError));
+    }
+  }
+
+  const merged = mergeRunSummaries(summaries);
+  if (request.runSnapshot) {
+    merged.runSnapshot = request.runSnapshot;
+  }
+  return merged;
+}
+
 function createBackendRunJob(request: BackendRunJobRequest): BackendRunJob {
   pruneRunJobs();
   const id = randomUUID();
@@ -846,27 +1077,11 @@ function createBackendRunJob(request: BackendRunJobRequest): BackendRunJob {
 async function runBackendRunJob(job: BackendRunJob): Promise<void> {
   try {
     await withRunLock(async () => {
-      const summaries: RunSummary[] = [];
-
-      for (const target of job.request.targets) {
-        try {
-          const body = buildJobTargetBody(job.request, target);
-          const config = buildRuntimeConfig(body);
-          const summary = await withCaseFilterEnv(config.targetCases, () => runRuntimeConfig(config, {
-            onProgress: (event) => { applyJobProgressEvent(job, target, event); },
-          }));
-          summaries.push(summary);
-          completeJobTarget(job, target);
-        } catch (targetError: unknown) {
-          failJobTarget(job, target, targetError);
-          summaries.push(failedRunSummary(jobTargetLabel(target), jobTargetModelLabel(target), targetError));
-        }
-      }
-
-      const merged = mergeRunSummaries(summaries);
-      if (job.request.runSnapshot) {
-        merged.runSnapshot = job.request.runSnapshot;
-      }
+      const merged = await executeBackendRunRequest(job.request, {
+        onProgress: (target, event) => { applyJobProgressEvent(job, target, event); },
+        onTargetComplete: (target) => { completeJobTarget(job, target); },
+        onTargetError: (target, targetError) => { failJobTarget(job, target, targetError); },
+      });
       job.summary = merged;
 
       if (job.request.persistResult) {
@@ -943,18 +1158,31 @@ async function withCaseFilterEnv<T>(targetCases: string | undefined, action: () 
   }
 }
 
+function isTargetMatrixRunRequest(body: JsonRecord): boolean {
+  return Array.isArray(body.targets);
+}
+
 async function handleRun(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const rawBody = await readJsonBody(request);
   if (!isJsonRecord(rawBody)) {
     throw new Error('request body must be a JSON object');
   }
 
+  let persistResult = shouldPersistRunResult(rawBody);
   const summary = await withRunLock(async () => {
+    if (isTargetMatrixRunRequest(rawBody)) {
+      const runRequest = normalizeBackendRunJobRequest(rawBody);
+      persistResult = runRequest.persistResult;
+      return executeBackendRunRequest(runRequest);
+    }
+
     const config = buildRuntimeConfig(rawBody);
-    return withCaseFilterEnv(config.targetCases, () => runRuntimeConfig(config));
+    const runSummary = await withCaseFilterEnv(config.targetCases, () => runRuntimeConfig(config));
+    applyRequestRunSnapshot(runSummary, rawBody);
+    return runSummary;
   });
-  applyRequestRunSnapshot(summary, rawBody);
-  if (shouldPersistRunResult(rawBody)) {
+
+  if (persistResult) {
     await persistRunSummary(summary);
   }
 
@@ -971,6 +1199,19 @@ async function handleRunStream(request: IncomingMessage, response: ServerRespons
 
   try {
     const summary = await withRunLock(async () => {
+      if (isTargetMatrixRunRequest(rawBody)) {
+        const runRequest = normalizeBackendRunJobRequest(rawBody);
+        const runSummary = await executeBackendRunRequest(runRequest, {
+          onProgress: (_target, event) => {
+            writeNdjson(response, { type: 'progress', event });
+          },
+        });
+        if (runRequest.persistResult) {
+          await persistRunSummary(runSummary);
+        }
+        return runSummary;
+      }
+
       const config = buildRuntimeConfig(rawBody);
       return withCaseFilterEnv(config.targetCases, () => runRuntimeConfig(config, {
         onProgress: (event) => {
@@ -978,8 +1219,10 @@ async function handleRunStream(request: IncomingMessage, response: ServerRespons
         },
       }));
     });
-    applyRequestRunSnapshot(summary, rawBody);
-    if (shouldPersistRunResult(rawBody)) {
+    if (!isTargetMatrixRunRequest(rawBody)) {
+      applyRequestRunSnapshot(summary, rawBody);
+    }
+    if (!isTargetMatrixRunRequest(rawBody) && shouldPersistRunResult(rawBody)) {
       await persistRunSummary(summary);
     }
     writeNdjson(response, { type: 'complete', summary });
@@ -1030,6 +1273,15 @@ async function handleReadHistory(response: ServerResponse, id: string): Promise<
   sendJson(response, 200, summary);
 }
 
+async function handleDeleteHistory(response: ServerResponse, id: string): Promise<void> {
+  const deleted = await deleteHistorySummary(id);
+  if (!deleted) {
+    sendJson(response, 404, { error: 'history entry not found' });
+    return;
+  }
+  sendNoContent(response);
+}
+
 async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
 
@@ -1044,6 +1296,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       service: 'llm-spec-backend',
       agentTests: true,
       backendRun: true,
+      targetMatrixRun: true,
+      asyncJobs: true,
     });
     return;
   }
@@ -1078,6 +1332,11 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return;
   }
 
+  if (request.method === 'DELETE' && url.pathname.startsWith('/api/history/')) {
+    await handleDeleteHistory(response, decodeURIComponent(url.pathname.slice('/api/history/'.length)));
+    return;
+  }
+
   if (request.method === 'POST' && url.pathname === '/api/run') {
     await handleRun(request, response);
     return;
@@ -1085,6 +1344,15 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   if (request.method === 'POST' && url.pathname === '/api/run/stream') {
     await handleRunStream(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+    sendJson(response, 404, { error: 'not found' });
+    return;
+  }
+
+  if (await sendStaticFile(request, response, url)) {
     return;
   }
 

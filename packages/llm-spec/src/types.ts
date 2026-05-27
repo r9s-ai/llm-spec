@@ -1,4 +1,4 @@
-export type ProviderName = 'openai' | 'anthropic' | 'gemini' | 'claude-agent' | 'codex';
+export type ProviderName = 'openai' | 'anthropic' | 'gemini' | 'xai' | 'claude-agent' | 'codex';
 
 export type TestStatus = 'passed' | 'failed' | 'skipped';
 

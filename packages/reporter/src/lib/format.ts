@@ -22,6 +22,7 @@ export function formatTime(iso: string): string {
 export function formatProviderName(provider: string): string {
   if (provider.includes('claude-agent')) return 'Claude Agent'
   if (provider.includes('codex')) return 'Codex'
+  if (provider.includes('xai')) return 'xAI'
   if (provider.includes('openai')) return 'OpenAI'
   if (provider.includes('anthropic')) return 'Anthropic'
   if (provider.includes('gemini')) return 'Gemini'

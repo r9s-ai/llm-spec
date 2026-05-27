@@ -33,6 +33,9 @@ function normalizeProviderSelector(raw: string): string {
   if (normalized === 'claudeagent') {
     return 'claude-agent';
   }
+  if (normalized === 'grok') {
+    return 'xai';
+  }
   return normalized;
 }
 
@@ -45,6 +48,12 @@ function getProviderSelectorAliases(provider: string): string[] {
     aliases.add('chat');
     aliases.add('openai.chat');
     aliases.add('openai.chatcompletions');
+  } else if (normalizedProvider === 'xai(chatcompletions)') {
+    aliases.add('xai');
+    aliases.add('grok');
+    aliases.add('chat');
+    aliases.add('xai.chat');
+    aliases.add('xai.chatcompletions');
   } else if (normalizedProvider === 'openai(responses)') {
     aliases.add('openai');
     aliases.add('responses');

@@ -81,6 +81,8 @@ const CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS_ENV_KEY = 'CLAUDE_CODE_DISABLE_EXPE
 const CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS_ENV_VALUE = '1';
 const CLAUDE_AGENT_TRACE_SOURCE = 'claude-agent-reverse-proxy';
 const CLAUDE_AGENT_TRACE_DIR = resolvePath(process.cwd(), '.llm-spec-traces');
+const CLAUDE_AGENT_TRACE_SETTLE_TIMEOUT_MS = 1500;
+const CLAUDE_AGENT_TRACE_SETTLE_POLL_MS = 100;
 
 const claudeAgentTestContext = new AsyncLocalStorage<string>();
 let claudeAgentCaseExecutionCounter = 0;
@@ -124,11 +126,29 @@ function resolveClaudeAgentModelScope(caseId: string, config: ClaudeAgentProvide
   if (caseId.startsWith('different_model_haiku')) {
     return config.haikuModel ?? config.model;
   }
-  if (caseId.includes('effort')) {
+  if (caseId === 'error_handling_invalid_model') {
+    return 'invalid-model-name-xyz';
+  }
+  if (caseId === 'beta_context_1m_opus') {
     return config.opusModel ?? config.model;
   }
-  if (caseId.includes('context_1m') || caseId.includes('thinking') || caseId.includes('mcp')) {
+  if (caseId === 'beta_context_1m_haiku') {
+    return config.haikuModel ?? config.model;
+  }
+  if (
+    caseId.includes('context_1m') ||
+    caseId.includes('mcp') ||
+    caseId.startsWith('beta_thinking') ||
+    (caseId.includes('thinking') && !caseId.includes('effort')) ||
+    caseId === 'beta_invalid_feature' ||
+    caseId === 'beta_empty_array' ||
+    caseId === 'beta_with_tools' ||
+    caseId.startsWith('beta_catalog_structured_outputs')
+  ) {
     return config.sonnetModel ?? config.model;
+  }
+  if (caseId.includes('effort') || caseId.startsWith('beta_catalog_fast_mode')) {
+    return config.opusModel ?? config.model;
   }
   return 'default';
 }
@@ -1959,6 +1979,105 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
     }
   }
 
+  function isClaudeAgentSessionTitlePromptText(value: string | undefined): boolean {
+    if (!value) {
+      return false;
+    }
+
+    const normalized = value.replace(/\s+/g, ' ').toLowerCase();
+    if (!normalized.includes('title')) {
+      return false;
+    }
+
+    return (
+      /\b(generate|create|write|suggest|provide)\b.{0,100}\btitle\b/.test(normalized) ||
+      /\btitle\b.{0,100}\b(conversation|session|chat|thread)\b/.test(normalized) ||
+      /\b(conversation|session|chat|thread)\b.{0,100}\btitle\b/.test(normalized)
+    );
+  }
+
+  function isClaudeAgentSessionTitleExchange(exchange: HttpTraceExchange): boolean {
+    const { promptTexts } = collectPromptTextsFromBody(exchange.request.body);
+    return promptTexts.some(isClaudeAgentSessionTitlePromptText);
+  }
+
+  function getClaudeAgentExchangeModel(exchange: HttpTraceExchange): string | undefined {
+    return collectPromptTextsFromBody(exchange.request.body).model;
+  }
+
+  function isClaudeAgentExpectedModelExchange(
+    exchange: HttpTraceExchange,
+    expectedModel: string | undefined,
+  ): boolean {
+    if (!expectedModel?.trim()) {
+      return true;
+    }
+
+    const observedModel = getClaudeAgentExchangeModel(exchange);
+    if (!observedModel?.trim()) {
+      return false;
+    }
+
+    return normalizeModelName(observedModel) === normalizeModelName(expectedModel);
+  }
+
+  function isRelevantClaudeAgentMessageBetaExchange(
+    exchange: HttpTraceExchange,
+    expectedModel?: string,
+  ): boolean {
+    return (
+      isClaudeAgentMessageBetaUrl(exchange.request.url) &&
+      !isClaudeAgentSessionTitleExchange(exchange) &&
+      isClaudeAgentExpectedModelExchange(exchange, expectedModel)
+    );
+  }
+
+  function hasPendingRelevantClaudeAgentMessageBetaExchange(
+    exchanges: HttpTraceExchange[],
+    expectedModel?: string,
+  ): boolean {
+    return exchanges.some((exchange) => (
+      isRelevantClaudeAgentMessageBetaExchange(exchange, expectedModel) &&
+      !exchange.response
+    ));
+  }
+
+  function hasRelevantClaudeAgentMessageBetaResponse(
+    exchanges: HttpTraceExchange[],
+    expectedModel?: string,
+  ): boolean {
+    return exchanges.some((exchange) => (
+      isRelevantClaudeAgentMessageBetaExchange(exchange, expectedModel) &&
+      Boolean(exchange.response)
+    ));
+  }
+
+  async function waitForClaudeAgentTraceToSettle(
+    testId: string,
+    expectedModel?: string,
+  ): Promise<HttpTraceExchange[]> {
+    const deadline = Date.now() + CLAUDE_AGENT_TRACE_SETTLE_TIMEOUT_MS;
+    let latestExchanges: HttpTraceExchange[] = [];
+
+    for (;;) {
+      latestExchanges = readTraceFile(testId);
+      if (
+        hasRelevantClaudeAgentMessageBetaResponse(latestExchanges, expectedModel) &&
+        !hasPendingRelevantClaudeAgentMessageBetaExchange(latestExchanges, expectedModel)
+      ) {
+        return latestExchanges;
+      }
+
+      if (Date.now() >= deadline) {
+        return latestExchanges;
+      }
+
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, CLAUDE_AGENT_TRACE_SETTLE_POLL_MS);
+      });
+    }
+  }
+
   // Group NDJSON entries by requestId into HttpTraceExchange objects
   function buildExchangesFromEntries(entries: TraceEntry[]): HttpTraceExchange[] {
     const byRequestId = new Map<string, HttpTraceExchange>();
@@ -2139,21 +2258,66 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
     return 'unknown';
   }
 
+  function formatClaudeAgentExpectedModel(expectedModel: string | undefined): string {
+    return expectedModel?.trim() || 'unspecified';
+  }
+
+  function formatObservedClaudeAgentMessageModels(exchanges: HttpTraceExchange[]): string {
+    const observedModels: string[] = [];
+    const seen = new Set<string>();
+
+    for (const exchange of exchanges) {
+      const model = getClaudeAgentExchangeModel(exchange) ?? 'unknown';
+      const normalized = normalizeModelName(model);
+      if (seen.has(normalized)) {
+        continue;
+      }
+      seen.add(normalized);
+      observedModels.push(model);
+    }
+
+    return observedModels.length > 0 ? observedModels.join(',') : 'none';
+  }
+
   function getFinalClaudeAgentMessageBetaExchange(
     httpTrace: TestCaseHttpTrace,
     context: string,
+    expectedModel?: string,
   ): HttpTraceExchange {
     const messageExchanges = httpTrace.exchanges.filter((exchange) =>
       isClaudeAgentMessageBetaUrl(exchange.request.url),
+    );
+    const relevantMessageExchanges = messageExchanges.filter((exchange) =>
+      !isClaudeAgentSessionTitleExchange(exchange),
+    );
+    const matchingModelMessageExchanges = relevantMessageExchanges.filter((exchange) =>
+      isClaudeAgentExpectedModelExchange(exchange, expectedModel),
     );
 
     if (messageExchanges.length === 0) {
       throw new Error(`${context}: no /v1/messages?beta=true exchanges captured`);
     }
 
-    const finalExchange = messageExchanges.at(-1);
+    if (relevantMessageExchanges.length === 0) {
+      throw new Error(
+        `${context}: no non-title /v1/messages?beta=true exchanges captured expected_model=${formatClaudeAgentExpectedModel(expectedModel)} observed_models=${formatObservedClaudeAgentMessageModels(messageExchanges)}`,
+      );
+    }
+
+    if (matchingModelMessageExchanges.length === 0) {
+      throw new Error(
+        `${context}: no matching-model non-title /v1/messages?beta=true exchanges captured expected_model=${formatClaudeAgentExpectedModel(expectedModel)} observed_models=${formatObservedClaudeAgentMessageModels(relevantMessageExchanges)}`,
+      );
+    }
+
+    const completedRelevantMessageExchanges = matchingModelMessageExchanges.filter((exchange) =>
+      Boolean(exchange.response),
+    );
+    const finalExchange = completedRelevantMessageExchanges.at(-1);
     if (!finalExchange) {
-      throw new Error(`${context}: no final /v1/messages?beta=true exchange found`);
+      throw new Error(
+        `${context}: no completed matching-model non-title /v1/messages?beta=true exchange found captured=${matchingModelMessageExchanges.length} expected_model=${formatClaudeAgentExpectedModel(expectedModel)} observed_models=${formatObservedClaudeAgentMessageModels(matchingModelMessageExchanges)}`,
+      );
     }
 
     if (!finalExchange.response) {
@@ -2166,8 +2330,9 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
   function assertFinalClaudeAgentMessageBetaResponseOk(
     httpTrace: TestCaseHttpTrace,
     context: string,
+    expectedModel?: string,
   ): HttpTraceResponse {
-    const finalExchange = getFinalClaudeAgentMessageBetaExchange(httpTrace, context);
+    const finalExchange = getFinalClaudeAgentMessageBetaExchange(httpTrace, context, expectedModel);
     const response = finalExchange.response;
     if (!response) {
       throw new Error(`${context}: final /v1/messages?beta=true exchange missing response`);
@@ -3657,47 +3822,52 @@ Please proceed.`,
     ...buildClaudeAgentBetaCatalogCases(),
   });
 
-  return cases.map((testCase) => ({
-    ...testCase,
-    protocol: 'claude-agent',
-    modelScope: resolveClaudeAgentModelScope(testCase.id, config),
-    run: async () => {
-      const testId = createClaudeAgentTestId(testCase.id);
-      let detail: string | undefined;
-      let runError: unknown;
+  return cases.map((testCase) => {
+    const modelScope = resolveClaudeAgentModelScope(testCase.id, config);
+    const expectedModel = modelScope === 'default' ? defaultModel : modelScope;
 
-      try {
-        detail = await runWithClaudeAgentTestId(testId, () => testCase.run());
-      } catch (error) {
-        runError = error;
-      }
+    return {
+      ...testCase,
+      protocol: 'claude-agent',
+      modelScope,
+      run: async () => {
+        const testId = createClaudeAgentTestId(testCase.id);
+        let detail: string | undefined;
+        let runError: unknown;
 
-      const exchanges = readTraceFile(testId);
-      const httpTrace: TestCaseHttpTrace = {
-        source: CLAUDE_AGENT_TRACE_SOURCE,
-        testId,
-        exchangeCount: exchanges.length,
-        exchanges,
-      };
-      claudeAgentCaseHttpTraceByCaseId.set(testCase.id, httpTrace);
+        try {
+          detail = await runWithClaudeAgentTestId(testId, () => testCase.run());
+        } catch (error) {
+          runError = error;
+        }
 
-      try {
-        const finalResponse = assertFinalClaudeAgentMessageBetaResponseOk(httpTrace, testCase.id);
-        const statusDetail = `message_api_status=${formatClaudeAgentResponseStatus(finalResponse)}`;
-        const detailParts = [statusDetail];
-        if (detail) {
-          detailParts.push(detail);
+        const exchanges = await waitForClaudeAgentTraceToSettle(testId, expectedModel);
+        const httpTrace: TestCaseHttpTrace = {
+          source: CLAUDE_AGENT_TRACE_SOURCE,
+          testId,
+          exchangeCount: exchanges.length,
+          exchanges,
+        };
+        claudeAgentCaseHttpTraceByCaseId.set(testCase.id, httpTrace);
+
+        try {
+          const finalResponse = assertFinalClaudeAgentMessageBetaResponseOk(httpTrace, testCase.id, expectedModel);
+          const statusDetail = `message_api_status=${formatClaudeAgentResponseStatus(finalResponse)}`;
+          const detailParts = [statusDetail];
+          if (detail) {
+            detailParts.push(detail);
+          }
+          if (runError) {
+            detailParts.push(`sdk_error_ignored="${truncate(formatError(runError), 160)}"`);
+          }
+          return detailParts.join(', ');
+        } catch (statusError) {
+          if (runError instanceof Error && statusError instanceof Error) {
+            statusError.message = `${statusError.message}; sdk_error=${formatError(runError)}`;
+          }
+          throw statusError;
         }
-        if (runError) {
-          detailParts.push(`sdk_error_ignored="${truncate(formatError(runError), 160)}"`);
-        }
-        return detailParts.join(', ');
-      } catch (statusError) {
-        if (runError instanceof Error && statusError instanceof Error) {
-          statusError.message = `${statusError.message}; sdk_error=${formatError(runError)}`;
-        }
-        throw statusError;
-      }
-    },
-  }));
+      },
+    };
+  });
 }

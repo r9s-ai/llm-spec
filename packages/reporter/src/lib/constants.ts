@@ -37,6 +37,13 @@ const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     bgColor: 'bg-blue-100',
     borderColor: 'border-blue-200',
   },
+  xai: {
+    label: 'xAI',
+    icon: Globe,
+    color: 'text-slate-700',
+    bgColor: 'bg-slate-100',
+    borderColor: 'border-slate-200',
+  },
   'claude-agent': {
     label: 'Claude Agent',
     icon: Bot,

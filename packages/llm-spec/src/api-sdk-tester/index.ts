@@ -3,6 +3,7 @@ export {
   runOpenAIChatCases,
   runOpenAIExtendedCases,
   runOpenAIResponsesCases,
+  runXAICases,
 } from './openai-provider';
 export { runAnthropicCases } from './anthropic-provider';
 export { runGeminiCases } from './gemini-provider';

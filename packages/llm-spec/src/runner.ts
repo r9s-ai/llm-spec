@@ -17,6 +17,7 @@ import {
   runOpenAICases,
   runOpenAIChatCases,
   runOpenAIResponsesCases,
+  runXAICases,
 } from './api-sdk-tester';
 import type { RuntimeConfig } from './api-sdk-tester';
 
@@ -83,6 +84,7 @@ async function runConfiguredTarget(
           apiBaseUrl: target.apiBaseUrl,
           model: target.model,
           timeoutMs: target.timeoutMs,
+          customHeaders: target.customHeaders,
         },
         config.failFast,
         config.concurrency,
@@ -100,6 +102,7 @@ async function runConfiguredTarget(
         model: target.model,
         timeoutMs: target.timeoutMs,
         apiVersion: target.apiVersion,
+        customHeaders: target.customHeaders,
         cachedContent: undefined,
         audioModel: undefined,
         imageModel: undefined,
@@ -151,6 +154,18 @@ export async function runRuntimeConfig(
 
       if (provider === 'gemini') {
         const summary = await runGeminiCases(config.gemini, config.failFast, config.concurrency, options.onProgress);
+        providers.push(summary);
+        printProviderSummary(summary);
+        continue;
+      }
+
+      if (provider === 'xai') {
+        const summary = await runXAICases(
+          config.xai,
+          config.failFast,
+          config.concurrency,
+          options.onProgress,
+        );
         providers.push(summary);
         printProviderSummary(summary);
         continue;

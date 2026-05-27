@@ -4,7 +4,7 @@ import { dirname, resolve as resolvePath } from 'node:path';
 import type { ProviderName } from '../../types';
 
 export interface OpenAIProviderConfig {
-  provider: 'openai';
+  provider: 'openai' | 'xai';
   apiKey?: string;
   apiBaseUrl?: string;
   model: string;
@@ -35,6 +35,7 @@ export interface AnthropicProviderConfig {
   container?: string;
   inferenceGeo?: string;
   betas?: string[];
+  customHeaders?: Record<string, string>;
 }
 
 export interface GeminiProviderConfig {
@@ -50,6 +51,7 @@ export interface GeminiProviderConfig {
   enableVertexOnlyCases: boolean;
   modelArmorPromptTemplate?: string;
   modelArmorResponseTemplate?: string;
+  customHeaders?: Record<string, string>;
 }
 
 export interface ClaudeAgentProviderConfig {
@@ -102,6 +104,7 @@ export interface RuntimeConfig {
   reportFile?: string;
   testTarget?: TestTargetConfig;
   openai: OpenAIProviderConfig;
+  xai: OpenAIProviderConfig;
   anthropic: AnthropicProviderConfig;
   gemini: GeminiProviderConfig;
   claudeAgent: ClaudeAgentProviderConfig;
@@ -245,6 +248,9 @@ function normalizeProviderName(raw: string): ProviderName | undefined {
   if (normalized === 'gemini' || normalized === 'google' || normalized === 'genai') {
     return 'gemini';
   }
+  if (normalized === 'xai' || normalized === 'grok') {
+    return 'xai';
+  }
   if (normalized === 'claude-agent' || normalized === 'claudeagent') {
     return 'claude-agent';
   }
@@ -385,6 +391,9 @@ function resolveTestTarget(
         firstNonEmptyEnv('TEST_TIMEOUT_MS', 'ANTHROPIC_TIMEOUT_MS', 'TIMEOUT_MS'),
         anthropic.timeoutMs || defaultTimeoutMs,
       ),
+      customHeaders:
+        parseCustomHeaders(firstNonEmptyEnv('TEST_CUSTOM_HEADERS', 'CUSTOM_HEADERS', 'ANTHROPIC_CUSTOM_HEADERS'))
+        ?? anthropic.customHeaders,
     };
   }
 
@@ -417,6 +426,9 @@ function resolveTestTarget(
     ),
     apiVersion: firstNonEmptyEnv('TEST_API_VERSION', 'GEMINI_API_VERSION', 'GOOGLE_API_VERSION', 'API_VERSION')
       ?? gemini.apiVersion,
+    customHeaders:
+      parseCustomHeaders(firstNonEmptyEnv('TEST_CUSTOM_HEADERS', 'CUSTOM_HEADERS', 'GEMINI_CUSTOM_HEADERS', 'GOOGLE_CUSTOM_HEADERS'))
+      ?? gemini.customHeaders,
   };
 }
 
@@ -451,6 +463,16 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     timeoutMs: parseNumber(firstNonEmptyEnv('OPENAI_TIMEOUT_MS'), defaultTimeoutMs),
   };
 
+  const xai: OpenAIProviderConfig = {
+    provider: 'xai',
+    apiKey: firstNonEmptyEnv('XAI_API_KEY', 'X_AI_API_KEY', 'API_KEY'),
+    apiBaseUrl:
+      firstNonEmptyEnv('XAI_API_BASE_URL', 'X_AI_API_BASE_URL') ?? 'https://api.x.ai/v1',
+    model: firstNonEmptyEnv('XAI_MODEL', 'X_AI_MODEL') ?? 'grok-beta',
+    customHeaders: parseCustomHeaders(firstNonEmptyEnv('CUSTOM_HEADERS', 'XAI_CUSTOM_HEADERS')),
+    timeoutMs: parseNumber(firstNonEmptyEnv('XAI_TIMEOUT_MS'), defaultTimeoutMs),
+  };
+
   const anthropic: AnthropicProviderConfig = {
     provider: 'anthropic',
     apiKey: firstNonEmptyEnv('ANTHROPIC_API_KEY', 'API_KEY'),
@@ -463,6 +485,7 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     container: firstNonEmptyEnv('ANTHROPIC_CONTAINER'),
     inferenceGeo: firstNonEmptyEnv('ANTHROPIC_INFERENCE_GEO'),
     betas: firstNonEmptyEnv('ANTHROPIC_BETAS')?.split(',').map((beta) => beta.trim()).filter(Boolean),
+    customHeaders: parseCustomHeaders(firstNonEmptyEnv('CUSTOM_HEADERS', 'ANTHROPIC_CUSTOM_HEADERS')),
   };
 
   const gemini: GeminiProviderConfig = {
@@ -478,6 +501,7 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     enableVertexOnlyCases: parseBoolean(firstNonEmptyEnv('GEMINI_ENABLE_VERTEX_ONLY_CASES'), false),
     modelArmorPromptTemplate: firstNonEmptyEnv('GEMINI_MODEL_ARMOR_PROMPT_TEMPLATE'),
     modelArmorResponseTemplate: firstNonEmptyEnv('GEMINI_MODEL_ARMOR_RESPONSE_TEMPLATE'),
+    customHeaders: parseCustomHeaders(firstNonEmptyEnv('CUSTOM_HEADERS', 'GEMINI_CUSTOM_HEADERS', 'GOOGLE_CUSTOM_HEADERS')),
   };
 
   const claudeAgent: ClaudeAgentProviderConfig = {
@@ -537,6 +561,7 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     reportFile,
     testTarget,
     openai,
+    xai,
     anthropic,
     gemini,
     claudeAgent,

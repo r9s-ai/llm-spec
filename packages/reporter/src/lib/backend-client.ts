@@ -14,6 +14,8 @@ export interface BackendHealth {
   service?: string
   agentTests?: boolean
   backendRun?: boolean
+  targetMatrixRun?: boolean
+  asyncJobs?: boolean
 }
 
 interface BackendRunOptions {
@@ -249,6 +251,16 @@ export async function loadBackendRunHistoryReport(rawUrl: string, id: string): P
     throw new Error(`Backend history report failed: ${response.status} ${response.statusText}`)
   }
   return parseReport(await response.json() as unknown)
+}
+
+export async function deleteBackendRunHistory(rawUrl: string, id: string): Promise<void> {
+  const backendUrl = normalizeBackendUrl(rawUrl)
+  const response = await fetch(`${backendUrl}/api/history/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) {
+    throw new Error(`Backend history delete failed: ${response.status} ${response.statusText}`)
+  }
 }
 
 export async function saveBackendRunReport(

@@ -144,8 +144,18 @@ export interface BackendJobTarget {
   enabled: boolean
   apiType?: StandardApiType
   agentProvider?: AgentProvider
+  apiKey?: string
+  apiBaseUrl?: string
   model?: string
+  timeoutMs?: number
+  concurrency?: number
   targetCases?: string
+  customHeaders?: Record<string, string>
+  apiVersion?: string
+  workingDirectory?: string
+  skipGitRepoCheck?: boolean
+  testImagePath?: string
+  failFast?: boolean
 }
 
 export interface BackendJobRequest {
@@ -155,6 +165,7 @@ export interface BackendJobRequest {
   standardExecution: 'browser' | 'backend'
   timeoutMs: number
   concurrency: number
+  failFast?: boolean
   customHeaders?: Record<string, string>
   apiVersion?: string
   workingDirectory?: string

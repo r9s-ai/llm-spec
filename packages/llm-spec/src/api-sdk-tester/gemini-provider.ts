@@ -33,6 +33,7 @@ export async function runGeminiCases(
     apiVersion?: string;
     httpOptions?: {
       baseUrl?: string;
+      headers?: Record<string, string>;
       timeout?: number;
     };
     fetch?: typeof fetch;
@@ -44,9 +45,10 @@ export async function runGeminiCases(
   if (config.apiVersion) {
     clientOptions.apiVersion = config.apiVersion;
   }
-  if (config.apiBaseUrl || config.timeoutMs > 0) {
+  if (config.apiBaseUrl || config.customHeaders || config.timeoutMs > 0) {
     clientOptions.httpOptions = {
       baseUrl: config.apiBaseUrl,
+      headers: config.customHeaders,
       timeout: config.timeoutMs,
     };
   }

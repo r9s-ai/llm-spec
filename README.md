@@ -1,10 +1,11 @@
 # LLM Spec
 
-用于验证三类 SDK API 格式/参数/特性支持情况的测试工具：
+用于验证多类 SDK/API 格式、参数和特性支持情况的测试工具：
 
 - `openai`
 - `@anthropic-ai/sdk`
 - `@google/genai`
+- xAI OpenAI-compatible API
 
 其中 OpenAI provider 会同时覆盖：
 - `chat.completions.create`
@@ -53,8 +54,121 @@ LLM_SPEC_BACKEND_PORT=8788 pnpm start:server
 
 - `GET /api/health`
 - `POST /api/run`
+- `POST /api/run/stream`
+- `POST /api/jobs`
+- `GET /api/jobs/:id`
+- `GET /api/history`
+- `GET /api/history/:id`
+- `POST /api/history`
+- `DELETE /api/history/:id`
 
 后端默认允许跨域访问。可通过 `LLM_SPEC_CORS_ORIGIN` 收紧来源。
+
+### Backend HTTP API
+
+可以直接通过 HTTP API 向 backend 发送测试服务请求，参数通过 JSON request body 传入。`POST /api/run` 会同步等待测试完成并返回 `RunSummary`；`POST /api/run/stream` 返回 NDJSON 进度流；`POST /api/jobs` 创建异步任务并返回 job id，适合长时间测试或外部系统轮询。
+
+单目标同步运行示例：
+
+```bash
+curl -sS http://localhost:8788/api/run \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "kind": "standard",
+    "apiType": "openai.chat",
+    "apiBaseUrl": "https://api.openai.com/v1",
+    "apiKey": "sk-...",
+    "model": "gpt-4o-mini",
+    "targetCases": "basic,stream",
+    "timeoutMs": 60000,
+    "concurrency": 1,
+    "persistResult": true
+  }'
+```
+
+多目标矩阵同步运行示例：
+
+```bash
+curl -sS http://localhost:8788/api/run \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "apiKey": "sk-...",
+    "apiBaseUrl": "https://api.openai.com/v1",
+    "timeoutMs": 600000,
+    "concurrency": 1,
+    "customHeaders": {
+      "X-Debug-Channel-ID": "13"
+    },
+    "targets": [
+      {
+        "id": "chat-smoke",
+        "kind": "standard",
+        "apiType": "openai.chat",
+        "model": "gpt-4o-mini",
+        "targetCases": "basic,stream"
+      },
+      {
+        "id": "responses-smoke",
+        "kind": "standard",
+        "apiType": "openai.responses",
+        "model": "gpt-4o-mini",
+        "targetCases": "responses_basic,responses_basic_stream"
+      }
+    ]
+  }'
+```
+
+异步任务示例：
+
+```bash
+JOB_ID=$(curl -sS http://localhost:8788/api/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "apiKey": "sk-...",
+    "apiBaseUrl": "https://api.openai.com/v1",
+    "targets": [
+      {
+        "kind": "standard",
+        "apiType": "openai.chat",
+        "model": "gpt-4o-mini",
+        "targetCases": "basic"
+      }
+    ]
+  }' | node -e 'process.stdin.on("data", d => console.log(JSON.parse(d).id))')
+
+curl -sS "http://localhost:8788/api/jobs/${JOB_ID}"
+```
+
+流式运行示例：
+
+```bash
+curl -N http://localhost:8788/api/run/stream \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "kind": "standard",
+    "apiType": "anthropic.messages",
+    "apiKey": "sk-ant-...",
+    "model": "claude-3-5-haiku-latest",
+    "targetCases": "basic,stream"
+  }'
+```
+
+请求体字段说明：
+
+- `kind`：单目标请求使用，取值 `standard` 或 `agent`；未设置时默认为 `standard`。
+- `apiType`：普通 API 测试类型，支持 `openai.chat`、`openai.responses`、`anthropic.messages`、`gemini.generateContent`。
+- `agentProvider`：Agent 测试类型，支持 `claude-agent`、`codex`。
+- `targets`：多目标矩阵。每项支持 `id`、`kind`、`enabled`、`apiType`、`agentProvider`、`model`、`targetCases`，并可覆盖顶层连接参数。
+- `apiKey` / `apiBaseUrl` / `model`：目标服务连接和模型参数；未传时回退到 backend 进程环境变量。
+- `customHeaders`：自定义请求头，支持 JSON 对象或 JSON 字符串。
+- `apiVersion`：Gemini 原生 SDK 使用。
+- `targetCases`：只运行匹配的用例，语法与 `TARGET_CASES` 一致；不传或传空字符串时默认运行全部用例。
+- `timeoutMs` / `concurrency` / `failFast`：运行控制参数。
+- `workingDirectory` / `skipGitRepoCheck` / `testImagePath`：Agent 测试参数。
+- `persistResult`：是否写入 backend history，默认 `true`。
+- `runSnapshot`：可选运行快照，会原样写入报告。
+
+`targets[]` 中的 `apiKey`、`apiBaseUrl`、`customHeaders`、`apiVersion`、`timeoutMs`、`concurrency`、`workingDirectory`、`skipGitRepoCheck`、`testImagePath`、`failFast` 会覆盖顶层同名字段，便于一次 API 请求中混合不同目标。
 
 ### 启动前端
 
@@ -62,11 +176,24 @@ LLM_SPEC_BACKEND_PORT=8788 pnpm start:server
 pnpm dev:reporter
 ```
 
-前端默认连接 `http://localhost:8788`，也可以在构建/运行前设置：
+前端开发模式默认连接 `http://localhost:8788`；生产构建默认连接当前页面同源后端。也可以在构建/运行前设置：
 
 ```bash
 VITE_LLM_SPEC_BACKEND_URL=http://your-backend:8788 pnpm --filter @llm-spec/reporter build
 ```
+
+### 打包为单个 Node 服务
+
+如果希望前端和后端由同一个 Node 服务提供：
+
+```bash
+pnpm build:service
+pnpm start:service
+```
+
+`build:service` 会构建 reporter 前端、构建 llm-spec 后端，并把前端产物复制到 `packages/llm-spec/dist/public/`。启动后，`/api/*` 由后端接口处理，其他路径由同一个服务返回前端静态文件。
+
+可用 `LLM_SPEC_STATIC_DIR` 覆盖静态文件目录。
 
 ### 执行策略
 
@@ -135,6 +262,7 @@ pnpm test:sdk
 ```bash
 TARGET_PROVIDERS=openai pnpm test:sdk
 TARGET_PROVIDERS=anthropic,gemini pnpm test:sdk
+TARGET_PROVIDERS=xai pnpm test:sdk
 TARGET_PROVIDERS=claude-agent pnpm test:sdk
 ```
 
@@ -201,6 +329,13 @@ REPORT_FILE=./report.json pnpm test:sdk
 - `OPENAI_REASONING_MODEL`（启用 Responses API 的 reasoning 参数测试）
 - `OPENAI_RESPONSES_PROMPT_ID`（启用 Responses API 的 prompt 参数测试）
 - `OPENAI_INCLUDE_MODEL_CATALOG_CASES`（启用 GPT/OpenAI 模型目录 smoke 测试；设置 `TARGET_CASES` 时也会自动加载这些可筛选用例）
+
+### xAI
+
+- `XAI_API_KEY`
+- `XAI_API_BASE_URL`（默认 `https://api.x.ai/v1`）
+- `XAI_MODEL`（默认 `grok-beta`，复用 OpenAI-compatible `chat.completions` 用例）
+- `XAI_TIMEOUT_MS`
 
 ### Anthropic
 

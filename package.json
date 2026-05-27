@@ -12,6 +12,8 @@
     "type-check": "pnpm -r type-check",
     "lint": "pnpm --filter @llm-spec/reporter lint",
     "clean": "pnpm -r clean",
+    "build:service": "pnpm --filter @llm-spec/reporter build && pnpm --filter llm-spec build && pnpm --filter llm-spec copy:reporter",
+    "start:service": "pnpm --filter llm-spec start:server",
     "dev": "concurrently -n watch,backend,reporter -c cyan,blue,green \"pnpm --filter llm-spec build:watch\" \"pnpm --filter llm-spec dev:server\" \"pnpm --filter @llm-spec/reporter dev\"",
     "dev:backend": "pnpm --filter llm-spec dev:server",
     "dev:reporter": "pnpm --filter @llm-spec/reporter dev",

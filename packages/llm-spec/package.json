@@ -9,6 +9,7 @@
     "build:bin": "esbuild src/index.ts src/server.ts --bundle --platform=node --target=node20 --outdir=dist --format=esm --sourcemap --packages=external",
     "build:watch": "esbuild src/index.ts src/server.ts --bundle --platform=node --target=node20 --outdir=dist --format=esm --sourcemap --watch --packages=external",
     "build:scripts": "esbuild scripts/*.ts --bundle --platform=node --target=node20 --outdir=dist/scripts --format=esm --sourcemap --out-extension:.js=.mjs",
+    "copy:reporter": "node dist/scripts/copy-reporter-dist.mjs",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist",
     "dev:server": "node --watch dist/server.js",

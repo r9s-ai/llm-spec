@@ -6,6 +6,7 @@ import {
   ChevronsUpDown,
   Cloud,
   Database,
+  Download,
   Eye,
   EyeOff,
   FileJson,
@@ -48,6 +49,7 @@ import {
 import {
   checkBackendHealth,
   createBackendJob,
+  deleteBackendRunHistory,
   listBackendRunHistory,
   loadBackendJobStatus,
   loadBackendRunHistoryReport,
@@ -188,7 +190,9 @@ const AGENT_OPTIONS: AgentOption[] = [
   },
 ]
 
-const DEFAULT_BACKEND_URL = import.meta.env.VITE_LLM_SPEC_BACKEND_URL ?? 'http://localhost:8788'
+const DEFAULT_BACKEND_URL =
+  import.meta.env.VITE_LLM_SPEC_BACKEND_URL ??
+  (import.meta.env.PROD ? window.location.origin : 'http://localhost:8788')
 
 const STANDARD_TARGET_CASES: Record<StandardApiType, TargetCaseOption[]> = {
   'openai.chat': [
@@ -645,6 +649,23 @@ interface SavedProfile {
   legacyDraft?: RunDraft
 }
 
+interface SitesExportPayload {
+  kind: 'llm-spec-sites'
+  version: 1
+  exportedAt: string
+  profiles: Array<Pick<SavedProfile, 'name' | 'savedAt' | 'config'>>
+  selectedProfileName: string | null
+  siteConfig: SiteProfileConfig
+  runDraft: RunDraft
+}
+
+interface NormalizedSitesImport {
+  profiles: SavedProfile[]
+  selectedProfileName: string | null
+  siteConfig?: SiteProfileConfig
+  runDraft?: RunDraft
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -904,6 +925,49 @@ function saveProfiles(profiles: SavedProfile[]): void {
   )
 }
 
+function normalizeProfileList(value: unknown): SavedProfile[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  const profilesByName = new Map<string, SavedProfile>()
+  for (const item of value) {
+    const profile = normalizeProfile(item)
+    if (profile) {
+      profilesByName.set(profile.name, profile)
+    }
+  }
+  return Array.from(profilesByName.values())
+}
+
+function normalizeSitesImportPayload(value: unknown): NormalizedSitesImport {
+  if (Array.isArray(value)) {
+    return {
+      profiles: normalizeProfileList(value),
+      selectedProfileName: null,
+    }
+  }
+
+  if (!isRecord(value)) {
+    throw new Error('Sites import must be a JSON object')
+  }
+
+  const profiles = normalizeProfileList(value.profiles)
+  const selectedName = stringValue(value.selectedProfileName, stringValue(value.selectedName)).trim()
+  const selectedProfileName = selectedName && profiles.some((profile) => profile.name === selectedName)
+    ? selectedName
+    : null
+  const rawSiteConfig = value.siteConfig ?? value.currentSiteConfig
+  const rawRunDraft = value.runDraft ?? value.currentRunDraft
+
+  return {
+    profiles,
+    selectedProfileName,
+    siteConfig: rawSiteConfig === undefined ? undefined : normalizeSiteConfig(rawSiteConfig),
+    runDraft: rawRunDraft === undefined ? undefined : normalizeRunDraft(rawRunDraft),
+  }
+}
+
 function loadSiteConfig(): SiteProfileConfig {
   try {
     const raw = localStorage.getItem(LAST_SITE_CONFIG_STORAGE_KEY)
@@ -979,6 +1043,27 @@ function saveActiveBackendJob(job: ActiveBackendJob | null): void {
   localStorage.setItem(ACTIVE_BACKEND_JOB_STORAGE_KEY, JSON.stringify(job))
 }
 
+function sanitizeDownloadNamePart(value: string, fallback: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return normalized || fallback
+}
+
+function downloadJsonFile(fileName: string, value: unknown): void {
+  const blob = new Blob([`${JSON.stringify(value, null, 2)}\n`], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 function parseCustomHeaders(value: string): Record<string, string> | undefined {
   const trimmed = value.trim()
   if (!trimmed || trimmed === '{}') {
@@ -995,9 +1080,22 @@ function parseCustomHeaders(value: string): Record<string, string> | undefined {
     if (typeof headerValue !== 'string') {
       throw new Error('Custom header values must be strings')
     }
-    headers[key] = headerValue
+    const headerName = key.trim()
+    if (!headerName) {
+      if (headerValue.trim()) {
+        throw new Error('Custom header names cannot be empty')
+      }
+      continue
+    }
+    if (headerValue.trim()) {
+      headers[headerName] = headerValue
+    }
   }
-  return headers
+  return Object.keys(headers).length > 0 ? headers : undefined
+}
+
+function formatUnknownError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function Field(props: {
@@ -1099,6 +1197,172 @@ function TextAreaField(props: {
   )
 }
 
+interface CustomHeaderRow {
+  name: string
+  value: string
+}
+
+function parseCustomHeaderRows(value: string): { rows: CustomHeaderRow[]; error?: string } {
+  try {
+    const headers = parseCustomHeaders(value) ?? {}
+    return {
+      rows: Object.entries(headers).map(([name, headerValue]) => ({ name, value: headerValue })),
+    }
+  } catch (error) {
+    return { rows: [], error: formatUnknownError(error) }
+  }
+}
+
+function serializeCustomHeaderRows(rows: CustomHeaderRow[]): string {
+  const headers: Record<string, string> = {}
+  for (const row of rows) {
+    const name = row.name.trim()
+    if (!name) {
+      continue
+    }
+    headers[name] = row.value
+  }
+  return JSON.stringify(headers, null, 2)
+}
+
+function CustomHeadersField(props: {
+  value: string
+  onChange: (value: string) => void
+}) {
+  const { value, onChange } = props
+  const parsed = useMemo(() => parseCustomHeaderRows(value), [value])
+  const [rows, setRows] = useState<CustomHeaderRow[]>(parsed.rows)
+  const [rawMode, setRawMode] = useState(false)
+  const lastSerializedRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (value === lastSerializedRef.current || parsed.error) {
+      return
+    }
+    setRows(parsed.rows)
+  }, [parsed.error, parsed.rows, value])
+
+  const duplicateNames = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const row of rows) {
+      const name = row.name.trim().toLowerCase()
+      if (!name) {
+        continue
+      }
+      counts.set(name, (counts.get(name) ?? 0) + 1)
+    }
+    return new Set(Array.from(counts.entries()).filter(([, count]) => count > 1).map(([name]) => name))
+  }, [rows])
+
+  const commitRows = useCallback((nextRows: CustomHeaderRow[]) => {
+    setRows(nextRows)
+    const serialized = serializeCustomHeaderRows(nextRows)
+    lastSerializedRef.current = serialized
+    onChange(serialized)
+  }, [onChange])
+
+  const updateRow = useCallback((index: number, patch: Partial<CustomHeaderRow>) => {
+    commitRows(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)))
+  }, [commitRows, rows])
+
+  const addRow = useCallback(() => {
+    commitRows([...rows, { name: '', value: '' }])
+    setRawMode(false)
+  }, [commitRows, rows])
+
+  const removeRow = useCallback((index: number) => {
+    commitRows(rows.filter((_, rowIndex) => rowIndex !== index))
+  }, [commitRows, rows])
+
+  const showRaw = rawMode || Boolean(parsed.error)
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="block text-sm font-semibold text-slate-700">Custom Headers</label>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => { setRawMode((current) => !current && !parsed.error) }}
+            disabled={Boolean(parsed.error)}
+          >
+            {showRaw ? 'Key/Value' : 'Raw JSON'}
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={addRow} disabled={Boolean(parsed.error)}>
+            <Plus className="h-4 w-4" />
+            Header
+          </Button>
+        </div>
+      </div>
+
+      {showRaw ? (
+        <div className="space-y-2">
+          <TextAreaField
+            label="Custom Headers JSON"
+            value={value}
+            onChange={(value) => {
+              lastSerializedRef.current = null
+              onChange(value)
+            }}
+            placeholder='{"X-Debug-Channel-ID":"13"}'
+          />
+          {parsed.error && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {parsed.error}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {rows.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+              No custom headers
+            </div>
+          ) : (
+            rows.map((row, index) => {
+              const normalizedName = row.name.trim().toLowerCase()
+              const duplicate = normalizedName ? duplicateNames.has(normalizedName) : false
+              const missingName = !row.name.trim() && row.value.trim()
+              return (
+                <div key={index} className="space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem]">
+                    <input
+                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-slate-900"
+                      value={row.name}
+                      onChange={(event) => { updateRow(index, { name: event.target.value }) }}
+                      placeholder="Header name"
+                      autoComplete="off"
+                    />
+                    <input
+                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-slate-900"
+                      value={row.value}
+                      onChange={(event) => { updateRow(index, { value: event.target.value }) }}
+                      placeholder="Header value"
+                      autoComplete="off"
+                    />
+                    <button
+                      type="button"
+                      className="flex h-10 w-full items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 md:w-10"
+                      onClick={() => { removeRow(index) }}
+                      aria-label="Remove header"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {missingName && <div className="text-xs text-rose-600">Header name is required.</div>}
+                  {duplicate && <div className="text-xs text-amber-700">Duplicate header names use the last value.</div>}
+                </div>
+              )
+            })
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ToggleButton<TValue extends string>(props: {
   active: boolean
   value: TValue
@@ -1131,8 +1395,9 @@ function ConfigurationSelector(props: {
   onAdd: () => void
   onEdit: (profile: SavedProfile) => void
   onDelete: (name: string) => void
+  onExport: (profile: SavedProfile) => void
 }) {
-  const { profiles, selectedName, onSelect, onAdd, onEdit, onDelete } = props
+  const { profiles, selectedName, onSelect, onAdd, onEdit, onDelete, onExport } = props
   const [open, setOpen] = useState(false)
   const selectedProfile = profiles.find((profile) => profile.name === selectedName)
 
@@ -1189,6 +1454,17 @@ function ConfigurationSelector(props: {
                     <span className="block truncate text-xs text-slate-500">
                       {profile.config.apiBaseUrl || profile.config.backendUrl || 'No endpoint'}
                     </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-900"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onExport(profile)
+                    }}
+                    aria-label={`Export ${profile.name}`}
+                  >
+                    <Download className="h-3.5 w-3.5" />
                   </button>
                   <button
                     type="button"
@@ -1606,6 +1882,7 @@ function buildBackendJobRequest(
     standardExecution: site.standardExecution,
     timeoutMs,
     concurrency,
+    failFast: runSnapshot.failFast,
     customHeaders: headers,
     apiVersion: emptyToUndefined(site.apiVersion),
     workingDirectory: emptyToUndefined(site.workingDirectory),
@@ -1761,6 +2038,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const siteImportInputRef = useRef<HTMLInputElement | null>(null)
   const initialProfileLoadedRef = useRef(false)
   const backendJobPollingRef = useRef<string | null>(null)
 
@@ -1817,6 +2095,13 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
     }
     return 'Browser fetch'
   })()
+  const customHeaderCount = useMemo(() => {
+    try {
+      return Object.keys(parseCustomHeaders(siteConfig.customHeaders) ?? {}).length
+    } catch {
+      return null
+    }
+  }, [siteConfig.customHeaders])
   const displayError = localError ?? error
   const hasRunProgress = runProgress.total > 0
   const progressStatusText = running || hasRunProgress ? runProgress.statusText : 'Ready'
@@ -1977,6 +2262,75 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
       setEditingProfileName(null)
     }
   }, [editingProfileName, profileName, profiles, selectedProfileName])
+
+  const handleExportSites = useCallback(() => {
+    const payload: SitesExportPayload = {
+      kind: 'llm-spec-sites',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      profiles: profiles.map((profile) => ({
+        name: profile.name,
+        savedAt: profile.savedAt,
+        config: profile.config,
+      })),
+      selectedProfileName,
+      siteConfig,
+      runDraft,
+    }
+    downloadJsonFile(`llm-spec-sites-${new Date().toISOString().slice(0, 10)}.json`, payload)
+  }, [profiles, runDraft, selectedProfileName, siteConfig])
+
+  const handleExportSite = useCallback((profile: SavedProfile) => {
+    const payload: SitesExportPayload = {
+      kind: 'llm-spec-sites',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      profiles: [{
+        name: profile.name,
+        savedAt: profile.savedAt,
+        config: profile.config,
+      }],
+      selectedProfileName: profile.name,
+      siteConfig: profile.config,
+      runDraft,
+    }
+    downloadJsonFile(`llm-spec-site-${sanitizeDownloadNamePart(profile.name, 'site')}.json`, payload)
+  }, [runDraft])
+
+  const handleImportSitesFile = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    try {
+      const payload = normalizeSitesImportPayload(JSON.parse(await file.text()) as unknown)
+      if (payload.profiles.length === 0 && !payload.siteConfig) {
+        throw new Error('Sites import contains no profiles or site config')
+      }
+
+      const nextSelectedName = payload.selectedProfileName ?? (payload.siteConfig ? null : payload.profiles[0]?.name ?? null)
+      const nextSelectedProfile = nextSelectedName
+        ? payload.profiles.find((profile) => profile.name === nextSelectedName)
+        : undefined
+
+      saveProfiles(payload.profiles)
+      setProfiles(payload.profiles)
+      setSelectedProfileName(nextSelectedName)
+      setProfileName(nextSelectedName ?? '')
+      setEditingProfileName(null)
+      setSiteConfig(payload.siteConfig ?? nextSelectedProfile?.config ?? payload.profiles[0]?.config ?? createDefaultSiteConfig())
+      if (payload.runDraft) {
+        setRunDraft(payload.runDraft)
+      }
+      setLocalError(null)
+      setBackendStatus('Sites imported')
+    } catch (importError) {
+      setLocalError(`Sites import failed: ${formatUnknownError(importError)}`)
+    } finally {
+      event.target.value = ''
+    }
+  }, [])
 
   const handleAddConfiguration = useCallback(() => {
     setSelectedProfileName(null)
@@ -2265,6 +2619,37 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
     }
   }, [onReport, siteConfig.backendUrl])
 
+  const handleExportHistoryReport = useCallback(async (entry: BackendRunHistoryEntry) => {
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      const report = await loadBackendRunHistoryReport(siteConfig.backendUrl, entry.id)
+      const baseName = entry.fileName.replace(/\.json$/i, '') || entry.id
+      downloadJsonFile(`${sanitizeDownloadNamePart(baseName, 'history')}.json`, report)
+    } catch (historyErrorValue) {
+      setHistoryError(formatUnknownError(historyErrorValue))
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [siteConfig.backendUrl])
+
+  const handleDeleteHistoryReport = useCallback(async (entry: BackendRunHistoryEntry) => {
+    if (!window.confirm(`Delete history record "${formatHistoryTitle(entry)}"?`)) {
+      return
+    }
+
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      await deleteBackendRunHistory(siteConfig.backendUrl, entry.id)
+      setHistoryItems((current) => current.filter((item) => item.id !== entry.id))
+    } catch (historyErrorValue) {
+      setHistoryError(formatUnknownError(historyErrorValue))
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [siteConfig.backendUrl])
+
   useEffect(() => {
     if (requiresBackend) {
       void handleRefreshHistory()
@@ -2287,17 +2672,45 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
             <Layers className="mr-3 h-6 w-6 text-slate-700" />
             LLM Spec Platform
           </div>
-          <ConfigurationSelector
-            profiles={profiles}
-            selectedName={selectedProfile?.name ?? null}
-            onSelect={handleLoadProfile}
-            onAdd={handleAddConfiguration}
-            onEdit={handleEditProfile}
-            onDelete={handleDeleteProfile}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={siteImportInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(event) => { void handleImportSitesFile(event) }}
+            />
+            <ConfigurationSelector
+              profiles={profiles}
+              selectedName={selectedProfile?.name ?? null}
+              onSelect={handleLoadProfile}
+              onAdd={handleAddConfiguration}
+              onEdit={handleEditProfile}
+              onDelete={handleDeleteProfile}
+              onExport={handleExportSite}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => { siteImportInputRef.current?.click() }}
+              aria-label="Import sites"
+            >
+              <Upload className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={handleExportSites}
+              aria-label="Export sites"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+          </div>
         </header>
 
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
           <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] lg:col-span-8">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6 py-5">
               <h2 className="text-lg font-bold text-slate-800">Run Console</h2>
@@ -2308,7 +2721,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
             </div>
 
             <div className="flex-grow space-y-6 p-6">
-              <dl className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-3">
+              <dl className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
                 <SummaryField
                   label="Site"
                   value={selectedProfile?.name ?? 'Unsaved site'}
@@ -2320,6 +2733,11 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                   muted={!siteConfig.apiBaseUrl}
                 />
                 <SummaryField label="Execution" value={executionSummary} />
+                <SummaryField
+                  label="Headers"
+                  value={customHeaderCount === null ? 'Invalid' : customHeaderCount > 0 ? `${customHeaderCount} custom` : 'None'}
+                  muted={!customHeaderCount}
+                />
               </dl>
 
               <div className="grid grid-cols-1 gap-5 md:grid-cols-12">
@@ -2565,40 +2983,67 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                 </div>
               )}
 
-              <div className="space-y-2">
+              <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
                 {historyItems.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-500">
                     {historyLoading ? 'Loading history...' : 'No saved backend runs'}
                   </div>
                 ) : (
-                  historyItems.slice(0, 6).map((entry) => (
-                    <button
+                  historyItems.map((entry) => (
+                    <div
                       key={entry.id}
-                      type="button"
-                      className="group flex w-full items-start gap-3 rounded-lg border border-slate-200 px-3 py-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-50"
-                      onClick={() => { void handleLoadHistoryReport(entry.id) }}
-                      disabled={historyLoading || running}
+                      className={cn(
+                        'group flex w-full items-start gap-2 rounded-lg border border-slate-200 px-3 py-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50',
+                        (historyLoading || running) && 'opacity-50',
+                      )}
                     >
-                      <FolderOpen className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 group-hover:text-slate-700" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-slate-800">
-                          {formatHistoryTitle(entry)}
+                      <button
+                        type="button"
+                        className="flex min-w-0 flex-1 items-start gap-3 text-left disabled:pointer-events-none"
+                        onClick={() => { void handleLoadHistoryReport(entry.id) }}
+                        disabled={historyLoading || running}
+                      >
+                        <FolderOpen className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 group-hover:text-slate-700" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-slate-800">
+                            {formatHistoryTitle(entry)}
+                          </span>
+                          <span className="mt-0.5 block truncate text-xs text-slate-500">
+                            {formatDateTime(entry.finishedAt)}
+                          </span>
+                          <span className="mt-1 block truncate text-xs text-slate-500">
+                            {formatHistorySubtitle(entry)}
+                          </span>
+                          <span className={cn(
+                            'mt-1 block truncate text-xs font-semibold',
+                            entry.totalFailed > 0 ? 'text-rose-600' : 'text-emerald-600',
+                          )}
+                          >
+                            {formatHistoryOutcome(entry)}
+                          </span>
                         </span>
-                        <span className="mt-0.5 block truncate text-xs text-slate-500">
-                          {formatDateTime(entry.finishedAt)}
-                        </span>
-                        <span className="mt-1 block truncate text-xs text-slate-500">
-                          {formatHistorySubtitle(entry)}
-                        </span>
-                        <span className={cn(
-                          'mt-1 block truncate text-xs font-semibold',
-                          entry.totalFailed > 0 ? 'text-rose-600' : 'text-emerald-600',
-                        )}
+                      </button>
+                      <div className="flex shrink-0 gap-1">
+                        <button
+                          type="button"
+                          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:pointer-events-none"
+                          onClick={() => { void handleExportHistoryReport(entry) }}
+                          disabled={historyLoading || running}
+                          aria-label={`Export ${formatHistoryTitle(entry)}`}
                         >
-                          {formatHistoryOutcome(entry)}
-                        </span>
-                      </span>
-                    </button>
+                          <Download className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 disabled:pointer-events-none"
+                          onClick={() => { void handleDeleteHistoryReport(entry) }}
+                          disabled={historyLoading || running}
+                          aria-label={`Delete ${formatHistoryTitle(entry)}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
                   ))
                 )}
               </div>
@@ -2752,11 +3197,9 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                   </div>
                 </div>
 
-                <TextAreaField
-                  label="Custom Headers"
+                <CustomHeadersField
                   value={siteConfig.customHeaders}
                   onChange={(value) => { updateSiteConfig({ customHeaders: value }) }}
-                  placeholder='{"X-Debug-Channel-ID":"13"}'
                 />
               </div>
             </ScrollArea>

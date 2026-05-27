@@ -34,6 +34,7 @@ export async function runAnthropicCases(
     timeout: config.timeoutMs,
     maxRetries: 0,
     fetch: createLoggingFetch('anthropic'),
+    ...(config.customHeaders ? { defaultHeaders: config.customHeaders } : {}),
   });
 
   const cases = buildAnthropicCases({ client, config });

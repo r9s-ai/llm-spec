@@ -278,6 +278,12 @@ export function printRuntimeConfig(config: RuntimeConfig): void {
   console.log(`audioModel: ${config.openai.audioModel ?? '(none)'}`);
   console.log(`timeoutMs: ${String(config.openai.timeoutMs)}`);
   console.log('');
+  console.log('[xai]');
+  console.log(`apiKey: ${maskSecret(config.xai.apiKey)}`);
+  console.log(`apiBaseUrl: ${config.xai.apiBaseUrl ?? '(default)'}`);
+  console.log(`model: ${config.xai.model}`);
+  console.log(`timeoutMs: ${String(config.xai.timeoutMs)}`);
+  console.log('');
   console.log('[anthropic]');
   console.log(`apiKey: ${maskSecret(config.anthropic.apiKey)}`);
   console.log(`apiBaseUrl: ${config.anthropic.apiBaseUrl ?? '(default)'}`);

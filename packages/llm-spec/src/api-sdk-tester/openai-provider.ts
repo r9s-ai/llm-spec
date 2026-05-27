@@ -30,9 +30,20 @@ function createOpenAIClient(config: OpenAIProviderConfig): OpenAI {
     baseURL: config.apiBaseUrl,
     timeout: config.timeoutMs,
     maxRetries: 0,
-    fetch: createLoggingFetch('openai'),
+    fetch: createLoggingFetch(config.provider),
     ...(config.customHeaders ? { defaultHeaders: config.customHeaders } : {}),
   });
+}
+
+function openAIProviderLabel(config: OpenAIProviderConfig, surface: string): string {
+  return `${config.provider}(${surface})`;
+}
+
+function missingOpenAICompatibleKeyMessage(config: OpenAIProviderConfig): string {
+  if (config.provider === 'xai') {
+    return 'missing API key (set XAI_API_KEY / X_AI_API_KEY or API_KEY)';
+  }
+  return 'missing API key (set OPENAI_API_KEY or API_KEY)';
 }
 
 export async function runOpenAIChatCases(
@@ -41,30 +52,32 @@ export async function runOpenAIChatCases(
   concurrency: number = 1,
   onProgress?: RunProgressHandler,
 ): Promise<ProviderSummary> {
+  const providerLabel = openAIProviderLabel(config, 'chatCompletions');
+
   if (!config.apiKey) {
     return createSetupSkippedSummary(
-      'openai(chatCompletions)',
+      providerLabel,
       config.model,
       config.apiBaseUrl,
       OPENAI_CHAT_PARAMS,
-      'missing API key (set OPENAI_API_KEY or API_KEY)',
+      missingOpenAICompatibleKeyMessage(config),
       onProgress,
     );
   }
 
   const client = createOpenAIClient(config);
-  setCurrentProvider('openai(chatCompletions)');
+  setCurrentProvider(providerLabel);
   const protocolCases = buildOpenAIChatCases({ client, config });
   const chatCompletionsCases = [...protocolCases];
 
   if (isGeminiOpenAICompatibilityTarget(config.model)) {
     chatCompletionsCases.push(...buildGeminiOpenAIChatCases({ client, config }));
-  } else if (!isOpenAICompatibilityGateway(config.apiBaseUrl)) {
+  } else if (config.provider === 'xai' || !isOpenAICompatibilityGateway(config.apiBaseUrl)) {
     chatCompletionsCases.push(...buildOfficialOpenAIChatCases({ client, config }));
   }
 
   return executeProviderCases(
-    'openai(chatCompletions)',
+    providerLabel,
     config.model,
     config.apiBaseUrl,
     OPENAI_CHAT_PARAMS,
@@ -81,20 +94,22 @@ export async function runOpenAIResponsesCases(
   concurrency: number = 1,
   onProgress?: RunProgressHandler,
 ): Promise<ProviderSummary> {
+  const providerLabel = openAIProviderLabel(config, 'responses');
+
   if (!config.apiKey) {
     return createSetupSkippedSummary(
-      'openai(responses)',
+      providerLabel,
       config.model,
       config.apiBaseUrl,
       OPENAI_RESPONSES_PARAMS,
-      'missing API key (set OPENAI_API_KEY or API_KEY)',
+      missingOpenAICompatibleKeyMessage(config),
       onProgress,
     );
   }
 
   if (isGeminiOpenAICompatibilityTarget(config.model)) {
     return createSetupSkippedSummary(
-      'openai(responses)',
+      providerLabel,
       config.model,
       config.apiBaseUrl,
       OPENAI_RESPONSES_PARAMS,
@@ -104,10 +119,10 @@ export async function runOpenAIResponsesCases(
   }
 
   const client = createOpenAIClient(config);
-  setCurrentProvider('openai(responses)');
+  setCurrentProvider(providerLabel);
   const responsesCases = buildOpenAIResponsesCases({ client, config });
   return executeProviderCases(
-    'openai(responses)',
+    providerLabel,
     config.model,
     config.apiBaseUrl,
     OPENAI_RESPONSES_PARAMS,
@@ -124,20 +139,22 @@ export async function runOpenAIExtendedCases(
   concurrency: number = 1,
   onProgress?: RunProgressHandler,
 ): Promise<ProviderSummary> {
+  const providerLabel = openAIProviderLabel(config, 'extended');
+
   if (!config.apiKey) {
     return createSetupSkippedSummary(
-      'openai(extended)',
+      providerLabel,
       config.model,
       config.apiBaseUrl,
       OPENAI_EXTENDED_PARAMS,
-      'missing API key (set OPENAI_API_KEY or API_KEY)',
+      missingOpenAICompatibleKeyMessage(config),
       onProgress,
     );
   }
 
   if (isGeminiOpenAICompatibilityTarget(config.model)) {
     return createSetupSkippedSummary(
-      'openai(extended)',
+      providerLabel,
       config.model,
       config.apiBaseUrl,
       OPENAI_EXTENDED_PARAMS,
@@ -147,10 +164,10 @@ export async function runOpenAIExtendedCases(
   }
 
   const client = createOpenAIClient(config);
-  setCurrentProvider('openai(extended)');
+  setCurrentProvider(providerLabel);
   const extendedCases = buildOpenAIExtendedCases({ client, config });
   return executeProviderCases(
-    'openai(extended)',
+    providerLabel,
     config.model,
     config.apiBaseUrl,
     OPENAI_EXTENDED_PARAMS,
@@ -171,4 +188,13 @@ export async function runOpenAICases(
   const responsesSummary = await runOpenAIResponsesCases(config, failFast, concurrency, onProgress);
   const extendedSummary = await runOpenAIExtendedCases(config, failFast, concurrency, onProgress);
   return [chatCompletionsSummary, responsesSummary, extendedSummary];
+}
+
+export async function runXAICases(
+  config: OpenAIProviderConfig,
+  failFast: boolean,
+  concurrency: number = 1,
+  onProgress?: RunProgressHandler,
+): Promise<ProviderSummary> {
+  return runOpenAIChatCases(config, failFast, concurrency, onProgress);
 }
