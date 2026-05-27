@@ -1,5 +1,14 @@
 import type { RunSummary } from '@/types'
 
+function sanitizeReportBackendInfo(report: RunSummary): RunSummary {
+  if (!report.runSnapshot || !('backendUrl' in report.runSnapshot)) {
+    return report
+  }
+  const runSnapshot = { ...report.runSnapshot }
+  delete runSnapshot.backendUrl
+  return { ...report, runSnapshot }
+}
+
 export function parseReport(json: unknown): RunSummary {
   if (!json || typeof json !== 'object') {
     throw new Error('Invalid report: expected a JSON object')
@@ -24,7 +33,7 @@ export function parseReport(json: unknown): RunSummary {
     }
   }
 
-  return json as RunSummary
+  return sanitizeReportBackendInfo(json as RunSummary)
 }
 
 export async function loadFromFile(file: File): Promise<RunSummary> {

@@ -1,16 +1,16 @@
-import { Server, Clock, Upload } from 'lucide-react'
+import { Clock, Home, Server } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { RunSummary } from '@/types'
 import { formatDateTime } from '@/lib/format'
 
 interface HeaderProps {
   report: RunSummary
-  onLoadNew: () => void
+  onBackHome: () => void
 }
 
-export function Header({ report, onLoadNew }: HeaderProps) {
+export function Header({ report, onBackHome }: HeaderProps) {
   return (
-    <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-slate-200">
+    <header className="flex flex-col gap-6 border-b border-slate-200 pb-6 md:flex-row md:items-center md:justify-between">
       <div className="space-y-2">
         <div className="flex items-center gap-3 text-slate-500 mb-2">
           <Server className="w-5 h-5" />
@@ -26,17 +26,19 @@ export function Header({ report, onLoadNew }: HeaderProps) {
         </p>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="text-right hidden md:block">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center md:justify-end">
+        <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-left shadow-sm sm:text-right">
           <div className="text-sm font-medium text-slate-900">Test Period</div>
-          <div className="text-xs text-slate-500 flex items-center gap-1 justify-end mt-1">
+          <div className="mt-1 flex items-center gap-1 text-xs text-slate-500 sm:justify-end">
             <Clock className="w-3 h-3" />
-            {formatDateTime(report.startedAt)} — {formatDateTime(report.finishedAt)}
+            <span>
+              {formatDateTime(report.startedAt)} — {formatDateTime(report.finishedAt)}
+            </span>
           </div>
         </div>
-        <Button variant="outline" onClick={onLoadNew}>
-          <Upload className="w-4 h-4 mr-2" />
-          Load New
+        <Button variant="outline" onClick={onBackHome} aria-label="Back to home">
+          <Home className="w-4 h-4 mr-2" />
+          Back Home
         </Button>
       </div>
     </header>

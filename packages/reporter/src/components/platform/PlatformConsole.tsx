@@ -190,9 +190,42 @@ const AGENT_OPTIONS: AgentOption[] = [
   },
 ]
 
-const DEFAULT_BACKEND_URL =
-  import.meta.env.VITE_LLM_SPEC_BACKEND_URL ??
-  (import.meta.env.PROD ? window.location.origin : 'http://localhost:8788')
+function currentDomainBackendUrl(): string {
+  return window.location.origin
+}
+
+function isLoopbackBackendUrl(value: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return false
+  }
+
+  try {
+    const hostname = new URL(trimmed.includes('://') ? trimmed : `http://${trimmed}`).hostname.toLowerCase()
+    return (
+      hostname === 'localhost' ||
+      hostname === '0.0.0.0' ||
+      hostname === '::1' ||
+      hostname === '[::1]' ||
+      /^127(?:\.\d{1,3}){3}$/.test(hostname)
+    )
+  } catch {
+    return false
+  }
+}
+
+function resolveRuntimeBackendUrl(value: string): string {
+  const trimmed = value.trim()
+  if (import.meta.env.PROD && isLoopbackBackendUrl(trimmed)) {
+    return currentDomainBackendUrl()
+  }
+  return trimmed
+}
+
+const ENV_BACKEND_URL = import.meta.env.VITE_LLM_SPEC_BACKEND_URL?.trim()
+const DEFAULT_BACKEND_URL = resolveRuntimeBackendUrl(
+  ENV_BACKEND_URL || (import.meta.env.PROD ? currentDomainBackendUrl() : 'http://localhost:8788'),
+)
 
 const STANDARD_TARGET_CASES: Record<StandardApiType, TargetCaseOption[]> = {
   'openai.chat': [
@@ -649,13 +682,15 @@ interface SavedProfile {
   legacyDraft?: RunDraft
 }
 
+type PortableSiteProfileConfig = Omit<SiteProfileConfig, 'backendUrl'>
+
 interface SitesExportPayload {
   kind: 'llm-spec-sites'
   version: 1
   exportedAt: string
-  profiles: Array<Pick<SavedProfile, 'name' | 'savedAt' | 'config'>>
+  profiles: Array<Pick<SavedProfile, 'name' | 'savedAt'> & { config: PortableSiteProfileConfig }>
   selectedProfileName: string | null
-  siteConfig: SiteProfileConfig
+  siteConfig: PortableSiteProfileConfig
   runDraft: RunDraft
 }
 
@@ -758,11 +793,32 @@ function normalizeSiteConfig(value: unknown): SiteProfileConfig {
     apiBaseUrl: stringValue(value.apiBaseUrl, defaults.apiBaseUrl),
     customHeaders: stringValue(value.customHeaders, defaults.customHeaders),
     apiVersion: stringValue(value.apiVersion, defaults.apiVersion),
-    backendUrl: stringValue(value.backendUrl, defaults.backendUrl),
+    backendUrl: defaults.backendUrl,
     standardExecution: normalizeStandardExecution(value.standardExecution),
     workingDirectory: stringValue(value.workingDirectory, defaults.workingDirectory),
     skipGitRepoCheck: booleanValue(value.skipGitRepoCheck, defaults.skipGitRepoCheck),
     testImagePath: stringValue(value.testImagePath, defaults.testImagePath),
+  }
+}
+
+function toPortableSiteConfig(config: SiteProfileConfig): PortableSiteProfileConfig {
+  return {
+    apiKey: config.apiKey,
+    apiBaseUrl: config.apiBaseUrl,
+    customHeaders: config.customHeaders,
+    apiVersion: config.apiVersion,
+    standardExecution: config.standardExecution,
+    workingDirectory: config.workingDirectory,
+    skipGitRepoCheck: config.skipGitRepoCheck,
+    testImagePath: config.testImagePath,
+  }
+}
+
+function toPortableProfile(profile: SavedProfile): Pick<SavedProfile, 'name' | 'savedAt'> & { config: PortableSiteProfileConfig } {
+  return {
+    name: profile.name,
+    savedAt: profile.savedAt,
+    config: toPortableSiteConfig(profile.config),
   }
 }
 
@@ -917,11 +973,7 @@ function loadProfiles(): SavedProfile[] {
 function saveProfiles(profiles: SavedProfile[]): void {
   localStorage.setItem(
     SITE_STORAGE_KEY,
-    JSON.stringify(profiles.map((profile) => ({
-      name: profile.name,
-      savedAt: profile.savedAt,
-      config: profile.config,
-    }))),
+    JSON.stringify(profiles.map(toPortableProfile)),
   )
 }
 
@@ -1029,7 +1081,11 @@ function loadActiveBackendJob(): ActiveBackendJob | null {
     if (typeof value.id !== 'string' || typeof value.backendUrl !== 'string') {
       return null
     }
-    return { id: value.id, backendUrl: value.backendUrl }
+    const backendUrl = resolveRuntimeBackendUrl(value.backendUrl)
+    if (import.meta.env.PROD && isLoopbackBackendUrl(value.backendUrl) && backendUrl !== value.backendUrl.trim()) {
+      return null
+    }
+    return { id: value.id, backendUrl }
   } catch {
     return null
   }
@@ -1062,6 +1118,15 @@ function downloadJsonFile(fileName: string, value: unknown): void {
   link.click()
   link.remove()
   URL.revokeObjectURL(url)
+}
+
+function sanitizeRunSummaryForExport(summary: RunSummary): RunSummary {
+  if (!summary.runSnapshot || !('backendUrl' in summary.runSnapshot)) {
+    return summary
+  }
+  const runSnapshot = { ...summary.runSnapshot }
+  delete runSnapshot.backendUrl
+  return { ...summary, runSnapshot }
 }
 
 function parseCustomHeaders(value: string): Record<string, string> | undefined {
@@ -1452,7 +1517,7 @@ function ConfigurationSelector(props: {
                   >
                     <span className="block truncate text-sm font-semibold text-slate-900">{profile.name}</span>
                     <span className="block truncate text-xs text-slate-500">
-                      {profile.config.apiBaseUrl || profile.config.backendUrl || 'No endpoint'}
+                      {profile.config.apiBaseUrl || 'Provider default'}
                     </span>
                   </button>
                   <button
@@ -1849,7 +1914,6 @@ function buildRunSnapshot(
   return {
     siteName: siteName ?? undefined,
     apiBaseUrl: emptyToUndefined(site.apiBaseUrl),
-    backendUrl: emptyToUndefined(site.backendUrl),
     standardExecution: site.standardExecution,
     timeoutMs: parsePositiveNumber(draft.settings.timeoutMs, 45_000),
     concurrency: parsePositiveNumber(draft.settings.concurrency, 1),
@@ -1878,7 +1942,6 @@ function buildBackendJobRequest(
   return {
     apiKey: emptyToUndefined(site.apiKey),
     apiBaseUrl: emptyToUndefined(site.apiBaseUrl),
-    backendUrl: emptyToUndefined(site.backendUrl),
     standardExecution: site.standardExecution,
     timeoutMs,
     concurrency,
@@ -2065,7 +2128,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
   }, [runDraft])
 
   useEffect(() => {
-    localStorage.setItem(LAST_SITE_CONFIG_STORAGE_KEY, JSON.stringify(siteConfig))
+    localStorage.setItem(LAST_SITE_CONFIG_STORAGE_KEY, JSON.stringify(toPortableSiteConfig(siteConfig)))
   }, [siteConfig])
 
   useEffect(() => {
@@ -2268,13 +2331,9 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
       kind: 'llm-spec-sites',
       version: 1,
       exportedAt: new Date().toISOString(),
-      profiles: profiles.map((profile) => ({
-        name: profile.name,
-        savedAt: profile.savedAt,
-        config: profile.config,
-      })),
+      profiles: profiles.map(toPortableProfile),
       selectedProfileName,
-      siteConfig,
+      siteConfig: toPortableSiteConfig(siteConfig),
       runDraft,
     }
     downloadJsonFile(`llm-spec-sites-${new Date().toISOString().slice(0, 10)}.json`, payload)
@@ -2285,13 +2344,9 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
       kind: 'llm-spec-sites',
       version: 1,
       exportedAt: new Date().toISOString(),
-      profiles: [{
-        name: profile.name,
-        savedAt: profile.savedAt,
-        config: profile.config,
-      }],
+      profiles: [toPortableProfile(profile)],
       selectedProfileName: profile.name,
-      siteConfig: profile.config,
+      siteConfig: toPortableSiteConfig(profile.config),
       runDraft,
     }
     downloadJsonFile(`llm-spec-site-${sanitizeDownloadNamePart(profile.name, 'site')}.json`, payload)
@@ -2625,7 +2680,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
     try {
       const report = await loadBackendRunHistoryReport(siteConfig.backendUrl, entry.id)
       const baseName = entry.fileName.replace(/\.json$/i, '') || entry.id
-      downloadJsonFile(`${sanitizeDownloadNamePart(baseName, 'history')}.json`, report)
+      downloadJsonFile(`${sanitizeDownloadNamePart(baseName, 'history')}.json`, sanitizeRunSummaryForExport(report))
     } catch (historyErrorValue) {
       setHistoryError(formatUnknownError(historyErrorValue))
     } finally {
@@ -2760,21 +2815,15 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                 <div className="md:col-span-6">
                   <div className="space-y-1.5">
                     <label className="block text-sm font-semibold text-slate-700">Backend</label>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <div className="flex h-10 min-w-0 flex-1 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600">
-                        <span className="truncate">
-                          {requiresBackend ? siteConfig.backendUrl : 'Standard API targets run from browser'}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        className="flex h-10 w-full shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-50 sm:w-auto"
-                        onClick={handleCheckBackend}
-                        disabled={running || !requiresBackend}
-                      >
-                        Check
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-50 sm:w-auto"
+                      onClick={handleCheckBackend}
+                      disabled={running}
+                    >
+                      <Server className="h-4 w-4" />
+                      Check Backend
+                    </button>
                   </div>
                 </div>
               </div>
@@ -3124,12 +3173,6 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                     value={profileName}
                     onChange={setProfileName}
                     placeholder="e.g. Gemini OpenAI Gateway"
-                  />
-                  <Field
-                    label="Backend URL"
-                    value={siteConfig.backendUrl}
-                    onChange={(value) => { updateSiteConfig({ backendUrl: value }) }}
-                    placeholder="http://localhost:8788"
                   />
                 </div>
 

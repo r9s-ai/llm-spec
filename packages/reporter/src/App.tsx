@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useReportData } from '@/hooks/useReportData'
 import { PlatformConsole } from '@/components/platform/PlatformConsole'
 import { Header } from '@/components/layout/Header'
@@ -7,7 +7,7 @@ import { ProviderTabs } from '@/components/summary/ProviderTabs'
 import { ParamCoverage } from '@/components/coverage/ParamCoverage'
 import { TestCaseGrid } from '@/components/test-cases/TestCaseGrid'
 import { TraceModal } from '@/components/trace/TraceModal'
-import type { TestCaseResult, ProviderSummary } from '@/types'
+import type { ProviderSummary, RunSummary, TestCaseResult } from '@/types'
 import { isAgentProvider, formatProviderName } from '@/lib/format'
 import { Badge } from '@/components/ui/badge'
 import { Bot } from 'lucide-react'
@@ -17,10 +17,28 @@ export default function App() {
   const [activeProvider, setActiveProvider] = useState('__overview__')
   const [traceCase, setTraceCase] = useState<TestCaseResult | null>(null)
 
+  const handleReport = useCallback((data: RunSummary) => {
+    setActiveProvider('__overview__')
+    setTraceCase(null)
+    loadReport(data)
+  }, [loadReport])
+
+  const handleBackHome = useCallback(() => {
+    setActiveProvider('__overview__')
+    setTraceCase(null)
+    reset()
+
+    const url = new URL(window.location.href)
+    if (url.searchParams.has('report')) {
+      url.searchParams.delete('report')
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+    }
+  }, [reset])
+
   if (!report) {
     return (
       <PlatformConsole
-        onReport={loadReport}
+        onReport={handleReport}
         onLoadFile={loadFile}
         onLoadSample={loadSample}
         loading={loading}
@@ -37,7 +55,7 @@ export default function App() {
   return (
     <div className="min-h-screen p-6 md:p-12 font-sans">
       <div className="max-w-6xl mx-auto space-y-8">
-        <Header report={report} onLoadNew={reset} />
+        <Header report={report} onBackHome={handleBackHome} />
 
         <SummaryCards report={report} />
 

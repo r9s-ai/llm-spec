@@ -347,7 +347,9 @@ function optionalRunSnapshot(body: JsonRecord): RunSnapshot | undefined {
   if (!isJsonRecord(value)) {
     return undefined;
   }
-  return value as unknown as RunSnapshot;
+  const runSnapshot = { ...(value as unknown as RunSnapshot) };
+  delete runSnapshot.backendUrl;
+  return runSnapshot;
 }
 
 function optionalPositiveNumber(body: JsonRecord, key: string): number | undefined {
@@ -623,7 +625,6 @@ function normalizeBackendRunJobRequest(body: JsonRecord): BackendRunJobRequest {
   return {
     apiKey: topLevelOverrides.apiKey,
     apiBaseUrl: topLevelOverrides.apiBaseUrl,
-    backendUrl: optionalString(body, 'backendUrl'),
     standardExecution,
     timeoutMs: topLevelOverrides.timeoutMs ?? 45_000,
     concurrency: topLevelOverrides.concurrency ?? 1,
@@ -920,7 +921,6 @@ function createHistoryEntry(id: string, fileName: string, summary: RunSummary): 
     totalSkipped: summary.totalSkipped,
     siteName: summary.runSnapshot?.siteName,
     apiBaseUrl: summary.runSnapshot?.apiBaseUrl ?? firstApiBaseUrl,
-    backendUrl: summary.runSnapshot?.backendUrl,
   };
 }
 
