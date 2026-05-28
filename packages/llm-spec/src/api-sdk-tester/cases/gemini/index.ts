@@ -9,6 +9,7 @@ import {
 
 import type { GoogleGenAI } from '@google/genai';
 
+import { MEDIA_INPUT_FIXTURES, readFixtureBase64 } from '../../fixtures';
 import type { GeminiProviderConfig } from '../../environment';
 import { summarizeGeminiResponse, truncate } from '../runtime';
 import type { TestCase } from '../types';
@@ -96,7 +97,14 @@ function resolveGeminiModelScope(caseId: string): string {
   if (caseId === 'audio_modality') {
     return 'audio';
   }
+  if (caseId === 'audio_input') {
+    return 'audio';
+  }
+  if (caseId === 'video_input') {
+    return 'video';
+  }
   if (
+    caseId === 'image_input' ||
     caseId === 'image_config' ||
     caseId === 'image_response_modalities_text_image' ||
     caseId === 'image_google_search_tool'
@@ -149,6 +157,97 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
         const response = await ai.models.generateContent({
           model: config.model,
           contents: 'Reply with exactly: ok',
+        });
+        return summarizeGeminiResponse(response);
+      },
+    },
+    'audio_input': {
+      description: 'audio inlineData input',
+      covers: ['model', 'contents.inlineData'],
+      run: async () => {
+        const model = config.audioModel ?? config.model;
+        const fixture = MEDIA_INPUT_FIXTURES.audio.silent1s;
+        const response = await ai.models.generateContent({
+          model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: 'The attached audio is short. Reply with exactly: audio-ok',
+                },
+                {
+                  inlineData: {
+                    mimeType: fixture.mimeType,
+                    data: readFixtureBase64(fixture.fileName),
+                  },
+                },
+              ],
+            },
+          ],
+          config: {
+            maxOutputTokens: 16,
+          },
+        });
+        return summarizeGeminiResponse(response);
+      },
+    },
+    'image_input': {
+      description: 'image inlineData input',
+      covers: ['model', 'contents.inlineData'],
+      run: async () => {
+        const fixture = MEDIA_INPUT_FIXTURES.image.sampleJpeg;
+        const response = await ai.models.generateContent({
+          model: config.model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: 'Ignore the image content and reply exactly: image-ok',
+                },
+                {
+                  inlineData: {
+                    mimeType: fixture.mimeType,
+                    data: readFixtureBase64(fixture.fileName),
+                  },
+                },
+              ],
+            },
+          ],
+          config: {
+            maxOutputTokens: 16,
+          },
+        });
+        return summarizeGeminiResponse(response);
+      },
+    },
+    'video_input': {
+      description: 'video inlineData input',
+      covers: ['model', 'contents.inlineData'],
+      run: async () => {
+        const fixture = MEDIA_INPUT_FIXTURES.video.office;
+        const response = await ai.models.generateContent({
+          model: config.model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: 'The attached video is short. Reply with exactly: video-ok',
+                },
+                {
+                  inlineData: {
+                    mimeType: fixture.mimeType,
+                    data: readFixtureBase64(fixture.fileName),
+                  },
+                },
+              ],
+            },
+          ],
+          config: {
+            maxOutputTokens: 16,
+          },
         });
         return summarizeGeminiResponse(response);
       },

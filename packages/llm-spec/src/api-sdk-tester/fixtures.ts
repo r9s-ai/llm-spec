@@ -40,6 +40,27 @@ export const IMAGE_INPUT_FIXTURES = [
   },
 ] as const;
 
+export const MEDIA_INPUT_FIXTURES = {
+  audio: {
+    silent1s: {
+      mimeType: 'audio/wav',
+      fileName: 'audio/silent-1s.wav',
+    },
+  },
+  image: {
+    sampleJpeg: {
+      mimeType: 'image/jpeg',
+      fileName: 'images/image-input.jpg',
+    },
+  },
+  video: {
+    office: {
+      mimeType: 'video/mp4',
+      fileName: 'video/office.mp4',
+    },
+  },
+} as const;
+
 let resolvedFixtureDir: string | undefined;
 const fixtureByteCache = new Map<string, Buffer>();
 
