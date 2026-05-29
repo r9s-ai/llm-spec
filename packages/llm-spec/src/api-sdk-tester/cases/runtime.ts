@@ -1,6 +1,7 @@
 import type { ProviderSummary, RunProgressHandler, TestCaseResult } from '../../types';
 import { applyCaseFilter } from '../environment/case-filter';
 import { consumeCapturedHttpTrace, flushCapturedHttpTrace, runWithActiveTestContext } from '../environment';
+import { selectCasesForModel } from './model-capabilities';
 import type { TestCase } from './types';
 
 let providerCaseExecutionCounter = 0;
@@ -185,6 +186,7 @@ async function runCase(provider: string, testCase: TestCase): Promise<TestCaseRe
       apiType: testCase.apiType,
       protocol: testCase.protocol,
       modelScope: testCase.modelScope,
+      testModel: testCase.testModel,
     };
   }
 
@@ -203,6 +205,7 @@ async function runCase(provider: string, testCase: TestCase): Promise<TestCaseRe
       apiType: testCase.apiType,
       protocol: testCase.protocol,
       modelScope: testCase.modelScope,
+      testModel: testCase.testModel,
       httpTrace,
     };
   } catch (error) {
@@ -217,6 +220,7 @@ async function runCase(provider: string, testCase: TestCase): Promise<TestCaseRe
       apiType: testCase.apiType,
       protocol: testCase.protocol,
       modelScope: testCase.modelScope,
+      testModel: testCase.testModel,
       httpTrace,
     };
   }
@@ -297,7 +301,11 @@ export async function executeProviderCases(
   const startedAt = new Date().toISOString();
   const caseResults: TestCaseResult[] = [];
   const { filteredCases, filterEnv } = applyCaseFilter(provider, cases);
-  const progressTotal = Math.max(filteredCases.length, 1);
+  const modelSelection = filterEnv
+    ? { selectedCases: filteredCases, excluded: [] }
+    : selectCasesForModel(provider, model, apiBaseUrl, filteredCases);
+  const selectedCases = modelSelection.selectedCases;
+  const progressTotal = Math.max(selectedCases.length, 1);
   let completedCases = 0;
 
   const emitProviderComplete = (): void => {
@@ -313,6 +321,10 @@ export async function executeProviderCases(
     console.log(
       `[${provider}] case filter enabled: ${filterEnv.key}=${filterEnv.value} (${filteredCases.length}/${cases.length} selected)`,
     );
+  } else if (modelSelection.excluded.length > 0) {
+    console.log(
+      `[${provider}] model case selection: ${selectedCases.length}/${filteredCases.length} selected for model=${model}`,
+    );
   }
 
   onProgress?.({
@@ -322,10 +334,10 @@ export async function executeProviderCases(
     total: progressTotal,
   });
 
-  if (filteredCases.length === 0) {
+  if (selectedCases.length === 0) {
     const detail = filterEnv
       ? `no cases matched ${filterEnv.key}=${filterEnv.value}`
-      : 'no cases selected';
+      : 'no cases selected for model';
     onProgress?.({
       phase: 'case-complete',
       provider,
@@ -363,7 +375,7 @@ export async function executeProviderCases(
   }
 
   if (concurrency <= 1) {
-    for (const testCase of filteredCases) {
+    for (const testCase of selectedCases) {
       console.log(`[${provider}] running ${testCase.id} - ${testCase.description}`);
       onProgress?.({
         phase: 'case-start',
@@ -392,13 +404,13 @@ export async function executeProviderCases(
     let nextIndex = 0;
 
     const worker = async (): Promise<void> => {
-      while (nextIndex < filteredCases.length) {
+      while (nextIndex < selectedCases.length) {
         const index = nextIndex++;
-        if (index >= filteredCases.length) {
+        if (index >= selectedCases.length) {
           break;
         }
 
-        const testCase = filteredCases[index]!;
+        const testCase = selectedCases[index]!;
 
         console.log(`[${provider}] running ${testCase.id} - ${testCase.description}`);
         onProgress?.({
@@ -426,10 +438,10 @@ export async function executeProviderCases(
       }
     };
 
-    const placeholders = filteredCases.map(() => null);
+    const placeholders = selectedCases.map(() => null);
     caseResults.push(...(placeholders as unknown as TestCaseResult[]));
 
-    const workerCount = Math.min(concurrency, filteredCases.length);
+    const workerCount = Math.min(concurrency, selectedCases.length);
     await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
     for (let index = caseResults.length - 1; index >= 0; index--) {

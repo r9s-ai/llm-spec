@@ -162,7 +162,9 @@ curl -N http://localhost:8788/api/run/stream \
 - `apiKey` / `apiBaseUrl` / `model`：目标服务连接和模型参数；未传时回退到 backend 进程环境变量。
 - `customHeaders`：自定义请求头，支持 JSON 对象或 JSON 字符串。
 - `apiVersion`：Gemini 原生 SDK 使用。
-- `targetCases`：只运行匹配的用例，语法与 `TARGET_CASES` 一致；不传或传空字符串时默认运行全部用例。
+- `targetCases`：只运行匹配的用例，语法与 `TARGET_CASES` 一致；不传或传空字符串时默认运行当前模型推荐用例。
+- 默认未指定 `targetCases` 时，会根据本行选择的测试模型自动筛掉已知不适配的参数用例（例如 reasoning-only、legacy `max_tokens`、Gemini image/audio 模型用例等）。显式传入 `targetCases` 时以人工选择为准。
+- 报告中的 `testModel` 表示该用例实际选择的测试模型；部分用例会使用专用模型槽位，例如 `OPENAI_REASONING_MODEL`、`OPENAI_AUDIO_MODEL`、`GEMINI_IMAGE_MODEL` 或 Anthropic 的 Opus/Haiku/Fast Mode 模型。
 - `timeoutMs` / `concurrency` / `failFast`：运行控制参数。
 - `workingDirectory` / `skipGitRepoCheck` / `testImagePath`：Agent 测试参数。
 - `persistResult`：是否写入 backend history，默认 `true`。

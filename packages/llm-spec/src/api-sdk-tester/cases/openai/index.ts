@@ -676,6 +676,7 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
     {
       protocol: 'openai.chat',
       modelScope: 'protocol',
+      testModel: config.model,
     },
   );
 }

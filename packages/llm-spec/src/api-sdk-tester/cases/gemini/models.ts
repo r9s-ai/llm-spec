@@ -86,6 +86,7 @@ export function buildGeminiServedModelCases(context: GeminiCaseContext): TestCas
   const cases: Record<string, {
     description: string;
     covers: readonly string[];
+    testModel?: string;
     run: () => Promise<string>;
   }> = {};
 
@@ -93,6 +94,7 @@ export function buildGeminiServedModelCases(context: GeminiCaseContext): TestCas
     cases[geminiModelCatalogCaseId(model.id)] = {
       description: `Gemini served generateContent model smoke (${model.kind}): ${model.id}`,
       covers: ['model'],
+      testModel: model.id,
       run: async () => {
         if (model.kind === 'image') {
           const response = await ai.models.generateContent({

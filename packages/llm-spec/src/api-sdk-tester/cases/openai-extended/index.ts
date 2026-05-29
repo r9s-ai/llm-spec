@@ -753,6 +753,11 @@ export function buildOpenAIExtendedCases({ client, config }: OpenAIExtendedCaseC
           : testCase.id.startsWith('audio_transcriptions')
             ? 'openai.audio.transcriptions'
             : 'openai.audio.translations',
+        testModel: testCase.id.startsWith('audio_speech')
+          ? speechModel
+          : testCase.id.startsWith('audio_transcriptions')
+            ? transcriptionModel
+            : translationModel,
       };
     }
     if (testCase.id.startsWith('images_')) {
@@ -762,11 +767,13 @@ export function buildOpenAIExtendedCases({ client, config }: OpenAIExtendedCaseC
         protocol: testCase.id.startsWith('images_edits')
           ? 'openai.images.edits'
           : 'openai.images.generations',
+        testModel: testCase.id.startsWith('images_edits') ? imageEditModel : imageModel,
       };
     }
     return {
       ...testCase,
       protocol: 'openai.embeddings',
+      testModel: embeddingModel,
     };
   });
 }

@@ -57,6 +57,11 @@ import {
   saveBackendRunReport,
 } from '@/lib/backend-client'
 import { formatDateTime } from '@/lib/format'
+import {
+  isCaseRecommendedForModel,
+  isGeminiOpenAICompatibilityModel,
+  normalizeModelName,
+} from '@/lib/model-capabilities'
 import { cn } from '@/lib/utils'
 import type {
   AgentProvider,
@@ -189,6 +194,16 @@ const AGENT_OPTIONS: AgentOption[] = [
     defaultModel: '',
   },
 ]
+
+const ANTHROPIC_MESSAGES_MODEL_IDS = [
+  'claude-sonnet-4-5',
+  'claude-sonnet-4-20250514',
+  'claude-opus-4-1',
+  'claude-opus-4-20250514',
+  'claude-haiku-4-5',
+  'claude-3-5-haiku-latest',
+  'claude-3-haiku-20240307',
+] as const
 
 function currentDomainBackendUrl(): string {
   return window.location.origin
@@ -631,14 +646,6 @@ function emptyToUndefined(value: string): string | undefined {
   return trimmed ? trimmed : undefined
 }
 
-function isGeminiOpenAICompatibilityModel(value: string): boolean {
-  return value.trim().toLowerCase().startsWith('gemini-')
-}
-
-function normalizeModelName(value: string): string {
-  return value.trim().toLowerCase()
-}
-
 function matchesRequiredModel(option: TargetCaseOption, model: string): boolean {
   if (!option.requiredModels || option.requiredModels.length === 0) {
     return true
@@ -655,7 +662,7 @@ function getTargetCaseOptions(apiType: StandardApiType, model: string): TargetCa
       return false
     }
     if (apiType !== 'openai.chat') {
-      return true
+      return isCaseRecommendedForModel(apiType, option.value, model)
     }
     if (option.group === 'Gemini compatibility') {
       return geminiCompatibility
@@ -663,7 +670,7 @@ function getTargetCaseOptions(apiType: StandardApiType, model: string): TargetCa
     if (option.group === 'OpenAI-specific') {
       return !geminiCompatibility
     }
-    return true
+    return isCaseRecommendedForModel(apiType, option.value, model)
   })
 }
 
@@ -1594,16 +1601,26 @@ function TargetCasesField(props: {
   value: string
   options: TargetCaseOption[]
   onChange: (value: string) => void
+  modelQuickSelect?: {
+    apiType: StandardApiType
+    currentModel: string
+    models: readonly string[]
+    allOptions: TargetCaseOption[]
+    onSelectModelCases?: (model: string, targetCases: string) => void
+  }
   agentToggles?: Array<{
     label: string
     enabled: boolean
     onToggle: () => void
   }>
 }) {
-  const { label, value, options, onChange, agentToggles } = props
+  const { label, value, options, onChange, modelQuickSelect, agentToggles } = props
   const enabledAgentLabels = agentToggles?.filter((a) => a.enabled) ?? []
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [quickModel, setQuickModel] = useState('')
+  const quickSelectApiType = modelQuickSelect?.apiType
+  const quickSelectCurrentModel = modelQuickSelect?.currentModel ?? ''
   const selectedValues = useMemo(() => parseTargetCaseValue(value), [value])
   const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues])
   const normalizedSearch = search.trim().toLowerCase()
@@ -1625,12 +1642,56 @@ function TargetCasesField(props: {
     customValue.length > 0
     && !options.some((option) => option.value === customValue)
     && !selectedSet.has(customValue)
+  const quickModels = useMemo(() => {
+    if (!modelQuickSelect) {
+      return []
+    }
+    return Array.from(
+      new Set([modelQuickSelect.currentModel, ...modelQuickSelect.models].map((model) => model.trim()).filter(Boolean)),
+    )
+  }, [modelQuickSelect])
+
+  useEffect(() => {
+    setQuickModel('')
+  }, [quickSelectApiType, quickSelectCurrentModel])
+
+  const getQuickModelCases = useCallback((model: string): TargetCaseOption[] => {
+    if (!modelQuickSelect || !model.trim()) {
+      return []
+    }
+
+    const normalizedModel = normalizeModelName(model)
+    const catalogOptions = modelQuickSelect.allOptions.filter((option) =>
+      option.requiredModels?.some((requiredModel) =>
+        normalizeModelName(requiredModel) === normalizedModel,
+      ),
+    )
+    const targetOptions = getTargetCaseOptions(modelQuickSelect.apiType, model)
+    if (catalogOptions.length === 0) {
+      return targetOptions
+    }
+
+    const targetValues = new Set(targetOptions.map((option) => option.value))
+    return [
+      ...targetOptions,
+      ...catalogOptions.filter((option) => !targetValues.has(option.value)),
+    ]
+  }, [modelQuickSelect])
+
+  const quickModelCaseCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const model of quickModels) {
+      counts.set(model, new Set(getQuickModelCases(model).map((option) => option.value)).size)
+    }
+    return counts
+  }, [getQuickModelCases, quickModels])
 
   const updateValues = useCallback((nextValues: string[]) => {
     onChange(serializeTargetCaseValue(nextValues))
   }, [onChange])
 
   const toggleValue = useCallback((value: string) => {
+    setQuickModel('')
     if (selectedSet.has(value)) {
       updateValues(selectedValues.filter((item) => item !== value))
       return
@@ -1639,10 +1700,22 @@ function TargetCasesField(props: {
   }, [selectedSet, selectedValues, updateValues])
 
   const selectVisible = useCallback(() => {
+    setQuickModel('')
     updateValues([...selectedValues, ...filteredOptions.map((option) => option.value)])
   }, [filteredOptions, selectedValues, updateValues])
 
+  const selectQuickModelCases = useCallback((model: string) => {
+    const caseFilter = serializeTargetCaseValue(getQuickModelCases(model).map((option) => option.value))
+    setQuickModel(model)
+    if (modelQuickSelect?.onSelectModelCases) {
+      modelQuickSelect.onSelectModelCases(model, caseFilter)
+      return
+    }
+    onChange(caseFilter)
+  }, [getQuickModelCases, modelQuickSelect, onChange])
+
   const removeValue = useCallback((value: string) => {
+    setQuickModel('')
     updateValues(selectedValues.filter((item) => item !== value))
   }, [selectedValues, updateValues])
 
@@ -1688,6 +1761,39 @@ function TargetCasesField(props: {
               placeholder="Search cases or type custom filter"
             />
           </div>
+          {modelQuickSelect && quickModels.length > 0 && (
+            <div className="border-b border-slate-100 px-3 py-2">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Model quick select</span>
+                {quickModel && <span className="truncate text-xs text-slate-400">{quickModel}</span>}
+              </div>
+              <div className="flex max-h-24 flex-wrap gap-1.5 overflow-auto pr-1">
+                {quickModels.map((model) => {
+                  const caseCount = quickModelCaseCounts.get(model) ?? 0
+                  const active = normalizeModelName(quickModel || quickSelectCurrentModel) === normalizeModelName(model)
+                  return (
+                    <button
+                      key={model}
+                      type="button"
+                      className={cn(
+                        'max-w-full rounded-md border px-2 py-1 text-left text-xs transition-colors',
+                        active
+                          ? 'border-slate-900 bg-slate-900 text-white'
+                          : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white hover:text-slate-900',
+                        caseCount === 0 && 'cursor-not-allowed opacity-50',
+                      )}
+                      title={`Select cases for ${model}`}
+                      onClick={() => { selectQuickModelCases(model) }}
+                      disabled={caseCount === 0}
+                    >
+                      <span className="inline-block max-w-[13rem] truncate align-bottom">{model}</span>
+                      <span className={cn('ml-1', active ? 'text-slate-200' : 'text-slate-400')}>({caseCount})</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
             <span className="text-xs text-slate-500">
               {selectedValues.length === 0 ? 'No filter selected' : `${selectedValues.length} case filters`}
@@ -1696,7 +1802,16 @@ function TargetCasesField(props: {
               <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={selectVisible}>
                 Select visible
               </Button>
-              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => { updateValues([]) }}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => {
+                  setQuickModel('')
+                  updateValues([])
+                }}
+              >
                 Clear
               </Button>
             </div>
@@ -1774,6 +1889,7 @@ function TargetCasesField(props: {
                   type="button"
                   className="mt-1 flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm hover:bg-slate-100"
                   onClick={() => {
+                    setQuickModel('')
                     updateValues([...selectedValues, customValue])
                     setSearch('')
                   }}
@@ -1854,6 +1970,20 @@ function getAllRunTargetCaseOptions(target: RunTarget): TargetCaseOption[] {
     return AGENT_TARGET_CASES[target.agentProvider]
   }
   return STANDARD_TARGET_CASES[target.apiType]
+}
+
+function getCaseQuickSelectModels(target: StandardRunTarget): readonly string[] {
+  const defaultModel = selectedStandardOption(target.apiType).defaultModel
+  if (target.apiType === 'openai.chat') {
+    return [defaultModel, ...OPENAI_CHAT_SERVED_MODEL_IDS]
+  }
+  if (target.apiType === 'openai.responses') {
+    return [defaultModel, ...OPENAI_RESPONSES_SERVED_MODEL_IDS]
+  }
+  if (target.apiType === 'anthropic.messages') {
+    return [defaultModel, ...ANTHROPIC_MESSAGES_MODEL_IDS]
+  }
+  return [defaultModel, ...GEMINI_GENERATE_CONTENT_SERVED_MODEL_IDS]
 }
 
 function getRunTargetCaseOptions(target: RunTarget): TargetCaseOption[] {
@@ -2911,6 +3041,21 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                           <TargetCasesField
                             value={target.targetCases}
                             options={getRunTargetCaseOptions(target)}
+                            modelQuickSelect={target.kind === 'standard'
+                              ? {
+                                  apiType: target.apiType,
+                                  currentModel: getRunTargetModel(target),
+                                  models: getCaseQuickSelectModels(target),
+                                  allOptions: getAllRunTargetCaseOptions(target),
+                                  onSelectModelCases: (model, targetCases) => {
+                                    updateTarget(target.id, (current) => (
+                                      current.kind === 'standard'
+                                        ? { ...current, model, targetCases }
+                                        : current
+                                    ))
+                                  },
+                                }
+                              : undefined}
                             onChange={(value) => {
                               updateTarget(target.id, (current) => ({ ...current, targetCases: value }))
                             }}

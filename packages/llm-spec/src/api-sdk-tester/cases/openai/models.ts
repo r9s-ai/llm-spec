@@ -164,6 +164,7 @@ function addDevelopGpt5MiniChatCatalogCases(
     description: string;
     covers: readonly string[];
     precondition: () => string | undefined;
+    testModel?: string;
     run: () => Promise<string>;
   }>,
   context: OpenAICaseContext,
@@ -179,6 +180,7 @@ function addDevelopGpt5MiniChatCatalogCases(
       description: `OpenAI chat model catalog multimodal smoke (${fixture.format}): ${model}`,
       covers: ['model', 'messages[0].content.image.format'],
       precondition,
+      testModel: model,
       run: async () => {
         const response = await client.chat.completions.create({
           model,
@@ -211,6 +213,7 @@ function addDevelopGpt5MiniChatCatalogCases(
       description: `OpenAI chat model catalog reasoning_effort=${effort}: ${model}`,
       covers: ['model', 'reasoning_effort'],
       precondition,
+      testModel: model,
       run: async () => {
         const response = await client.chat.completions.create({
           model,
@@ -227,6 +230,7 @@ function addDevelopGpt5MiniChatCatalogCases(
     description: `OpenAI chat model catalog stream smoke: ${model}`,
     covers: ['model', 'stream'],
     precondition,
+    testModel: model,
     run: async () => {
       const stream = await client.chat.completions.create({
         model,
@@ -249,6 +253,7 @@ function addDevelopGptResponsesCatalogCases(
     description: string;
     covers: readonly string[];
     precondition: () => string | undefined;
+    testModel?: string;
     run: () => Promise<string>;
   }>,
   context: OpenAICaseContext,
@@ -270,6 +275,7 @@ function addDevelopGptResponsesCatalogCases(
       description: `OpenAI Responses model catalog instructions smoke: ${model}`,
       covers: ['model', 'instructions'],
       precondition,
+      testModel: model,
       run: async () => {
         const response = await client.responses.create({
           model,
@@ -289,6 +295,7 @@ function addDevelopGptResponsesCatalogCases(
         description: `OpenAI Responses model catalog reasoning.effort=${effort}: ${model}`,
         covers: ['model', 'reasoning'],
         precondition,
+        testModel: model,
         run: async () => {
           const response = await client.responses.create({
             model,
@@ -312,6 +319,7 @@ function addDevelopGptResponsesCatalogCases(
       description: `OpenAI Responses model catalog multimodal smoke (${fixture.format}): ${multimodalModel}`,
       covers: ['model', 'input_image.format'],
       precondition,
+      testModel: multimodalModel,
       run: async () => {
         const response = await client.responses.create(
           {
@@ -343,6 +351,7 @@ function addDevelopGptResponsesCatalogCases(
     description: `OpenAI Responses model catalog stream smoke: ${multimodalModel}`,
     covers: ['model', 'stream'],
     precondition,
+    testModel: multimodalModel,
     run: async () => {
       const stream = await client.responses.create({
         model: multimodalModel,
@@ -373,6 +382,7 @@ export function buildOpenAIChatServedModelCases(context: OpenAICaseContext): Tes
     description: string;
     covers: readonly string[];
     precondition: () => string | undefined;
+    testModel?: string;
     run: () => Promise<string>;
   }> = {};
 
@@ -381,6 +391,7 @@ export function buildOpenAIChatServedModelCases(context: OpenAICaseContext): Tes
       description: `OpenAI served model smoke: ${model}`,
       covers: ['model'],
       precondition: createOpenAIModelCatalogPrecondition(context, 'chat.completions'),
+      testModel: model,
       run: async () => {
         const response = await client.chat.completions.create({
           model,
@@ -409,6 +420,7 @@ export function buildOpenAIResponsesServedModelCases(context: OpenAICaseContext)
     description: string;
     covers: readonly string[];
     precondition: () => string | undefined;
+    testModel?: string;
     run: () => Promise<string>;
   }> = {};
 
@@ -417,6 +429,7 @@ export function buildOpenAIResponsesServedModelCases(context: OpenAICaseContext)
       description: `OpenAI Responses served model smoke: ${model}`,
       covers: ['model'],
       precondition: createOpenAIModelCatalogPrecondition(context, 'responses'),
+      testModel: model,
       run: async () => {
         const response = await client.responses.create({
           model,

@@ -69,6 +69,7 @@ export interface TestCaseResult {
   apiType?: 'chatCompletions' | 'responses' | 'embeddings' | 'audio' | 'images';
   protocol?: string;
   modelScope?: string;
+  testModel?: string;
   httpTrace?: TestCaseHttpTrace;
 }
 

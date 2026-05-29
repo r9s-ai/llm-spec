@@ -1174,6 +1174,7 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
     {
       apiType: 'responses',
       protocol: 'openai.responses',
+      testModel: config.model,
     },
   );
 
@@ -1181,6 +1182,9 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
     ...cases.map((testCase) => ({
       ...testCase,
       modelScope: resolveOpenAIResponsesModelScope(testCase.id),
+      testModel: resolveOpenAIResponsesModelScope(testCase.id) === 'reasoning'
+        ? responsesReasoningModel
+        : testCase.testModel,
     })),
     ...buildOpenAIResponsesServedModelCases({ client, config }),
   ];

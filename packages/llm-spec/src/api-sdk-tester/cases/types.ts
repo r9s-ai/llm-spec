@@ -7,4 +7,5 @@ export interface TestCase {
   apiType?: 'chatCompletions' | 'responses' | 'embeddings' | 'audio' | 'images';
   protocol?: string;
   modelScope?: string;
+  testModel?: string;
 }

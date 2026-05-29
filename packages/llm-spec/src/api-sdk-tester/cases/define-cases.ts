@@ -8,12 +8,14 @@ export interface TestCaseDefinition {
   apiType?: 'chatCompletions' | 'responses' | 'embeddings' | 'audio' | 'images';
   protocol?: string;
   modelScope?: string;
+  testModel?: string;
 }
 
 export interface DefineCasesDefaults {
   apiType?: 'chatCompletions' | 'responses' | 'embeddings' | 'audio' | 'images';
   protocol?: string;
   modelScope?: string;
+  testModel?: string;
 }
 
 export function defineCases(
@@ -35,6 +37,7 @@ export function defineCases(
       apiType: inferredApiType,
       protocol: definition.protocol ?? defaults.protocol,
       modelScope: definition.modelScope ?? defaults.modelScope,
+      testModel: definition.testModel ?? defaults.testModel,
     };
   });
 }

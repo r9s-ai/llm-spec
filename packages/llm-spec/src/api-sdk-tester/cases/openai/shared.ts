@@ -2,7 +2,26 @@ import type OpenAI from 'openai';
 
 import type { OpenAIProviderConfig } from '../../environment';
 import { IMAGE_INPUT_FIXTURES, createFixtureDataUri } from '../../fixtures';
+import {
+  isGeminiOpenAICompatibilityTarget,
+  isGpt5NanoModel,
+  isOpenAICompatibilityGateway,
+  isReasoningModel,
+} from '../model-capabilities';
 import { formatError } from '../runtime';
+
+export {
+  isGeminiOpenAICompatibilityTarget,
+  isGpt5NanoModel,
+  isGpt5SeriesModel,
+  isGpt4oOrNewerModel,
+  isLikelyAudioOutputModel,
+  isO3OrO4MiniModel,
+  isOpenAICompatibilityGateway,
+  isOSeriesModel,
+  isReasoningModel,
+  resolveReasoningEffort,
+} from '../model-capabilities';
 
 export const OPENAI_CHAT_PARAMS = [
   'messages',
@@ -45,41 +64,6 @@ export const OPENAI_CHAT_PARAMS = [
 export interface OpenAICaseContext {
   client: OpenAI;
   config: OpenAIProviderConfig;
-}
-
-function normalizeModelName(model: string): string {
-  return model.trim().toLowerCase();
-}
-
-export function isOSeriesModel(model: string): boolean {
-  return /^o\d/.test(normalizeModelName(model));
-}
-
-export function isO3OrO4MiniModel(model: string): boolean {
-  const normalized = normalizeModelName(model);
-  return normalized.startsWith('o3') || normalized.startsWith('o4-mini');
-}
-
-export function isGpt5SeriesModel(model: string): boolean {
-  return normalizeModelName(model).startsWith('gpt-5');
-}
-
-export function isGpt5NanoModel(model: string): boolean {
-  return /^gpt-5(?:\.\d+)?-nano(?:-|$)/.test(normalizeModelName(model));
-}
-
-export function isGpt4oOrNewerModel(model: string): boolean {
-  const normalized = normalizeModelName(model);
-  return (
-    normalized.startsWith('gpt-4o') ||
-    normalized.startsWith('gpt-5') ||
-    isOSeriesModel(normalized)
-  );
-}
-
-export function isReasoningModel(model: string): boolean {
-  const normalized = normalizeModelName(model);
-  return normalized.startsWith('gpt-5') || isOSeriesModel(model);
 }
 
 export function resolveChatCompletionOutputLimit(_model: string, requested: number): number {
@@ -125,35 +109,6 @@ export function skipGpt5NanoNChoiceFanout(model: string, feature: string): strin
     : undefined;
 }
 
-function isGpt5ProModel(model: string): boolean {
-  return normalizeModelName(model).startsWith('gpt-5-pro');
-}
-
-export function isLikelyAudioOutputModel(model: string): boolean {
-  return normalizeModelName(model).includes('audio');
-}
-
-export function isOpenAICompatibilityGateway(apiBaseUrl: string | undefined): boolean {
-  if (!apiBaseUrl) {
-    return false;
-  }
-
-  try {
-    const hostname = new URL(apiBaseUrl).hostname.toLowerCase();
-    return !(hostname === 'api.openai.com' || hostname.endsWith('.openai.com'));
-  } catch {
-    return false;
-  }
-}
-
-function isGeminiModel(model: string): boolean {
-  return normalizeModelName(model).startsWith('gemini-');
-}
-
-export function isGeminiOpenAICompatibilityTarget(model: string): boolean {
-  return isGeminiModel(model);
-}
-
 export type PromptCacheRetentionValue = 'in_memory' | '24h' | 'in-memory';
 
 export const OPENAI_IMAGE_DATA_URI_FIXTURES = IMAGE_INPUT_FIXTURES.map((fixture) => ({
@@ -172,17 +127,6 @@ function isPromptCacheRetentionValueError(error: unknown): boolean {
     mentionsLegacyValue &&
     mentionsSnakeValue
   );
-}
-
-export function resolveReasoningEffort(model: string): 'none' | 'low' | 'high' {
-  const normalized = normalizeModelName(model);
-  if (isGpt5ProModel(normalized)) {
-    return 'high';
-  }
-  if (normalized.startsWith('gpt-5.1')) {
-    return 'none';
-  }
-  return 'low';
 }
 
 export function createBaseMessages(model: string) {

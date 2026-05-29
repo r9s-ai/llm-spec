@@ -740,11 +740,22 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
     {
       protocol: 'openai.chat',
       modelScope: 'openai',
+      testModel: config.model,
     },
   );
 
+  const casesWithSelectedModels = officialCases.map((testCase) => {
+    if (testCase.id.startsWith('reasoning_effort')) {
+      return { ...testCase, testModel: chatReasoningModel };
+    }
+    if (testCase.id === 'audio_modalities') {
+      return { ...testCase, testModel: audioOutputModel };
+    }
+    return testCase;
+  });
+
   return [
-    ...officialCases,
+    ...casesWithSelectedModels,
     ...buildOpenAIChatServedModelCases({ client, config }),
   ];
 }

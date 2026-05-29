@@ -14,6 +14,11 @@ import type { GeminiProviderConfig } from '../../environment';
 import { summarizeGeminiResponse, truncate } from '../runtime';
 import type { TestCase } from '../types';
 import { defineCases } from '../define-cases';
+import {
+  isGemini25FlashModel,
+  isGeminiAudioOutputModel,
+  isGeminiImageGenerationModel,
+} from '../model-capabilities';
 import { buildGeminiServedModelCases } from './models';
 
 export const GEMINI_GENERATE_CONTENT_PARAMS = [
@@ -57,14 +62,6 @@ export const GEMINI_GENERATE_CONTENT_PARAMS = [
 export interface GeminiCaseContext {
   ai: GoogleGenAI;
   config: GeminiProviderConfig;
-}
-
-function normalizeGeminiModelName(model: string): string {
-  return model.trim().toLowerCase();
-}
-
-function isGemini25FlashModel(model: string): boolean {
-  return normalizeGeminiModelName(model).startsWith('gemini-2.5-flash');
 }
 
 const GEMINI_SAFETY_SETTING_CATEGORIES = [
@@ -115,6 +112,13 @@ function resolveGeminiModelScope(caseId: string): string {
 }
 
 export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] {
+  const audioOutputModel = config.audioModel ?? (
+    isGeminiAudioOutputModel(config.model) ? config.model : undefined
+  );
+  const imageOutputModel = config.imageModel ?? (
+    isGeminiImageGenerationModel(config.model) ? config.model : undefined
+  );
+
   const functionDeclaration = {
     name: 'echoText',
     description: 'Echoes text.',
@@ -1065,10 +1069,10 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
       description: 'responseModalities + mediaResolution + speechConfig + audioTimestamp',
       covers: ['responseModalities', 'mediaResolution', 'speechConfig', 'audioTimestamp'],
       precondition: () =>
-        config.audioModel ? undefined : 'set GEMINI_AUDIO_MODEL to enable audio modality test',
+        audioOutputModel ? undefined : 'select a Gemini TTS/audio model or set GEMINI_AUDIO_MODEL',
       run: async () => {
         const response = await ai.models.generateContent({
-          model: config.audioModel ?? config.model,
+          model: audioOutputModel ?? config.model,
           contents: 'Say hello in one sentence.',
           config: {
             responseModalities: [Modality.AUDIO],
@@ -1092,10 +1096,10 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
       description: 'imageConfig',
       covers: ['imageConfig', 'responseModalities'],
       precondition: () =>
-        config.imageModel ? undefined : 'set GEMINI_IMAGE_MODEL to enable image config test',
+        imageOutputModel ? undefined : 'select a Gemini image model or set GEMINI_IMAGE_MODEL',
       run: async () => {
         const response = await ai.models.generateContent({
-          model: config.imageModel ?? config.model,
+          model: imageOutputModel ?? config.model,
           contents: 'Generate a simple landscape image.',
           config: {
             responseModalities: [Modality.IMAGE],
@@ -1112,10 +1116,10 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
       description: 'responseModalities TEXT+IMAGE',
       covers: ['responseModalities'],
       precondition: () =>
-        config.imageModel ? undefined : 'set GEMINI_IMAGE_MODEL to enable image modality test',
+        imageOutputModel ? undefined : 'select a Gemini image model or set GEMINI_IMAGE_MODEL',
       run: async () => {
         const response = await ai.models.generateContent({
-          model: config.imageModel ?? config.model,
+          model: imageOutputModel ?? config.model,
           contents: 'Generate a simple picture of a red square and briefly describe it.',
           config: {
             responseModalities: [Modality.TEXT, Modality.IMAGE],
@@ -1128,10 +1132,10 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
       description: 'image model with google_search tool',
       covers: ['tools', 'responseModalities'],
       precondition: () =>
-        config.imageModel ? undefined : 'set GEMINI_IMAGE_MODEL to enable image tool test',
+        imageOutputModel ? undefined : 'select a Gemini image model or set GEMINI_IMAGE_MODEL',
       run: async () => {
         const response = await ai.models.generateContent({
-          model: config.imageModel ?? config.model,
+          model: imageOutputModel ?? config.model,
           contents:
             'Create a Da Vinci style anatomical sketch of a dissected Monarch butterfly with short English notes.',
           config: {
@@ -1194,11 +1198,21 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
     },
   });
 
-  const normalizedCases = cases.map((testCase) => ({
-    ...testCase,
-    protocol: 'gemini.generateContent',
-    modelScope: resolveGeminiModelScope(testCase.id),
-  }));
+  const normalizedCases = cases.map((testCase) => {
+    const modelScope = resolveGeminiModelScope(testCase.id);
+    const testModel = modelScope === 'audio'
+      ? (audioOutputModel ?? config.model)
+      : modelScope === 'image'
+        ? (imageOutputModel ?? config.model)
+        : config.model;
+
+    return {
+      ...testCase,
+      protocol: 'gemini.generateContent',
+      modelScope,
+      testModel,
+    };
+  });
 
   return [
     ...normalizedCases,

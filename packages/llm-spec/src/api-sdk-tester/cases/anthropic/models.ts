@@ -69,6 +69,7 @@ export function buildAnthropicMessageServedModelCases({
   const cases: Record<string, {
     description: string;
     covers: readonly string[];
+    testModel?: string;
     run: () => Promise<string>;
   }> = {};
 
@@ -76,6 +77,7 @@ export function buildAnthropicMessageServedModelCases({
     cases[anthropicModelCatalogCaseId(model)] = {
       description: `Anthropic Messages served model smoke: ${model}`,
       covers: ['model'],
+      testModel: model,
       run: async () => {
         const response = await client.messages.create({
           model,

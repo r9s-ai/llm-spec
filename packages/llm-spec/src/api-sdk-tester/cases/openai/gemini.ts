@@ -632,8 +632,18 @@ export function buildGeminiOpenAIChatCases({ client, config }: OpenAICaseContext
       apiType: 'chatCompletions',
       protocol: 'openai.chat',
       modelScope: 'gemini',
+      testModel: config.model,
     },
   );
 
-  return cases;
+  return cases.map((testCase) => (
+    [
+      'gemini_reasoning_effort_variants',
+      'gemini_stream_includes_usage',
+      'gemini_extra_body_native_params',
+      'gemini_response_envelope_and_usage',
+    ].includes(testCase.id)
+      ? { ...testCase, testModel: chatReasoningModel }
+      : testCase
+  ));
 }

@@ -405,6 +405,9 @@ export function renderTextReport(summary: RunSummary): string {
         if (result.modelScope) {
           lines.push(`  modelScope: ${result.modelScope}`);
         }
+        if (result.testModel) {
+          lines.push(`  testModel: ${result.testModel}`);
+        }
         lines.push(`  covered: ${result.coveredParams.length > 0 ? result.coveredParams.join(', ') : '(none)'}`);
         const betaAnnotation = getCaseBetaAnnotation(provider.provider, result.id);
         if (betaAnnotation) {
@@ -453,6 +456,9 @@ export function renderTextReport(summary: RunSummary): string {
         if (result.modelScope) {
           lines.push(`  modelScope: ${result.modelScope}`);
         }
+        if (result.testModel) {
+          lines.push(`  testModel: ${result.testModel}`);
+        }
         lines.push(`  covered: ${result.coveredParams.length > 0 ? result.coveredParams.join(', ') : '(none)'}`);
         const betaAnnotation = getCaseBetaAnnotation(provider.provider, result.id);
         if (betaAnnotation) {
@@ -492,6 +498,7 @@ export function renderHtmlReport(summary: RunSummary): string {
           const scopeLines = [
             result.protocol ? `<div class="case-meta">protocol: ${escapeHtml(result.protocol)}</div>` : '',
             result.modelScope ? `<div class="case-meta">modelScope: ${escapeHtml(result.modelScope)}</div>` : '',
+            result.testModel ? `<div class="case-meta">testModel: ${escapeHtml(result.testModel)}</div>` : '',
           ]
             .filter(Boolean)
             .join('');

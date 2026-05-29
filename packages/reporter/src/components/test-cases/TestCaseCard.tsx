@@ -57,6 +57,11 @@ export function TestCaseCard({ result, index, onClick }: TestCaseCardProps) {
               {result.modelScope}
             </Badge>
           )}
+          {result.testModel && (
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+              {result.testModel}
+            </Badge>
+          )}
           {result.apiType && (
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
               {result.apiType}

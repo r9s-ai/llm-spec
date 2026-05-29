@@ -65,6 +65,7 @@ export interface TestCaseResult {
   apiType?: 'chatCompletions' | 'responses'
   protocol?: string
   modelScope?: string
+  testModel?: string
   httpTrace?: TestCaseHttpTrace
 }
 

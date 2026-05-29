@@ -7,6 +7,7 @@ import type {
   TestCaseHttpTrace,
   TestCaseResult,
 } from '@/types'
+import { isCaseRecommendedForModel } from './model-capabilities'
 
 interface BrowserRunConfig {
   apiType: StandardApiType
@@ -26,6 +27,7 @@ interface BrowserCase {
   description: string
   covers: string[]
   precondition?: () => string | undefined
+  testModel?: string
   run: (testId: string) => Promise<BrowserCaseRunResult>
 }
 
@@ -550,6 +552,7 @@ function buildOpenAIChatModelCatalogCases(config: BrowserRunConfig, url: string,
     description: `OpenAI served model smoke: ${model}`,
     covers: ['model'],
     precondition: buildOpenAIModelCatalogPrecondition(config, 'chat.completions'),
+    testModel: model,
     run: async () => {
       const result = await tracedFetch({
         url,
@@ -572,6 +575,7 @@ function buildOpenAIResponsesModelCatalogCases(config: BrowserRunConfig, url: st
     description: `OpenAI Responses served model smoke: ${model}`,
     covers: ['model'],
     precondition: buildOpenAIModelCatalogPrecondition(config, 'responses'),
+    testModel: model,
     run: async () => {
       const result = await tracedFetch({
         url,
@@ -595,6 +599,7 @@ function buildGeminiModelCatalogCases(config: BrowserRunConfig, headers: Record<
     id: modelCatalogCaseId('model_', model.id),
     description: `Gemini served generateContent model smoke (${model.kind}): ${model.id}`,
     covers: ['model'],
+    testModel: model.id,
     run: async () => {
       const result = await tracedFetch({
         url: buildGeminiEndpoint(config, model.id),
@@ -982,6 +987,7 @@ async function runCase(provider: string, testCase: BrowserCase): Promise<TestCas
       durationMs: Math.round(performance.now() - started),
       coveredParams: [...testCase.covers],
       detail: skipReason,
+      testModel: testCase.testModel,
     }
   }
 
@@ -995,6 +1001,7 @@ async function runCase(provider: string, testCase: BrowserCase): Promise<TestCas
       durationMs: Math.round(performance.now() - started),
       coveredParams: [...testCase.covers],
       detail: result.detail,
+      testModel: testCase.testModel,
       httpTrace: buildTrace(testId, result.exchanges),
     }
   } catch (error) {
@@ -1006,6 +1013,7 @@ async function runCase(provider: string, testCase: BrowserCase): Promise<TestCas
       durationMs: Math.round(performance.now() - started),
       coveredParams: [...testCase.covers],
       error: getErrorMessage(error),
+      testModel: testCase.testModel,
       httpTrace: buildTrace(testId, exchanges),
     }
   }
@@ -1050,7 +1058,16 @@ export async function runBrowserStandardCases(config: BrowserRunConfig): Promise
   const startedAt = new Date().toISOString()
   const provider = providerNameForApiType(config.apiType)
   const allParams = PARAMS[config.apiType]
-  const cases = filterCases(buildCases(config), config)
+  const builtCases = buildCases(config).map((testCase) => ({
+    ...testCase,
+    testModel: testCase.testModel ?? config.model,
+  }))
+  const filteredCases = filterCases(builtCases, config)
+  const cases = config.targetCases?.trim()
+    ? filteredCases
+    : filteredCases.filter((testCase) =>
+      isCaseRecommendedForModel(config.apiType, testCase.id, testCase.testModel ?? config.model),
+    )
   const apiBaseUrl = config.apiBaseUrl ?? defaultBaseUrl(config.apiType)
   const progressTotal = Math.max(cases.length, 1)
 

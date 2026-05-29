@@ -20,6 +20,11 @@ import { IMAGE_INPUT_FIXTURES, readFixtureBase64 } from '../../fixtures';
 import { formatError, summarizeAnthropicResponse, truncate } from '../runtime';
 import type { TestCase } from '../types';
 import { defineCases } from '../define-cases';
+import {
+  normalizeModelName,
+  supportsAnthropicServerTools,
+  supportsExtendedThinking,
+} from '../model-capabilities';
 import { buildAnthropicMessageServedModelCases } from './models';
 
 export const ANTHROPIC_MESSAGE_PARAMS = [
@@ -89,30 +94,6 @@ const claudeAgentTestContext = new AsyncLocalStorage<string>();
 let claudeAgentCaseExecutionCounter = 0;
 
 const claudeAgentCaseHttpTraceByCaseId = new Map<string, TestCaseHttpTrace>();
-
-function normalizeModelName(model: string): string {
-  return model.trim().toLowerCase();
-}
-
-function supportsExtendedThinking(model: string): boolean {
-  const normalized = normalizeModelName(model);
-  // Extended thinking is supported on Claude 4 and later models
-  return (
-    normalized.includes('claude-4') ||
-    normalized.includes('claude-opus-4') ||
-    normalized.includes('claude-sonnet-4')
-  );
-}
-
-function supportsAnthropicServerTools(model: string): boolean {
-  const normalized = normalizeModelName(model);
-  return (
-    normalized.includes('claude-opus-4') ||
-    normalized.includes('claude-sonnet-4') ||
-    normalized.includes('claude-haiku-4') ||
-    normalized.includes('claude-mythos')
-  );
-}
 
 function resolveAnthropicMessageModelScope(caseId: string, config: AnthropicProviderConfig): string {
   if (caseId.startsWith('different_model_opus')) {
@@ -1828,11 +1809,15 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
   });
 
   return [
-    ...cases.map((testCase) => ({
-      ...testCase,
-      protocol: 'anthropic.messages',
-      modelScope: resolveAnthropicMessageModelScope(testCase.id, config),
-    })),
+    ...cases.map((testCase) => {
+      const modelScope = resolveAnthropicMessageModelScope(testCase.id, config);
+      return {
+        ...testCase,
+        protocol: 'anthropic.messages',
+        modelScope,
+        testModel: modelScope === 'default' ? config.model : modelScope,
+      };
+    }),
     ...buildAnthropicMessageServedModelCases({ client, config }),
   ];
 }
@@ -4151,6 +4136,7 @@ Please proceed.`,
       ...testCase,
       protocol: 'claude-agent',
       modelScope,
+      testModel: expectedModel,
       run: async () => {
         const testId = createClaudeAgentTestId(testCase.id);
         let detail: string | undefined;
