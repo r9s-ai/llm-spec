@@ -13,7 +13,17 @@ interface DocConfig {
   url: string;
   outputFilename: string;
   headers?: Record<string, string>;
-  proxy?: string;
+}
+
+interface EnvValue {
+  name: string;
+  value: string;
+}
+
+interface ProxyConfig {
+  source: string;
+  url: string;
+  noProxy?: EnvValue;
 }
 
 /**
@@ -24,7 +34,6 @@ const docs: DocConfig[] = [
     name: 'Anthropic Messages Create',
     url: 'https://platform.claude.com/docs/en/api/typescript/messages/create.md',
     outputFilename: 'anthropic-messages-create.md',
-    proxy: 'http://127.0.0.1:1080',
   },
   {
     name: 'OpenAI Chat Completions Create',
@@ -66,6 +75,114 @@ function resolveOutputDir(): string {
 
 const OUTPUT_DIR = resolveOutputDir();
 
+function readEnv(names: readonly string[]): EnvValue | undefined {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) {
+      return { name, value };
+    }
+  }
+
+  return undefined;
+}
+
+function getDefaultPort(protocol: string): string {
+  return protocol === 'https:' ? '443' : '80';
+}
+
+function splitNoProxyEntry(entry: string): { host: string; port?: string } {
+  let host = entry.trim().toLowerCase();
+  let port: string | undefined;
+
+  if (host.startsWith('[')) {
+    const closingBracket = host.indexOf(']');
+    if (closingBracket >= 0) {
+      const afterBracket = host.slice(closingBracket + 1);
+      if (afterBracket.startsWith(':')) {
+        port = afterBracket.slice(1);
+      }
+      host = host.slice(1, closingBracket);
+    }
+  } else {
+    const colonIndex = host.lastIndexOf(':');
+    if (colonIndex > -1 && host.indexOf(':') === colonIndex) {
+      port = host.slice(colonIndex + 1);
+      host = host.slice(0, colonIndex);
+    }
+  }
+
+  return { host, port };
+}
+
+function noProxyMatches(url: URL, noProxy: string): boolean {
+  const hostname = url.hostname.toLowerCase();
+  const port = url.port || getDefaultPort(url.protocol);
+
+  return noProxy.split(',').some((entry) => {
+    const trimmedEntry = entry.trim();
+    if (!trimmedEntry) {
+      return false;
+    }
+
+    if (trimmedEntry === '*') {
+      return true;
+    }
+
+    let { host, port: noProxyPort } = splitNoProxyEntry(trimmedEntry);
+    if (noProxyPort && noProxyPort !== port) {
+      return false;
+    }
+
+    if (host.startsWith('*.')) {
+      host = host.slice(2);
+      return hostname.endsWith(`.${host}`);
+    }
+
+    if (host.startsWith('.')) {
+      host = host.slice(1);
+    }
+
+    return hostname === host || hostname.endsWith(`.${host}`);
+  });
+}
+
+function resolveProxyConfig(url: string): ProxyConfig | undefined {
+  const targetUrl = new URL(url);
+  const noProxy = readEnv(['NO_PROXY', 'no_proxy']);
+  if (noProxy && noProxyMatches(targetUrl, noProxy.value)) {
+    return undefined;
+  }
+
+  const proxyEnvNames =
+    targetUrl.protocol === 'http:'
+      ? ['HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy']
+      : ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy'];
+  const proxy = readEnv(proxyEnvNames);
+
+  if (!proxy) {
+    return undefined;
+  }
+
+  return {
+    source: proxy.name,
+    url: proxy.value,
+    noProxy,
+  };
+}
+
+function formatProxyForLog(proxyUrl: string): string {
+  try {
+    const url = new URL(proxyUrl);
+    if (url.username || url.password) {
+      url.username = '***';
+      url.password = '***';
+    }
+    return url.toString();
+  } catch {
+    return proxyUrl.replace(/\/\/[^/@]+@/, '//***@');
+  }
+}
+
 /**
  * 确保目录存在
  */
@@ -80,16 +197,18 @@ function ensureDirectoryExists(dir: string): void {
  * 拉取单个文档
  */
 async function fetchDoc(config: DocConfig): Promise<void> {
+  const proxy = resolveProxyConfig(config.url);
+
   console.log(`\n📄 正在拉取: ${config.name}`);
   console.log(`   URL: ${config.url}`);
-  if (config.proxy) {
-    console.log(`   🔄 使用代理: ${config.proxy}`);
+  if (proxy) {
+    console.log(`   🔄 使用代理(${proxy.source}): ${formatProxyForLog(proxy.url)}`);
   }
 
   try {
     let content: string;
 
-    if (config.proxy) {
+    if (proxy) {
       // 使用代理时改为调用curl，确保与手动验证行为一致
       const args = [
         '--silent',
@@ -97,8 +216,12 @@ async function fetchDoc(config: DocConfig): Promise<void> {
         '--location',
         '--fail',
         '--proxy',
-        config.proxy,
+        proxy.url,
       ];
+
+      if (proxy.noProxy) {
+        args.push('--noproxy', proxy.noProxy.value);
+      }
 
       if (config.headers) {
         for (const [key, value] of Object.entries(config.headers)) {

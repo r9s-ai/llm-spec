@@ -74,9 +74,7 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
             'metadata/user/prompt cache/service tier/store extensions on chat.completions',
           ),
         run: async () => {
-          const preferredRetention: PromptCacheRetentionValue = compatibilityGateway
-            ? 'in_memory'
-            : 'in-memory';
+          const preferredRetention: PromptCacheRetentionValue = 'in_memory';
           const response = await withPromptCacheRetentionFallback((retention) =>
             client.chat.completions.create(
               {
@@ -108,9 +106,7 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
         precondition: () =>
           skipOpenAIOnlyCaseOnGemini('prompt cache extensions on chat.completions'),
         run: async () => {
-          let appliedRetention: PromptCacheRetentionValue = compatibilityGateway
-            ? 'in_memory'
-            : 'in-memory';
+          let appliedRetention: PromptCacheRetentionValue = 'in_memory';
 
           const runCacheRequest = () =>
             withPromptCacheRetentionFallback(
@@ -147,6 +143,27 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
           }).usage;
 
           return `retention=${appliedRetention}, first_cached=${firstUsage?.prompt_tokens_details?.cached_tokens ?? 'n/a'}, second_cached=${secondUsage?.prompt_tokens_details?.cached_tokens ?? 'n/a'}, ${summarizeOpenAIResponse(second)}`;
+        },
+      },
+      'prompt_cache_retention_24h': {
+        description: 'prompt_cache_retention 24h',
+        covers: ['prompt_cache_key', 'prompt_cache_retention'],
+        precondition: () =>
+          skipOpenAIOnlyCaseOnGemini('24h prompt cache retention on chat.completions') ??
+          (compatibilityGateway
+            ? `24h prompt cache retention targets native OpenAI; current gateway=${config.apiBaseUrl ?? '(unknown)'}`
+            : undefined),
+        run: async () => {
+          const response = await client.chat.completions.create(
+            {
+              model: config.model,
+              messages: promptCacheMessages,
+              prompt_cache_key: 'llm-spec-chat-cache-retention-24h',
+              prompt_cache_retention: '24h',
+              max_completion_tokens: outputLimit(64),
+            } as never,
+          );
+          return summarizeOpenAIResponse(response);
         },
       },
       'logprobs': {
@@ -389,9 +406,7 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
             'metadata/user/prompt cache/service tier/store extensions on streamed chat.completions',
           ),
         run: async () => {
-          const preferredRetention: PromptCacheRetentionValue = compatibilityGateway
-            ? 'in_memory'
-            : 'in-memory';
+          const preferredRetention: PromptCacheRetentionValue = 'in_memory';
           const stream = await withPromptCacheRetentionFallback(
             (retention) =>
               client.chat.completions.create(

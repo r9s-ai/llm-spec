@@ -154,7 +154,7 @@ export function isGeminiOpenAICompatibilityTarget(model: string): boolean {
   return isGeminiModel(model);
 }
 
-export type PromptCacheRetentionValue = 'in-memory' | 'in_memory';
+export type PromptCacheRetentionValue = 'in_memory' | '24h' | 'in-memory';
 
 export const OPENAI_IMAGE_DATA_URI_FIXTURES = IMAGE_INPUT_FIXTURES.map((fixture) => ({
   ...fixture,
@@ -198,7 +198,7 @@ export function createBaseMessages(model: string) {
 
 export async function withPromptCacheRetentionFallback<T>(
   runWithRetention: (retention: PromptCacheRetentionValue) => Promise<T>,
-  preferredRetention: PromptCacheRetentionValue = 'in-memory',
+  preferredRetention: PromptCacheRetentionValue = 'in_memory',
 ): Promise<T> {
   const fallbackRetention: PromptCacheRetentionValue =
     preferredRetention === 'in-memory' ? 'in_memory' : 'in-memory';

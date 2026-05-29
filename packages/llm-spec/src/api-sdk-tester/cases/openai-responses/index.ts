@@ -138,6 +138,80 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
           return results.join(' | ');
         },
       },
+      'responses_input_file_detail': {
+        description: 'responses input_file detail low/high variants',
+        covers: ['input', 'input_file.detail'],
+        precondition: () =>
+          compatibilityGateway
+            ? `input_file detail targets native OpenAI responses; current gateway=${config.apiBaseUrl ?? '(unknown)'}`
+            : undefined,
+        run: async () => {
+          const fileData = `data:text/plain;base64,${Buffer.from('status: ok\n').toString('base64')}`;
+          const results: string[] = [];
+
+          for (const detail of ['low', 'high'] as const) {
+            const response = await client.responses.create(
+              {
+                model: config.model,
+                input: [
+                  {
+                    role: 'user',
+                    content: [
+                      {
+                        type: 'input_text',
+                        text: 'Read the attached text file and reply with the status value only.',
+                      },
+                      {
+                        type: 'input_file',
+                        file_data: fileData,
+                        filename: 'llm-spec-status.txt',
+                        detail,
+                      },
+                    ],
+                  },
+                ],
+                max_output_tokens: 64,
+              } as never,
+            );
+            results.push(`${detail}:${summarizeOpenAIResponses(response)}`);
+          }
+
+          return results.join(' | ');
+        },
+      },
+      'responses_assistant_phase_replay': {
+        description: 'responses assistant input phase replay',
+        covers: ['input', 'input.phase'],
+        run: async () => {
+          const response = await client.responses.create(
+            {
+              model: config.model,
+              input: [
+                {
+                  role: 'user',
+                  content: 'Prepare a short answer.',
+                },
+                {
+                  role: 'assistant',
+                  phase: 'commentary',
+                  content: 'I am preparing the concise answer.',
+                },
+                {
+                  role: 'assistant',
+                  phase: 'final_answer',
+                  content: 'ok',
+                },
+                {
+                  role: 'user',
+                  content: 'Reply with exactly: ok',
+                },
+              ],
+              max_output_tokens: 32,
+            } as never,
+          );
+          return summarizeOpenAIResponses(response);
+        },
+      },
       'responses_sampling_and_limits': {
         description: 'responses temperature/top_p/max_output_tokens',
         covers: ['temperature', 'top_p', 'max_output_tokens'],
@@ -177,9 +251,7 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
           'user',
         ],
         run: async () => {
-          const preferredRetention: PromptCacheRetentionValue = compatibilityGateway
-            ? 'in_memory'
-            : 'in-memory';
+          const preferredRetention: PromptCacheRetentionValue = 'in_memory';
           const response = await withPromptCacheRetentionFallback((retention) =>
             client.responses.create(
               {
@@ -207,9 +279,7 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
         description: 'responses prompt_cache_key + prompt_cache_retention round trip',
         covers: ['prompt_cache_key', 'prompt_cache_retention'],
         run: async () => {
-          let appliedRetention: PromptCacheRetentionValue = compatibilityGateway
-            ? 'in_memory'
-            : 'in-memory';
+          let appliedRetention: PromptCacheRetentionValue = 'in_memory';
 
           const runCacheRequest = () =>
             withPromptCacheRetentionFallback(
@@ -246,6 +316,26 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
           }).usage;
 
           return `retention=${appliedRetention}, first_cached=${firstUsage?.input_tokens_details?.cached_tokens ?? 'n/a'}, second_cached=${secondUsage?.input_tokens_details?.cached_tokens ?? 'n/a'}, ${summarizeOpenAIResponses(second)}`;
+        },
+      },
+      'responses_prompt_cache_retention_24h': {
+        description: 'responses prompt_cache_retention 24h',
+        covers: ['prompt_cache_key', 'prompt_cache_retention'],
+        precondition: () =>
+          compatibilityGateway
+            ? `24h prompt cache retention targets native OpenAI responses; current gateway=${config.apiBaseUrl ?? '(unknown)'}`
+            : undefined,
+        run: async () => {
+          const response = await client.responses.create(
+            {
+              model: config.model,
+              input: promptCacheInput,
+              prompt_cache_key: 'llm-spec-responses-cache-retention-24h',
+              prompt_cache_retention: '24h',
+              max_output_tokens: 32,
+            } as never,
+          );
+          return summarizeOpenAIResponses(response);
         },
       },
       'responses_context_include_truncation': {
@@ -695,9 +785,7 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
           'stream_options',
         ],
         run: async () => {
-          const preferredRetention: PromptCacheRetentionValue = compatibilityGateway
-            ? 'in_memory'
-            : 'in-memory';
+          const preferredRetention: PromptCacheRetentionValue = 'in_memory';
           const stream = await withPromptCacheRetentionFallback(
             (retention) =>
               client.responses.create(

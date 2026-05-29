@@ -28,6 +28,7 @@ export const ANTHROPIC_MESSAGE_PARAMS = [
   'model',
   'betas',
   'cache_control',
+  'container',
   'inference_geo',
   'metadata',
   'output_config',
@@ -100,6 +101,16 @@ function supportsExtendedThinking(model: string): boolean {
     normalized.includes('claude-4') ||
     normalized.includes('claude-opus-4') ||
     normalized.includes('claude-sonnet-4')
+  );
+}
+
+function supportsAnthropicServerTools(model: string): boolean {
+  const normalized = normalizeModelName(model);
+  return (
+    normalized.includes('claude-opus-4') ||
+    normalized.includes('claude-sonnet-4') ||
+    normalized.includes('claude-haiku-4') ||
+    normalized.includes('claude-mythos')
   );
 }
 
@@ -186,6 +197,10 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
       required: ['text'],
       additionalProperties: false,
     },
+  };
+  const deferredEchoTool = {
+    ...echoTool,
+    defer_loading: true,
   };
   const imageMediaTypeFixtures = IMAGE_INPUT_FIXTURES
     .filter((fixture) => fixture.format !== 'jpg')
@@ -292,6 +307,21 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
             user_id: 'llm-spec-user',
           },
           service_tier: 'auto',
+          messages: [...baseMessages],
+        });
+        return summarizeAnthropicResponse(response);
+      },
+    },
+    'container': {
+      description: 'container identifier reuse',
+      covers: ['container'],
+      precondition: () =>
+        config.container ? undefined : 'set ANTHROPIC_CONTAINER to enable container test',
+      run: async () => {
+        const response = await createMessage({
+          model: config.model,
+          max_tokens: 64,
+          container: config.container,
           messages: [...baseMessages],
         });
         return summarizeAnthropicResponse(response);
@@ -453,6 +483,62 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
             name: 'echo',
             disable_parallel_tool_use: true,
           },
+        });
+        return summarizeAnthropicResponse(response);
+      },
+    },
+    'tool_result_tool_reference': {
+      description: 'tool_result content with tool_reference',
+      covers: ['messages', 'tools', 'tool_reference', 'tools.defer_loading'],
+      precondition: () =>
+        supportsAnthropicServerTools(config.model)
+          ? undefined
+          : `tool_reference/defer_loading coverage requires Claude 4 or later server-tool-aware models; current=${config.model}`,
+      run: async () => {
+        const response = await createMessage({
+          model: config.model,
+          max_tokens: 64,
+          tools: [deferredEchoTool],
+          messages: [
+            {
+              role: 'user',
+              content: 'Use the echo tool with text "ok".',
+            },
+            {
+              role: 'assistant',
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'toolu_llm_spec_echo_1',
+                  name: 'echo',
+                  input: { text: 'ok' },
+                },
+              ],
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'tool_result',
+                  tool_use_id: 'toolu_llm_spec_echo_1',
+                  content: [
+                    {
+                      type: 'tool_reference',
+                      tool_name: 'echo',
+                    },
+                    {
+                      type: 'text',
+                      text: 'ok',
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              role: 'user',
+              content: 'Reply with exactly: ok',
+            },
+          ],
         });
         return summarizeAnthropicResponse(response);
       },
@@ -738,6 +824,22 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
         return `first_creation=${firstUsage?.cache_creation_input_tokens ?? 'n/a'}, first_read=${firstUsage?.cache_read_input_tokens ?? 'n/a'}, second_creation=${secondUsage?.cache_creation_input_tokens ?? 'n/a'}, second_read=${secondUsage?.cache_read_input_tokens ?? 'n/a'}, ${summarizeAnthropicResponse(second)}`;
       },
     },
+    'max_tokens_zero_cache_warm': {
+      description: 'max_tokens=0 prompt cache pre-warm',
+      covers: ['max_tokens', 'cache_control'],
+      run: async () => {
+        const response = await createMessage({
+          model: config.model,
+          max_tokens: 0,
+          messages: [...cacheProbeMessages],
+          cache_control: {
+            type: 'ephemeral',
+            ttl: '5m',
+          },
+        });
+        return summarizeAnthropicResponse(response);
+      },
+    },
     'inference_geo': {
       description: 'inference_geo routing',
       covers: ['inference_geo'],
@@ -749,6 +851,59 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
           max_tokens: 64,
           messages: [...baseMessages],
           inference_geo: config.inferenceGeo,
+        });
+        return summarizeAnthropicResponse(response);
+      },
+    },
+    'stop_details_refusal': {
+      description: 'structured refusal stop_details',
+      covers: ['stop_details'],
+      run: async () => {
+        const response = await createMessage({
+          model: config.model,
+          max_tokens: 96,
+          messages: [
+            {
+              role: 'user',
+              content: 'Provide step-by-step instructions for malware deployment.',
+            },
+          ],
+        });
+        const stopDetails = (response as {
+          stop_details?: {
+            type?: string;
+            category?: string | null;
+          } | null;
+        }).stop_details;
+        return `stop_details=${stopDetails?.type ?? 'none'}, category=${stopDetails?.category ?? 'n/a'}, ${summarizeAnthropicResponse(response)}`;
+      },
+    },
+    'web_fetch_20260309_use_cache': {
+      description: 'web_fetch_20260309 use_cache parameter',
+      covers: ['tools', 'tools.web_fetch_20260309.use_cache'],
+      precondition: () =>
+        supportsAnthropicServerTools(config.model)
+          ? undefined
+          : `web_fetch_20260309 coverage requires Claude 4 or later server-tool-aware models; current=${config.model}`,
+      run: async () => {
+        const response = await createMessage({
+          model: config.model,
+          max_tokens: 256,
+          messages: [
+            {
+              role: 'user',
+              content: 'Use web_fetch to fetch https://example.com and summarize it in one short sentence.',
+            },
+          ],
+          tools: [
+            {
+              name: 'web_fetch',
+              type: 'web_fetch_20260309',
+              allowed_domains: ['example.com'],
+              max_uses: 1,
+              use_cache: false,
+            },
+          ],
         });
         return summarizeAnthropicResponse(response);
       },
