@@ -14,6 +14,7 @@ interface AnthropicModelCatalogContext {
 
 export const ANTHROPIC_MESSAGES_SERVED_MODEL_IDS = [
   'claude-haiku-4.5',
+  'claude-opus-4-8',
   'claude-opus-4-7',
   'claude-mythos-preview',
   'claude-opus-4-6',

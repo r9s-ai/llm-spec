@@ -99,6 +99,9 @@ export function summarizeAnthropicResponse(response: unknown): string {
       speed?: string;
       input_tokens?: number;
       output_tokens?: number;
+      output_tokens_details?: {
+        thinking_tokens?: number;
+      } | null;
     };
   };
 
@@ -117,6 +120,12 @@ export function summarizeAnthropicResponse(response: unknown): string {
     }
     if (typeof obj.usage.input_tokens === 'number' && typeof obj.usage.output_tokens === 'number') {
       parts.push(`tokens=${obj.usage.input_tokens}+${obj.usage.output_tokens}`);
+    }
+    if (obj.usage.output_tokens_details) {
+      const thinkingTokens = obj.usage.output_tokens_details.thinking_tokens;
+      if (typeof thinkingTokens === 'number') {
+        parts.push(`thinking_tokens=${thinkingTokens}`);
+      }
     }
   }
 

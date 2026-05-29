@@ -230,6 +230,39 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
     return createMessageUnsafe(body, options);
   }
 
+  function summarizeOutputTokenDetails(response: unknown): string {
+    const usage = (response as {
+      usage?: {
+        output_tokens?: number;
+        output_tokens_details?: {
+          thinking_tokens?: number;
+        } | null;
+      };
+    }).usage;
+
+    if (!usage || typeof usage.output_tokens !== 'number') {
+      throw new Error('expected usage.output_tokens');
+    }
+    if (!Object.prototype.hasOwnProperty.call(usage, 'output_tokens_details')) {
+      throw new Error('expected usage.output_tokens_details field');
+    }
+
+    const details = usage.output_tokens_details;
+    if (details === null) {
+      return `output_tokens=${usage.output_tokens}, thinking_tokens=null`;
+    }
+    if (!details || typeof details.thinking_tokens !== 'number') {
+      throw new Error('expected usage.output_tokens_details.thinking_tokens');
+    }
+    if (details.thinking_tokens > usage.output_tokens) {
+      throw new Error(
+        `expected thinking_tokens <= output_tokens, got ${details.thinking_tokens} > ${usage.output_tokens}`,
+      );
+    }
+
+    return `output_tokens=${usage.output_tokens}, thinking_tokens=${details.thinking_tokens}`;
+  }
+
   const cases = defineCases({
     'basic': {
       description: 'basic messages.create',
@@ -241,6 +274,78 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
           messages: [...baseMessages],
         });
         return summarizeAnthropicResponse(response);
+      },
+    },
+    'message_role_system': {
+      description: 'system role inside messages',
+      covers: ['messages', 'messages.role.system'],
+      run: async () => {
+        const response = await createMessage({
+          model: config.model,
+          max_tokens: 64,
+          messages: [
+            {
+              role: 'system',
+              content: 'For this request, reply exactly: system-ok',
+            },
+            {
+              role: 'user',
+              content: 'What is the required reply?',
+            },
+          ],
+        });
+        return summarizeAnthropicResponse(response);
+      },
+    },
+    'mid_conversation_system_block': {
+      description: 'mid-conversation system content block',
+      covers: ['messages', 'messages.role.system', 'messages.content.mid_conv_system'],
+      run: async () => {
+        const response = await createMessage({
+          model: config.model,
+          max_tokens: 64,
+          messages: [
+            {
+              role: 'user',
+              content: 'Reply with exactly: before',
+            },
+            {
+              role: 'assistant',
+              content: 'before',
+            },
+            {
+              role: 'system',
+              content: [
+                {
+                  type: 'mid_conv_system',
+                  content: [
+                    {
+                      type: 'text',
+                      text: 'From this point forward, reply exactly: mid-ok',
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              role: 'user',
+              content: 'What should you reply now?',
+            },
+          ],
+        });
+        return summarizeAnthropicResponse(response);
+      },
+    },
+    'usage_output_tokens_details': {
+      description: 'usage output_tokens_details thinking token breakdown',
+      covers: ['usage.output_tokens_details'],
+      run: async () => {
+        const response = await createMessage({
+          model: config.model,
+          max_tokens: 64,
+          messages: [...baseMessages],
+        });
+        return `${summarizeOutputTokenDetails(response)}, ${summarizeAnthropicResponse(response)}`;
       },
     },
     'different_model_haiku': {
@@ -902,6 +1007,67 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
               allowed_domains: ['example.com'],
               max_uses: 1,
               use_cache: false,
+            },
+          ],
+        });
+        return summarizeAnthropicResponse(response);
+      },
+    },
+    'web_fetch_tool_result_error_url_not_in_prior_context': {
+      description: 'web_fetch_tool_result error_code url_not_in_prior_context',
+      covers: [
+        'messages',
+        'tools',
+        'messages.web_fetch_tool_result.error_code.url_not_in_prior_context',
+      ],
+      precondition: () =>
+        supportsAnthropicServerTools(config.model)
+          ? undefined
+          : `web_fetch_tool_result coverage requires Claude 4 or later server-tool-aware models; current=${config.model}`,
+      run: async () => {
+        const response = await createMessage({
+          model: config.model,
+          max_tokens: 64,
+          tools: [
+            {
+              name: 'web_fetch',
+              type: 'web_fetch_20260309',
+              allowed_domains: ['example.com'],
+              max_uses: 1,
+            },
+          ],
+          messages: [
+            {
+              role: 'user',
+              content: 'Please fetch a page and summarize it.',
+            },
+            {
+              role: 'assistant',
+              content: [
+                {
+                  type: 'server_tool_use',
+                  id: 'srvtoolu_llm_spec_fetch_1',
+                  name: 'web_fetch',
+                  input: { url: 'https://example.com/outside-prior-context' },
+                },
+              ],
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'web_fetch_tool_result',
+                  tool_use_id: 'srvtoolu_llm_spec_fetch_1',
+                  content: {
+                    type: 'web_fetch_tool_result_error',
+                    error_code: 'url_not_in_prior_context',
+                  },
+                },
+              ],
+            },
+            {
+              role: 'user',
+              content: 'Reply with exactly: ok',
             },
           ],
         });
