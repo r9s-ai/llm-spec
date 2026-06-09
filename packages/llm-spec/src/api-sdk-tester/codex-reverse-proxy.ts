@@ -15,7 +15,8 @@ import { pipeline } from 'node:stream/promises';
 
 import WebSocket, { WebSocketServer, type RawData } from 'ws';
 
-import type { HttpTraceExchange, TestCaseHttpTrace } from '../types';
+import type { HttpTraceExchange, PluginRequestParams, TestCaseHttpTrace } from '../types';
+import { getRegisteredTestPluginCase, runTestPluginBeforeCase } from './plugins';
 
 const CODEX_TRACE_SOURCE = 'codex-reverse-proxy';
 const DEFAULT_UPSTREAM_BASE_URL = 'https://api.openai.com/v1';
@@ -274,6 +275,79 @@ function createForwardHttpHeaders(
   }
 
   return forwardHeaders;
+}
+
+async function applyBeforeCasePluginsToHttpRequest(options: {
+  traceContext: ProxyTraceContext;
+  requestId: string;
+  requestIndex: number;
+  upstreamUrl: URL;
+  method: string;
+  headers: Record<string, string>;
+  body: Buffer;
+}): Promise<{
+  upstreamUrl: URL;
+  method: string;
+  headers: Record<string, string>;
+  body: Buffer;
+  serializedBody?: string;
+}> {
+  const {
+    traceContext,
+    requestId,
+    requestIndex,
+    method,
+  } = options;
+  const registeredCase = getRegisteredTestPluginCase(traceContext.testId);
+  const serializedBody = serializeBody(
+    options.body,
+    findHeaderValue(options.headers, 'content-type'),
+  );
+  const originalRequest: PluginRequestParams = {
+    url: options.upstreamUrl.toString(),
+    method,
+    headers: options.headers,
+    body: serializedBody,
+  };
+
+  if (!registeredCase) {
+    return {
+      upstreamUrl: options.upstreamUrl,
+      method,
+      headers: options.headers,
+      body: options.body,
+      serializedBody,
+    };
+  }
+
+  const pluginRequest = await runTestPluginBeforeCase({
+    provider: registeredCase.provider,
+    testId: traceContext.testId,
+    id: registeredCase.id,
+    name: registeredCase.name,
+    description: registeredCase.description,
+    requestId,
+    requestIndex,
+    request: originalRequest,
+  });
+  const nextUpstreamUrl = new URL(pluginRequest.url);
+  const bodyChanged = pluginRequest.body !== serializedBody;
+  const nextBody = bodyChanged
+    ? Buffer.from(pluginRequest.body ?? '', 'utf8')
+    : options.body;
+  const nextHeaders = createForwardHttpHeaders(pluginRequest.headers, nextBody, nextUpstreamUrl);
+  const nextSerializedBody = serializeBody(
+    nextBody,
+    findHeaderValue(nextHeaders, 'content-type'),
+  );
+
+  return {
+    upstreamUrl: nextUpstreamUrl,
+    method: pluginRequest.method,
+    headers: nextHeaders,
+    body: nextBody,
+    serializedBody: nextSerializedBody,
+  };
 }
 
 function createForwardWebSocketOptions(
@@ -733,20 +807,26 @@ async function handleHttpRequest(
   try {
     const requestBody = await readRequestBody(request);
     const incomingHeaders = normalizeHeaders(request.headers);
-    const upstreamUrl = createUpstreamUrl(upstreamBaseUrl, request.url);
-    const forwardHeaders = createForwardHttpHeaders(incomingHeaders, requestBody, upstreamUrl);
-    const requestMethod = request.method ?? 'GET';
-    const serializedRequestBody = serializeBody(
-      requestBody,
-      findHeaderValue(forwardHeaders, 'content-type'),
-    );
+    const initialUpstreamUrl = createUpstreamUrl(upstreamBaseUrl, request.url);
+    const initialMethod = request.method ?? 'GET';
+    const initialForwardHeaders = createForwardHttpHeaders(incomingHeaders, requestBody, initialUpstreamUrl);
+    const pluginRequest = await applyBeforeCasePluginsToHttpRequest({
+      traceContext,
+      requestId,
+      requestIndex: traceContext.trace.exchanges.length + 1,
+      upstreamUrl: initialUpstreamUrl,
+      method: initialMethod,
+      headers: initialForwardHeaders,
+      body: requestBody,
+    });
+    const { upstreamUrl, method: requestMethod, headers: forwardHeaders, body: forwardBody, serializedBody } = pluginRequest;
     createTraceExchange(traceContext, requestId, {
       requestId,
       testId: traceContext.testId,
       url: upstreamUrl.toString(),
       method: requestMethod,
       headers: sanitizeHeaders(forwardHeaders),
-      body: serializedRequestBody,
+      body: serializedBody,
     });
     await logProxyRequest({
       testId: traceContext.testId,
@@ -754,7 +834,7 @@ async function handleHttpRequest(
       url: upstreamUrl.toString(),
       method: requestMethod,
       headers: sanitizeHeaders(forwardHeaders),
-      body: serializedRequestBody,
+      body: serializedBody,
     });
 
     await new Promise<void>((resolve) => {
@@ -862,8 +942,8 @@ async function handleHttpRequest(
         })();
       });
 
-      if (requestBody.length > 0) {
-        upstreamRequest.write(requestBody);
+      if (forwardBody.length > 0) {
+        upstreamRequest.write(forwardBody);
       }
       upstreamRequest.end();
     });

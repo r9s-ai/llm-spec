@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve as resolvePath } from 'node:path';
 
-import type { ProviderName } from '../../types';
+import type { ProviderName, R9SBillingAuditConfig } from '../../types';
 
 export interface OpenAIProviderConfig {
   provider: 'openai' | 'xai';
@@ -102,6 +102,8 @@ export interface RuntimeConfig {
   failFast: boolean;
   concurrency: number;
   reportFile?: string;
+  pluginPaths: string[];
+  r9sBillingAudit?: R9SBillingAuditConfig;
   testTarget?: TestTargetConfig;
   openai: OpenAIProviderConfig;
   xai: OpenAIProviderConfig;
@@ -220,6 +222,17 @@ function parseCustomHeaders(value: string | undefined): Record<string, string> |
     // invalid JSON, ignore
   }
   return undefined;
+}
+
+function parseStringList(value: string | undefined): string[] {
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function normalizeOptionalModel(value: string | undefined): string | undefined {
@@ -440,6 +453,17 @@ export function resolveRuntimeConfig(): RuntimeConfig {
   const failFast = false;
   const concurrency = parseNumber(firstNonEmptyEnv('SDK_CONCURRENCY'), 1);
   const reportFile = firstNonEmptyEnv('REPORT_FILE');
+  const pluginPaths = parseStringList(firstNonEmptyEnv('LLM_SPEC_PLUGINS', 'TEST_PLUGINS'));
+  const r9sBillingAuditEnabled = parseBoolean(firstNonEmptyEnv('R9S_BILLING_AUDIT', 'R9S_BILLING_AUDIT_ENABLED'), false);
+  const r9sBillingAudit: R9SBillingAuditConfig | undefined = r9sBillingAuditEnabled
+    ? {
+        enabled: true,
+        managerBaseUrl: firstNonEmptyEnv('R9S_MANAGER_BASE_URL', 'R9S_MANAGER_API_BASE_URL'),
+        managerKey: firstNonEmptyEnv('R9S_MANAGER_KEY', 'R9S_MANAGER_API_KEY'),
+        apiKey: firstNonEmptyEnv('TEST_API_KEY', 'TEST_KEY', 'API_KEY'),
+        tokenId: firstNonEmptyEnv('R9S_TOKEN_ID', 'R9S_API_TOKEN_ID'),
+      }
+    : undefined;
 
   const defaultTimeoutMs = parseNumber(firstNonEmptyEnv('SDK_TIMEOUT_MS'), 45_000);
 
@@ -559,6 +583,8 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     failFast,
     concurrency,
     reportFile,
+    pluginPaths,
+    r9sBillingAudit,
     testTarget,
     openai,
     xai,

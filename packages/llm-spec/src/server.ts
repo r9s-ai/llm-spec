@@ -5,9 +5,17 @@ import { basename, dirname, extname, resolve as resolvePath, sep } from 'node:pa
 import { fileURLToPath } from 'node:url';
 
 import { formatError, resolveRuntimeConfig } from './api-sdk-tester';
+import { createTestPluginManager } from './api-sdk-tester/plugins';
+import { createR9SBillingAuditPlugin } from './api-sdk-tester/r9s-billing-audit-plugin';
 import type { RuntimeConfig, TargetApiType } from './api-sdk-tester';
 import { runRuntimeConfig } from './runner';
-import type { RunProgressEvent, RunSnapshot, RunSummary } from './types';
+import type {
+  R9SBillingAuditConfig,
+  RunProgressEvent,
+  RunSnapshot,
+  RunSummary,
+  TestLifecyclePlugin,
+} from './types';
 
 type JsonRecord = Record<string, unknown>;
 type AgentProvider = 'claude-agent' | 'codex';
@@ -79,6 +87,8 @@ interface BackendRunJobRequest {
   workingDirectory?: string;
   skipGitRepoCheck?: boolean;
   testImagePath?: string;
+  pluginPaths?: string[];
+  billingAudit?: R9SBillingAuditConfig;
   persistResult: boolean;
   runSnapshot?: RunSnapshot;
   targets: BackendRunJobTarget[];
@@ -337,6 +347,27 @@ function optionalString(body: JsonRecord, key: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function optionalStringList(body: JsonRecord, key: string): string[] | undefined {
+  const value = body[key];
+  if (typeof value === 'string') {
+    const items = value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return items.length > 0 ? items : undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const items = value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return items.length > 0 ? items : undefined;
+}
+
 function optionalBoolean(body: JsonRecord, key: string): boolean | undefined {
   const value = body[key];
   return typeof value === 'boolean' ? value : undefined;
@@ -394,6 +425,31 @@ function parseCustomHeadersRecord(value: unknown): Record<string, string> | unde
   }
 
   return Object.keys(headers).length > 0 ? headers : undefined;
+}
+
+function optionalBillingAuditConfig(
+  body: JsonRecord,
+  fallbackApiKey?: string,
+): R9SBillingAuditConfig | undefined {
+  const value = body.billingAudit ?? body.r9sBillingAudit;
+  if (!isJsonRecord(value)) {
+    return undefined;
+  }
+
+  const enabled = optionalBoolean(value, 'enabled') ?? false;
+  return {
+    enabled,
+    managerBaseUrl:
+      optionalString(value, 'managerBaseUrl') ??
+      optionalString(value, 'baseUrl') ??
+      optionalString(value, 'baseurl'),
+    managerKey:
+      optionalString(value, 'managerKey') ??
+      optionalString(value, 'managementApiKey') ??
+      optionalString(value, 'managerApiKey'),
+    apiKey: optionalString(value, 'apiKey') ?? fallbackApiKey,
+    tokenId: optionalString(value, 'tokenId') ?? optionalString(value, 'token_id'),
+  };
 }
 
 function normalizeTargetApiType(value: string | undefined): TargetApiType {
@@ -455,12 +511,15 @@ function defaultModelForApiType(apiType: TargetApiType): string {
 }
 
 function commonConfig(baseConfig: RuntimeConfig, body: JsonRecord): RuntimeConfig {
+  const requestApiKey = optionalString(body, 'apiKey');
   return {
     ...baseConfig,
     targetCases: optionalString(body, 'targetCases'),
     failFast: optionalBoolean(body, 'failFast') ?? baseConfig.failFast,
     concurrency: optionalPositiveNumber(body, 'concurrency') ?? baseConfig.concurrency,
     reportFile: undefined,
+    pluginPaths: optionalStringList(body, 'pluginPaths') ?? baseConfig.pluginPaths,
+    r9sBillingAudit: optionalBillingAuditConfig(body, requestApiKey) ?? baseConfig.r9sBillingAudit,
   };
 }
 
@@ -634,6 +693,8 @@ function normalizeBackendRunJobRequest(body: JsonRecord): BackendRunJobRequest {
     workingDirectory: topLevelOverrides.workingDirectory,
     skipGitRepoCheck: topLevelOverrides.skipGitRepoCheck ?? false,
     testImagePath: topLevelOverrides.testImagePath,
+    pluginPaths: optionalStringList(body, 'pluginPaths'),
+    billingAudit: optionalBillingAuditConfig(body, topLevelOverrides.apiKey),
     persistResult: optionalBoolean(body, 'persistResult') ?? true,
     runSnapshot: optionalRunSnapshot(body),
     targets,
@@ -743,6 +804,8 @@ function buildJobTargetBody(request: BackendRunJobRequest, target: BackendRunJob
     apiVersion: target.apiVersion ?? request.apiVersion,
     failFast: target.failFast ?? request.failFast,
     concurrency: target.concurrency ?? request.concurrency,
+    pluginPaths: request.pluginPaths,
+    billingAudit: request.billingAudit,
     persistResult: false,
     runSnapshot: request.runSnapshot,
   };
@@ -1029,11 +1092,40 @@ interface ExecuteBackendRunRequestOptions {
   onTargetError?: (target: BackendRunJobTarget, error: unknown) => void;
 }
 
+function inferBackendRequestApiKey(request: BackendRunJobRequest): string | undefined {
+  if (request.billingAudit?.apiKey) {
+    return request.billingAudit.apiKey;
+  }
+  if (request.apiKey) {
+    return request.apiKey;
+  }
+  return request.targets.find((target) => target.apiKey)?.apiKey;
+}
+
+function createBackendRequestPlugins(
+  request: BackendRunJobRequest,
+  baseConfig: RuntimeConfig,
+): TestLifecyclePlugin[] {
+  const billingAuditConfig = request.billingAudit ?? baseConfig.r9sBillingAudit;
+  const billingAuditPlugin = createR9SBillingAuditPlugin(
+    billingAuditConfig
+      ? {
+          ...billingAuditConfig,
+          apiKey: billingAuditConfig.apiKey ?? inferBackendRequestApiKey(request),
+        }
+      : undefined,
+  );
+  return billingAuditPlugin ? [billingAuditPlugin] : [];
+}
+
 async function executeBackendRunRequest(
   request: BackendRunJobRequest,
   options: ExecuteBackendRunRequestOptions = {},
 ): Promise<RunSummary> {
   const summaries: RunSummary[] = [];
+  const baseConfig = resolveRuntimeConfig();
+  const defaultPluginPaths = request.pluginPaths ?? baseConfig.pluginPaths;
+  const pluginManager = await createTestPluginManager(defaultPluginPaths, createBackendRequestPlugins(request, baseConfig));
 
   for (const target of request.targets) {
     try {
@@ -1043,6 +1135,8 @@ async function executeBackendRunRequest(
         onProgress: options.onProgress
           ? (event) => { options.onProgress?.(target, event); }
           : undefined,
+        pluginManager,
+        runAfterRunPlugins: false,
       }));
       summaries.push(summary);
       options.onTargetComplete?.(target, summary);
@@ -1056,6 +1150,7 @@ async function executeBackendRunRequest(
   if (request.runSnapshot) {
     merged.runSnapshot = request.runSnapshot;
   }
+  await pluginManager.runAfterRun({ summary: merged });
   return merged;
 }
 

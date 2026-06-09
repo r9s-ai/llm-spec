@@ -3,6 +3,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 export interface ActiveTestContext {
   provider: string;
   testId: string;
+  caseId?: string;
+  description?: string;
 }
 
 const activeTestContext = new AsyncLocalStorage<ActiveTestContext>();

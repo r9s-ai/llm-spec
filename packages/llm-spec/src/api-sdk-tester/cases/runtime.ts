@@ -1,6 +1,7 @@
 import type { ProviderSummary, RunProgressHandler, TestCaseResult } from '../../types';
 import { applyCaseFilter } from '../environment/case-filter';
 import { consumeCapturedHttpTrace, flushCapturedHttpTrace, runWithActiveTestContext } from '../environment';
+import { registerTestPluginCase, unregisterTestPluginCase } from '../plugins';
 import { selectCasesForModel } from './model-capabilities';
 import type { TestCase } from './types';
 
@@ -191,9 +192,21 @@ async function runCase(provider: string, testCase: TestCase): Promise<TestCaseRe
   }
 
   const testId = createCaseExecutionTestId(provider, testCase.id);
+  registerTestPluginCase({
+    provider,
+    testId,
+    id: testCase.id,
+    name: testCase.id,
+    description: testCase.description,
+  });
 
   try {
-    const detail = await runWithActiveTestContext({ provider, testId }, () => testCase.run());
+    const detail = await runWithActiveTestContext({
+      provider,
+      testId,
+      caseId: testCase.id,
+      description: testCase.description,
+    }, () => testCase.run());
     const httpTrace = await collectCaseHttpTrace(testId);
     return {
       id: testCase.id,
@@ -223,6 +236,8 @@ async function runCase(provider: string, testCase: TestCase): Promise<TestCaseRe
       testModel: testCase.testModel,
       httpTrace,
     };
+  } finally {
+    unregisterTestPluginCase(testId);
   }
 }
 

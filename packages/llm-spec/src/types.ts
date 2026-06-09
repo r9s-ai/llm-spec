@@ -50,6 +50,142 @@ export interface TestCaseHttpTrace {
   exchanges: HttpTraceExchange[];
 }
 
+export type MaybePromise<T> = T | Promise<T>;
+
+export interface PluginRequestParams {
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  body?: string;
+}
+
+export interface PluginRequestPatch {
+  url?: string;
+  method?: string;
+  headers?: Record<string, string | null | undefined>;
+  body?: unknown;
+}
+
+export type PluginBeforeCaseResult =
+  | PluginRequestPatch
+  | { request?: PluginRequestPatch }
+  | void;
+
+export interface PluginCaseRequestContext {
+  provider: string;
+  testId: string;
+  id: string;
+  name: string;
+  description: string;
+  requestId?: string;
+  requestIndex: number;
+  request: PluginRequestParams;
+}
+
+export interface PluginCaseCompleteContext {
+  provider: string;
+  model: string;
+  apiBaseUrl?: string;
+  id: string;
+  name: string;
+  description: string;
+  result: TestCaseResult;
+  request?: HttpTraceRequest;
+  response?: HttpTraceResponse;
+  exchanges: HttpTraceExchange[];
+}
+
+export interface PluginRunCompleteContext {
+  summary: RunSummary;
+}
+
+export interface TestLifecyclePlugin {
+  name?: string;
+  beforeCase?: (context: PluginCaseRequestContext) => MaybePromise<PluginBeforeCaseResult>;
+  afterCase?: (context: PluginCaseCompleteContext) => MaybePromise<void>;
+  afterRun?: (context: PluginRunCompleteContext) => MaybePromise<void>;
+}
+
+export interface R9SBillingAuditConfig {
+  enabled: boolean;
+  managerBaseUrl?: string;
+  managerKey?: string;
+  apiKey?: string;
+  tokenId?: string;
+}
+
+export type R9SBillingAuditStatus = 'passed' | 'mismatched' | 'warning' | 'error';
+
+export interface R9SBillingAuditUsageTotals {
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedTokens?: number;
+  totalTokens?: number;
+  amount?: number;
+  totalAmount?: number;
+}
+
+export interface R9SBillingAuditLocalRecord {
+  provider: string;
+  model: string;
+  apiBaseUrl?: string;
+  caseId: string;
+  name: string;
+  description: string;
+  requestId?: string;
+  usage: R9SBillingAuditUsageTotals;
+}
+
+export interface R9SBillingAuditRemoteRecord {
+  id?: string;
+  requestTime?: number;
+  userId?: string;
+  customUserId?: string;
+  tokenId?: string;
+  model: string;
+  modelType?: string;
+  usage: R9SBillingAuditUsageTotals;
+  ext?: unknown;
+}
+
+export interface R9SBillingAuditUsageSummary {
+  recordCount: number;
+  totals: R9SBillingAuditUsageTotals;
+  byModel: Record<string, R9SBillingAuditUsageTotals>;
+}
+
+export interface R9SBillingAuditModelComparison {
+  model: string;
+  matched: boolean;
+  local: R9SBillingAuditUsageTotals;
+  remote: R9SBillingAuditUsageTotals;
+  diff: R9SBillingAuditUsageTotals;
+}
+
+export interface R9SBillingAuditReport {
+  status: R9SBillingAuditStatus;
+  startedAt: string;
+  finishedAt: string;
+  query: {
+    endpoint: string;
+    startTime: number;
+    endTime: number;
+    pageSize: number;
+    tokenId?: string;
+    apiKeyFingerprint?: string;
+  };
+  local: R9SBillingAuditUsageSummary & {
+    records: R9SBillingAuditLocalRecord[];
+  };
+  remote: R9SBillingAuditUsageSummary & {
+    totalAvailable: number;
+    records: R9SBillingAuditRemoteRecord[];
+  };
+  comparisons: R9SBillingAuditModelComparison[];
+  warnings: string[];
+  error?: string;
+}
+
 export interface ProviderConfig {
   provider: ProviderName;
   apiKey?: string;
@@ -97,6 +233,7 @@ export interface RunSummary {
   totalFailed: number;
   totalSkipped: number;
   runSnapshot?: RunSnapshot;
+  billingAudit?: R9SBillingAuditReport;
 }
 
 export interface RunTargetSnapshot {

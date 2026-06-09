@@ -16,6 +16,7 @@ import {
   Pencil,
   Play,
   Plus,
+  ReceiptText,
   RefreshCw,
   RotateCcw,
   Save,
@@ -69,6 +70,7 @@ import type {
   BackendJobStatusResponse,
   BackendRunHistoryEntry,
   PlatformRunConfig,
+  R9SBillingAuditConfig,
   RunProgressEvent,
   RunProgressHandler,
   RunSnapshot,
@@ -109,6 +111,10 @@ interface SiteProfileConfig {
   workingDirectory: string
   skipGitRepoCheck: boolean
   testImagePath: string
+  r9sBillingAuditEnabled: boolean
+  r9sManagerBaseUrl: string
+  r9sManagerKey: string
+  r9sTokenId: string
 }
 
 interface RunSettings {
@@ -681,6 +687,7 @@ const LAST_SITE_CONFIG_STORAGE_KEY = 'llm-spec-last-site'
 const ACTIVE_BACKEND_JOB_STORAGE_KEY = 'llm-spec-active-backend-job'
 const LEGACY_PROFILE_STORAGE_KEY = 'llm-spec-profiles'
 const LEGACY_LAST_PROFILE_STORAGE_KEY = 'llm-spec-last-profile'
+const DEFAULT_R9S_MANAGER_BASE_URL = 'https://portal-api.r9s.ai'
 
 interface SavedProfile {
   name: string
@@ -747,6 +754,10 @@ function createDefaultSiteConfig(): SiteProfileConfig {
     workingDirectory: '',
     skipGitRepoCheck: true,
     testImagePath: '',
+    r9sBillingAuditEnabled: false,
+    r9sManagerBaseUrl: DEFAULT_R9S_MANAGER_BASE_URL,
+    r9sManagerKey: '',
+    r9sTokenId: '',
   }
 }
 
@@ -805,6 +816,10 @@ function normalizeSiteConfig(value: unknown): SiteProfileConfig {
     workingDirectory: stringValue(value.workingDirectory, defaults.workingDirectory),
     skipGitRepoCheck: booleanValue(value.skipGitRepoCheck, defaults.skipGitRepoCheck),
     testImagePath: stringValue(value.testImagePath, defaults.testImagePath),
+    r9sBillingAuditEnabled: booleanValue(value.r9sBillingAuditEnabled, defaults.r9sBillingAuditEnabled),
+    r9sManagerBaseUrl: stringValue(value.r9sManagerBaseUrl, defaults.r9sManagerBaseUrl),
+    r9sManagerKey: stringValue(value.r9sManagerKey, defaults.r9sManagerKey),
+    r9sTokenId: stringValue(value.r9sTokenId, defaults.r9sTokenId),
   }
 }
 
@@ -818,6 +833,10 @@ function toPortableSiteConfig(config: SiteProfileConfig): PortableSiteProfileCon
     workingDirectory: config.workingDirectory,
     skipGitRepoCheck: config.skipGitRepoCheck,
     testImagePath: config.testImagePath,
+    r9sBillingAuditEnabled: config.r9sBillingAuditEnabled,
+    r9sManagerBaseUrl: config.r9sManagerBaseUrl,
+    r9sManagerKey: config.r9sManagerKey,
+    r9sTokenId: config.r9sTokenId,
   }
 }
 
@@ -2036,15 +2055,33 @@ function failedRunSummary(provider: string, model: string, error: unknown): RunS
   }
 }
 
+function effectiveStandardExecution(site: SiteProfileConfig): StandardExecutionMode {
+  return site.r9sBillingAuditEnabled ? 'backend' : site.standardExecution
+}
+
+function buildBillingAuditConfig(site: SiteProfileConfig): R9SBillingAuditConfig | undefined {
+  if (!site.r9sBillingAuditEnabled) {
+    return undefined
+  }
+  return {
+    enabled: true,
+    managerBaseUrl: emptyToUndefined(site.r9sManagerBaseUrl) ?? DEFAULT_R9S_MANAGER_BASE_URL,
+    managerKey: emptyToUndefined(site.r9sManagerKey),
+    apiKey: emptyToUndefined(site.apiKey),
+    tokenId: emptyToUndefined(site.r9sTokenId),
+  }
+}
+
 function buildRunSnapshot(
   siteName: string | null,
   site: SiteProfileConfig,
   draft: RunDraft,
 ): RunSnapshot {
+  const standardExecution = effectiveStandardExecution(site)
   return {
     siteName: siteName ?? undefined,
     apiBaseUrl: emptyToUndefined(site.apiBaseUrl),
-    standardExecution: site.standardExecution,
+    standardExecution,
     timeoutMs: parsePositiveNumber(draft.settings.timeoutMs, 45_000),
     concurrency: parsePositiveNumber(draft.settings.concurrency, 1),
     failFast: false,
@@ -2055,7 +2092,7 @@ function buildRunSnapshot(
       agentProvider: target.kind === 'agent' ? target.agentProvider : undefined,
       model: emptyToUndefined(getRunTargetModel(target)),
       targetCases: emptyToUndefined(target.targetCases),
-      execution: target.kind === 'agent' ? 'backend' : site.standardExecution,
+      execution: target.kind === 'agent' ? 'backend' : standardExecution,
     })),
   }
 }
@@ -2072,7 +2109,7 @@ function buildBackendJobRequest(
   return {
     apiKey: emptyToUndefined(site.apiKey),
     apiBaseUrl: emptyToUndefined(site.apiBaseUrl),
-    standardExecution: site.standardExecution,
+    standardExecution: effectiveStandardExecution(site),
     timeoutMs,
     concurrency,
     failFast: runSnapshot.failFast,
@@ -2081,6 +2118,7 @@ function buildBackendJobRequest(
     workingDirectory: emptyToUndefined(site.workingDirectory),
     skipGitRepoCheck: site.skipGitRepoCheck,
     testImagePath: emptyToUndefined(site.testImagePath),
+    billingAudit: buildBillingAuditConfig(site),
     persistResult: true,
     runSnapshot: {
       ...runSnapshot,
@@ -2278,9 +2316,13 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
     [runDraft.targets],
   )
   const agentTargetCount = activeTargets.filter((target) => target.kind === 'agent').length
-  const requiresBackend = siteConfig.standardExecution === 'backend' || agentTargetCount > 0
+  const effectiveExecution = effectiveStandardExecution(siteConfig)
+  const requiresBackend = effectiveExecution === 'backend' || agentTargetCount > 0
   const executionSummary = (() => {
-    if (siteConfig.standardExecution === 'backend') {
+    if (siteConfig.r9sBillingAuditEnabled) {
+      return 'Backend service + R9S audit'
+    }
+    if (effectiveExecution === 'backend') {
       return 'Backend service'
     }
     if (agentTargetCount > 0) {
@@ -2603,16 +2645,20 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
       if (activeTargets.length === 0) {
         throw new Error('Enable at least one matrix target before running tests')
       }
+      if (siteConfig.r9sBillingAuditEnabled && !siteConfig.r9sManagerKey.trim()) {
+        throw new Error('R9S Manager Key is required when billing audit is enabled')
+      }
 
       const headers = parseCustomHeaders(siteConfig.customHeaders)
       const timeoutMs = parsePositiveNumber(runDraft.settings.timeoutMs, 45_000)
       const concurrency = parsePositiveNumber(runDraft.settings.concurrency, 1)
       const runSnapshot = buildRunSnapshot(selectedProfileName, siteConfig, runDraft)
+      const standardExecution = effectiveStandardExecution(siteConfig)
       const runUsesBackend = activeTargets.some((target) => (
-        target.kind === 'agent' || siteConfig.standardExecution === 'backend'
+        target.kind === 'agent' || standardExecution === 'backend'
       ))
 
-      if (siteConfig.standardExecution === 'backend') {
+      if (standardExecution === 'backend') {
         const initialJob = await createBackendJob(siteConfig.backendUrl, buildBackendJobRequest(
           selectedProfileName,
           siteConfig,
@@ -3389,6 +3435,44 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                   value={siteConfig.customHeaders}
                   onChange={(value) => { updateSiteConfig({ customHeaders: value }) }}
                 />
+
+                <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                    <Checkbox
+                      checked={siteConfig.r9sBillingAuditEnabled}
+                      onCheckedChange={(checked) => {
+                        updateSiteConfig(checked === true
+                          ? { r9sBillingAuditEnabled: true, standardExecution: 'backend' }
+                          : { r9sBillingAuditEnabled: false })
+                      }}
+                    />
+                    <ReceiptText className="h-4 w-4 text-slate-500" />
+                    R9S Billing Audit
+                  </label>
+                  {siteConfig.r9sBillingAuditEnabled && (
+                    <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+                      <Field
+                        label="Manager Base URL"
+                        value={siteConfig.r9sManagerBaseUrl}
+                        onChange={(value) => { updateSiteConfig({ r9sManagerBaseUrl: value }) }}
+                        placeholder={DEFAULT_R9S_MANAGER_BASE_URL}
+                      />
+                      <Field
+                        label="Manager Key"
+                        value={siteConfig.r9sManagerKey}
+                        onChange={(value) => { updateSiteConfig({ r9sManagerKey: value }) }}
+                        type="password"
+                        autoComplete="off"
+                      />
+                      <Field
+                        label="Token ID"
+                        value={siteConfig.r9sTokenId}
+                        onChange={(value) => { updateSiteConfig({ r9sTokenId: value }) }}
+                        placeholder="tk_xxx"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </ScrollArea>
 

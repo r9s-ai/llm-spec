@@ -35,6 +35,14 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
+function formatNumber(value: number | undefined): string {
+  return value === undefined ? 'not fetched' : Intl.NumberFormat('en-US').format(value);
+}
+
+function formatAmount(value: number | undefined): string {
+  return value === undefined ? 'not fetched' : value.toFixed(8);
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -250,6 +258,92 @@ function renderHttpTraceHtml(trace: TestCaseHttpTrace | undefined): string {
 </details>`;
 }
 
+function appendBillingAuditText(lines: string[], summary: RunSummary): void {
+  const audit = summary.billingAudit;
+  if (!audit) {
+    return;
+  }
+
+  lines.push('');
+  lines.push('='.repeat(60));
+  lines.push('R9S Billing Audit');
+  lines.push('='.repeat(60));
+  lines.push(`status: ${audit.status}`);
+  lines.push(`query: ${audit.query.endpoint}`);
+  lines.push(`window: ${audit.query.startTime} - ${audit.query.endTime}`);
+  lines.push(`localRecords: ${audit.local.recordCount}`);
+  lines.push(`billingRecords: ${audit.remote.recordCount}/${audit.remote.totalAvailable}`);
+  lines.push(`billingAmount: ${formatAmount(audit.remote.totals.amount)}`);
+  if (audit.error) {
+    lines.push(`error: ${audit.error}`);
+  }
+  for (const warning of audit.warnings) {
+    lines.push(`warning: ${warning}`);
+  }
+  for (const comparison of audit.comparisons) {
+    lines.push(
+      [
+        `- model=${comparison.model}`,
+        `matched=${String(comparison.matched)}`,
+        `inputDiff=${formatNumber(comparison.diff.inputTokens)}`,
+        `outputDiff=${formatNumber(comparison.diff.outputTokens)}`,
+        `cachedDiff=${formatNumber(comparison.diff.cachedTokens)}`,
+      ].join(' '),
+    );
+  }
+}
+
+function renderBillingAuditHtml(summary: RunSummary): string {
+  const audit = summary.billingAudit;
+  if (!audit) {
+    return '';
+  }
+
+  const comparisonRows = audit.comparisons.length > 0
+    ? audit.comparisons.map((comparison) => `<tr>
+  <td><code>${escapeHtml(comparison.model)}</code></td>
+  <td>${comparison.matched ? 'yes' : 'no'}</td>
+  <td>${escapeHtml(formatNumber(comparison.local.inputTokens))}/${escapeHtml(formatNumber(comparison.remote.inputTokens))}</td>
+  <td>${escapeHtml(formatNumber(comparison.local.outputTokens))}/${escapeHtml(formatNumber(comparison.remote.outputTokens))}</td>
+  <td>${escapeHtml(formatNumber(comparison.local.cachedTokens))}/${escapeHtml(formatNumber(comparison.remote.cachedTokens))}</td>
+  <td>${escapeHtml(formatNumber(comparison.diff.inputTokens))} / ${escapeHtml(formatNumber(comparison.diff.outputTokens))} / ${escapeHtml(formatNumber(comparison.diff.cachedTokens))}</td>
+</tr>`).join('\n')
+    : `<tr><td colspan="6" class="muted">No model comparison rows.</td></tr>`;
+
+  const warnings = audit.warnings.length > 0
+    ? `<ul class="audit-warnings">${audit.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>`
+    : '';
+  const error = audit.error ? `<pre class="note">${escapeHtml(audit.error)}</pre>` : '';
+
+  return `<section class="billing-audit">
+<h2>R9S Billing Audit</h2>
+<p class="meta">
+  status=${escapeHtml(audit.status)} |
+  localRecords=${audit.local.recordCount} |
+  billingRecords=${audit.remote.recordCount}/${audit.remote.totalAvailable} |
+  billingAmount=${escapeHtml(formatAmount(audit.remote.totals.amount))}
+</p>
+<p class="meta">query=${escapeHtml(audit.query.endpoint)} | window=${audit.query.startTime}-${audit.query.endTime}</p>
+${error}
+${warnings}
+<table>
+<thead>
+<tr>
+  <th>Model</th>
+  <th>Matched</th>
+  <th>Input Local/R9S</th>
+  <th>Output Local/R9S</th>
+  <th>Cached Local/R9S</th>
+  <th>Diff In/Out/Cached</th>
+</tr>
+</thead>
+<tbody>
+${comparisonRows}
+</tbody>
+</table>
+</section>`;
+}
+
 export function printRuntimeConfig(config: RuntimeConfig): void {
   printProviderHeader('Runtime Config');
   if (config.testTarget) {
@@ -270,6 +364,8 @@ export function printRuntimeConfig(config: RuntimeConfig): void {
   console.log(`failFast: ${String(config.failFast)}`);
   console.log(`concurrency: ${String(config.concurrency)}`);
   console.log(`reportFile: ${config.reportFile ?? '(none)'}`);
+  console.log(`plugins: ${config.pluginPaths.length > 0 ? config.pluginPaths.join(', ') : '(none)'}`);
+  console.log(`r9sBillingAudit: ${config.r9sBillingAudit?.enabled ? 'enabled' : 'disabled'}`);
   console.log('');
   console.log('[openai]');
   console.log(`apiKey: ${maskSecret(config.openai.apiKey)}`);
@@ -357,6 +453,12 @@ export function printRunSummary(summary: RunSummary): void {
   console.log(`total passed: ${summary.totalPassed}`);
   console.log(`total failed: ${summary.totalFailed}`);
   console.log(`total skipped: ${summary.totalSkipped}`);
+  if (summary.billingAudit) {
+    console.log(`r9s billing audit: ${summary.billingAudit.status}`);
+    console.log(
+      `r9s billing diff models: ${summary.billingAudit.comparisons.filter((comparison) => !comparison.matched).length}`,
+    );
+  }
 }
 
 export function renderTextReport(summary: RunSummary): string {
@@ -367,6 +469,7 @@ export function renderTextReport(summary: RunSummary): string {
   lines.push(`startedAt: ${summary.startedAt}`);
   lines.push(`finishedAt: ${summary.finishedAt}`);
   lines.push(`total: passed=${summary.totalPassed} failed=${summary.totalFailed} skipped=${summary.totalSkipped}`);
+  appendBillingAuditText(lines, summary);
 
   // 分别统计Agent和Standard providers
   const agentProviders = summary.providers.filter(p => isAgentProvider(p.provider));
@@ -646,6 +749,17 @@ ${caseTable}
     padding-top: 16px;
     border-top: 1px dashed #cbd5e1;
   }
+  .billing-audit {
+    margin-top: 18px;
+    padding: 12px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    background: #f8fafc;
+  }
+  .audit-warnings {
+    color: #9a3412;
+    font-size: 13px;
+  }
   .provider:first-of-type {
     border-top: none;
     margin-top: 0;
@@ -757,6 +871,7 @@ ${caseTable}
     <div>finishedAt: ${escapeHtml(summary.finishedAt)}</div>
     <div>total: passed=${summary.totalPassed} failed=${summary.totalFailed} skipped=${summary.totalSkipped}</div>
   </div>
+  ${renderBillingAuditHtml(summary)}
   ${providerSections}
 </main>
 </body>

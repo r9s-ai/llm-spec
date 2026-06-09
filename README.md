@@ -166,11 +166,83 @@ curl -N http://localhost:8788/api/run/stream \
 - 默认未指定 `targetCases` 时，会根据本行选择的测试模型自动筛掉已知不适配的参数用例（例如 reasoning-only、legacy `max_tokens`、Gemini image/audio 模型用例等）。显式传入 `targetCases` 时以人工选择为准。
 - 报告中的 `testModel` 表示该用例实际选择的测试模型；部分用例会使用专用模型槽位，例如 `OPENAI_REASONING_MODEL`、`OPENAI_AUDIO_MODEL`、`GEMINI_IMAGE_MODEL` 或 Anthropic 的 Opus/Haiku/Fast Mode 模型。
 - `timeoutMs` / `concurrency` / `failFast`：运行控制参数。
+- `pluginPaths`：可选插件模块路径数组，或逗号分隔字符串。路径相对 backend 进程工作目录解析。
+- `billingAudit`：可选 R9S 计费审计配置，格式为 `{ "enabled": true, "managerBaseUrl": "https://portal-api.r9s.ai", "managerKey": "...", "tokenId": "tk_xxx" }`。开启后会在所有用例结束后调用 R9S Manager API usage 接口并把本地 usage 与平台账单写入报告。
 - `workingDirectory` / `skipGitRepoCheck` / `testImagePath`：Agent 测试参数。
 - `persistResult`：是否写入 backend history，默认 `true`。
 - `runSnapshot`：可选运行快照，会原样写入报告。
 
 `targets[]` 中的 `apiKey`、`apiBaseUrl`、`customHeaders`、`apiVersion`、`timeoutMs`、`concurrency`、`workingDirectory`、`skipGitRepoCheck`、`testImagePath`、`failFast` 会覆盖顶层同名字段，便于一次 API 请求中混合不同目标。
+
+### 插件机制
+
+Node runner 支持通过插件监听测试生命周期。CLI 使用 `LLM_SPEC_PLUGINS=./plugins/a.mjs,./plugins/b.mjs` 配置；backend API 可以在请求体中传 `pluginPaths`。
+
+插件模块可以默认导出插件对象、插件数组或返回插件对象的工厂函数。支持的 hook：
+
+- `beforeCase(context)`：在测试用例发出真实请求前执行；如果一个用例发出多次请求，会按请求各执行一次。`context` 包含 `id`、`name`、`description`、`provider`、`testId`、`requestId`、`requestIndex` 和 `request`。`request` 包含 `url`、`method`、`headers`、`body`。hook 可以返回 `{ request: { headers, body, url, method } }` 或直接返回这些字段来修改请求；`headers` 会合并，值为 `null` / `undefined` 表示删除该 header。
+- `afterCase(context)`：在用例结果生成后执行。`context` 包含用例名称、描述、`result`、首个 `request` / `response`，以及完整 `exchanges` 请求响应数组。
+- `afterRun(context)`：所有用例结束后执行，`context.summary` 是完整 `RunSummary` 报告，包含各用例的请求和响应 trace。
+
+示例：
+
+```js
+// plugins/add-debug-header.mjs
+export default {
+  name: 'add-debug-header',
+  beforeCase({ request, name }) {
+    return {
+      request: {
+        headers: {
+          'x-llm-spec-case': name,
+          ...request.headers,
+        },
+      },
+    };
+  },
+  afterCase({ name, response }) {
+    console.log(`[plugin] ${name}: status=${response?.status ?? 'none'}`);
+  },
+  afterRun({ summary }) {
+    console.log(`[plugin] finished providers=${summary.providers.length}`);
+  },
+};
+```
+
+### R9S 计费审计
+
+内置 R9S 计费审计插件基于 `afterRun` 生命周期执行。它会从本地 HTTP trace 的响应体中提取 OpenAI / Anthropic / Gemini 风格的 `usage`，再按运行报告的 `startedAt` / `finishedAt` 调用 R9S Manager API `GET /api/v1/portal/management/usage`，并按模型对比本地 input/output/cached token 与 R9S billing 记录。报告中的 `billingAudit` 字段会包含查询窗口、平台记录、按模型差异、告警和错误信息；前端 Summary 区域也会展示差异表。
+
+CLI 可通过环境变量开启：
+
+```bash
+R9S_BILLING_AUDIT=true \
+R9S_MANAGER_BASE_URL=https://portal-api.r9s.ai \
+R9S_MANAGER_KEY=manager-key \
+R9S_TOKEN_ID=tk_xxx \
+TEST_API_KEY=target-api-key \
+pnpm test:sdk
+```
+
+Backend API 可直接传入：
+
+```json
+{
+  "kind": "standard",
+  "apiType": "openai.chat",
+  "apiKey": "target-api-key",
+  "apiBaseUrl": "https://your-r9s-gateway/v1",
+  "model": "gpt-4o-mini",
+  "billingAudit": {
+    "enabled": true,
+    "managerBaseUrl": "https://portal-api.r9s.ai",
+    "managerKey": "manager-key",
+    "tokenId": "tk_xxx"
+  }
+}
+```
+
+前端在 Site Profile 中勾选 `R9S Billing Audit` 后会要求配置 Manager Base URL 和 Manager Key，并自动使用 backend 执行测试，避免在浏览器端暴露 Manager Key。`token_id` 过滤只会在显式配置 `billingAudit.tokenId` / `R9S_TOKEN_ID` 时启用；如果没有配置 token id，插件会查询整个时间窗口并在报告里提示未按 token_id 过滤。R9S 账单字段缺失或无法解析时会显示 `not fetched` 并给出 warning，不会用 0 代替未知值。
 
 ### 启动前端
 
@@ -310,6 +382,7 @@ REPORT_FILE=./report.json pnpm test:sdk
 - `FAIL_FAST`
 - `REPORT_FILE`
 - `SDK_TIMEOUT_MS`
+- `LLM_SPEC_PLUGINS`（逗号分隔的 Node 插件模块路径）
 - `CUSTOM_HEADERS`（JSON 对象字符串，作为 OpenAI SDK / Claude Agent 的统一自定义请求头配置；兼容旧的 `OPENAI_CUSTOM_HEADERS` / `CLAUDE_AGENT_CUSTOM_HEADERS`）
 
 ### 单目标配置

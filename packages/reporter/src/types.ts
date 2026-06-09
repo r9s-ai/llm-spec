@@ -93,6 +93,87 @@ export interface RunSummary {
   totalFailed: number
   totalSkipped: number
   runSnapshot?: RunSnapshot
+  billingAudit?: R9SBillingAuditReport
+}
+
+export interface R9SBillingAuditConfig {
+  enabled: boolean
+  managerBaseUrl?: string
+  managerKey?: string
+  apiKey?: string
+  tokenId?: string
+}
+
+export type R9SBillingAuditStatus = 'passed' | 'mismatched' | 'warning' | 'error'
+
+export interface R9SBillingAuditUsageTotals {
+  inputTokens?: number
+  outputTokens?: number
+  cachedTokens?: number
+  totalTokens?: number
+  amount?: number
+  totalAmount?: number
+}
+
+export interface R9SBillingAuditLocalRecord {
+  provider: string
+  model: string
+  apiBaseUrl?: string
+  caseId: string
+  name: string
+  description: string
+  requestId?: string
+  usage: R9SBillingAuditUsageTotals
+}
+
+export interface R9SBillingAuditRemoteRecord {
+  id?: string
+  requestTime?: number
+  userId?: string
+  customUserId?: string
+  tokenId?: string
+  model: string
+  modelType?: string
+  usage: R9SBillingAuditUsageTotals
+  ext?: unknown
+}
+
+export interface R9SBillingAuditUsageSummary {
+  recordCount: number
+  totals: R9SBillingAuditUsageTotals
+  byModel: Record<string, R9SBillingAuditUsageTotals>
+}
+
+export interface R9SBillingAuditModelComparison {
+  model: string
+  matched: boolean
+  local: R9SBillingAuditUsageTotals
+  remote: R9SBillingAuditUsageTotals
+  diff: R9SBillingAuditUsageTotals
+}
+
+export interface R9SBillingAuditReport {
+  status: R9SBillingAuditStatus
+  startedAt: string
+  finishedAt: string
+  query: {
+    endpoint: string
+    startTime: number
+    endTime: number
+    pageSize: number
+    tokenId?: string
+    apiKeyFingerprint?: string
+  }
+  local: R9SBillingAuditUsageSummary & {
+    records: R9SBillingAuditLocalRecord[]
+  }
+  remote: R9SBillingAuditUsageSummary & {
+    totalAvailable: number
+    records: R9SBillingAuditRemoteRecord[]
+  }
+  comparisons: R9SBillingAuditModelComparison[]
+  warnings: string[]
+  error?: string
 }
 
 export interface RunTargetSnapshot {
@@ -132,6 +213,8 @@ export interface PlatformRunConfig {
   workingDirectory?: string
   skipGitRepoCheck?: boolean
   testImagePath?: string
+  pluginPaths?: string[]
+  billingAudit?: R9SBillingAuditConfig
   persistResult?: boolean
   runSnapshot?: RunSnapshot
 }
@@ -172,6 +255,8 @@ export interface BackendJobRequest {
   workingDirectory?: string
   skipGitRepoCheck?: boolean
   testImagePath?: string
+  pluginPaths?: string[]
+  billingAudit?: R9SBillingAuditConfig
   persistResult?: boolean
   runSnapshot?: RunSnapshot
   targets: BackendJobTarget[]

@@ -12,6 +12,9 @@ import type { Socket } from 'node:net';
 import { resolve as resolvePath } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
+import type { PluginRequestParams } from '../types';
+import { getRegisteredTestPluginCase, runTestPluginBeforeCase } from './plugins';
+
 const CLAUDE_AGENT_TRACE_DIR = resolvePath(process.cwd(), '.llm-spec-traces');
 const CLAUDE_AGENT_TEST_ID_HEADER = 'x-test-id';
 const DEFAULT_UPSTREAM_BASE_URL = 'https://api.anthropic.com';
@@ -268,6 +271,71 @@ function createForwardHeaders(
   return forwardHeaders;
 }
 
+async function applyBeforeCasePluginsToProxyRequest(options: {
+  testId?: string;
+  requestId: string;
+  upstreamUrl: URL;
+  method: string;
+  headers: Record<string, string>;
+  body: Buffer;
+}): Promise<{
+  upstreamUrl: URL;
+  method: string;
+  headers: Record<string, string>;
+  body: Buffer;
+  serializedBody?: string;
+}> {
+  const serializedBody = serializeBody(
+    options.body,
+    findHeaderValue(options.headers, 'content-type'),
+  );
+  const registeredCase = getRegisteredTestPluginCase(options.testId);
+  if (!registeredCase || !options.testId) {
+    return {
+      upstreamUrl: options.upstreamUrl,
+      method: options.method,
+      headers: options.headers,
+      body: options.body,
+      serializedBody,
+    };
+  }
+
+  const originalRequest: PluginRequestParams = {
+    url: options.upstreamUrl.toString(),
+    method: options.method,
+    headers: options.headers,
+    body: serializedBody,
+  };
+  const pluginRequest = await runTestPluginBeforeCase({
+    provider: registeredCase.provider,
+    testId: options.testId,
+    id: registeredCase.id,
+    name: registeredCase.name,
+    description: registeredCase.description,
+    requestId: options.requestId,
+    requestIndex: 1,
+    request: originalRequest,
+  });
+  const nextUpstreamUrl = new URL(pluginRequest.url);
+  const bodyChanged = pluginRequest.body !== serializedBody;
+  const nextBody = bodyChanged
+    ? Buffer.from(pluginRequest.body ?? '', 'utf8')
+    : options.body;
+  const nextHeaders = createForwardHeaders(pluginRequest.headers, nextBody, nextUpstreamUrl);
+  const nextSerializedBody = serializeBody(
+    nextBody,
+    findHeaderValue(nextHeaders, 'content-type'),
+  );
+
+  return {
+    upstreamUrl: nextUpstreamUrl,
+    method: pluginRequest.method,
+    headers: nextHeaders,
+    body: nextBody,
+    serializedBody: nextSerializedBody,
+  };
+}
+
 async function handleProxyRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -279,10 +347,19 @@ async function handleProxyRequest(
   try {
     const requestBody = await readRequestBody(request);
     const incomingHeaders = normalizeHeaders(request.headers);
-    const upstreamUrl = createUpstreamUrl(upstreamBaseUrl, request.url);
-    const forwardHeaders = createForwardHeaders(incomingHeaders, requestBody, upstreamUrl);
-    const testId = findHeaderValue(forwardHeaders, CLAUDE_AGENT_TEST_ID_HEADER);
-    const requestMethod = request.method ?? 'GET';
+    const initialUpstreamUrl = createUpstreamUrl(upstreamBaseUrl, request.url);
+    const initialMethod = request.method ?? 'GET';
+    const initialForwardHeaders = createForwardHeaders(incomingHeaders, requestBody, initialUpstreamUrl);
+    const testId = findHeaderValue(initialForwardHeaders, CLAUDE_AGENT_TEST_ID_HEADER);
+    const pluginRequest = await applyBeforeCasePluginsToProxyRequest({
+      testId,
+      requestId,
+      upstreamUrl: initialUpstreamUrl,
+      method: initialMethod,
+      headers: initialForwardHeaders,
+      body: requestBody,
+    });
+    const { upstreamUrl, method: requestMethod, headers: forwardHeaders, body: forwardBody, serializedBody } = pluginRequest;
 
     await appendTraceEntry(testId, {
       type: 'request',
@@ -291,7 +368,7 @@ async function handleProxyRequest(
       url: upstreamUrl.toString(),
       method: requestMethod,
       headers: sanitizeHeaders(forwardHeaders),
-      body: serializeBody(requestBody, findHeaderValue(forwardHeaders, 'content-type')),
+      body: serializedBody,
     });
     await logProxyRequest({
       testId,
@@ -299,7 +376,7 @@ async function handleProxyRequest(
       url: upstreamUrl.toString(),
       method: requestMethod,
       headers: sanitizeHeaders(forwardHeaders),
-      body: serializeBody(requestBody, findHeaderValue(forwardHeaders, 'content-type')),
+      body: serializedBody,
     });
 
     await new Promise<void>((resolve) => {
@@ -396,8 +473,8 @@ async function handleProxyRequest(
         })();
       });
 
-      if (requestBody.length > 0) {
-        upstreamRequest.write(requestBody);
+      if (forwardBody.length > 0) {
+        upstreamRequest.write(forwardBody);
       }
       upstreamRequest.end();
     });

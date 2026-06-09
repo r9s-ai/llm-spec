@@ -16,7 +16,9 @@ import type {
   TestCaseHttpTrace,
 } from '../../../types';
 import type { AnthropicProviderConfig, ClaudeAgentProviderConfig } from '../../environment';
+import { getActiveTestContext } from '../../environment';
 import { IMAGE_INPUT_FIXTURES, readFixtureBase64 } from '../../fixtures';
+import { registerTestPluginCase, unregisterTestPluginCase } from '../../plugins';
 import { formatError, summarizeAnthropicResponse, truncate } from '../runtime';
 import type { TestCase } from '../types';
 import { defineCases } from '../define-cases';
@@ -4141,38 +4143,50 @@ Please proceed.`,
         const testId = createClaudeAgentTestId(testCase.id);
         let detail: string | undefined;
         let runError: unknown;
-
-        try {
-          detail = await runWithClaudeAgentTestId(testId, () => testCase.run());
-        } catch (error) {
-          runError = error;
-        }
-
-        const exchanges = await waitForClaudeAgentTraceToSettle(testId, expectedModel);
-        const httpTrace: TestCaseHttpTrace = {
-          source: CLAUDE_AGENT_TRACE_SOURCE,
+        const activeTestContext = getActiveTestContext();
+        registerTestPluginCase({
+          provider: 'claude-agent',
           testId,
-          exchangeCount: exchanges.length,
-          exchanges,
-        };
-        claudeAgentCaseHttpTraceByCaseId.set(testCase.id, httpTrace);
+          id: testCase.id,
+          name: testCase.id,
+          description: activeTestContext?.description ?? testCase.description,
+        });
 
         try {
-          const finalResponse = assertFinalClaudeAgentMessageBetaResponseOk(httpTrace, testCase.id, expectedModel);
-          const statusDetail = `message_api_status=${formatClaudeAgentResponseStatus(finalResponse)}`;
-          const detailParts = [statusDetail];
-          if (detail) {
-            detailParts.push(detail);
+          try {
+            detail = await runWithClaudeAgentTestId(testId, () => testCase.run());
+          } catch (error) {
+            runError = error;
           }
-          if (runError) {
-            detailParts.push(`sdk_error_ignored="${truncate(formatError(runError), 160)}"`);
+
+          const exchanges = await waitForClaudeAgentTraceToSettle(testId, expectedModel);
+          const httpTrace: TestCaseHttpTrace = {
+            source: CLAUDE_AGENT_TRACE_SOURCE,
+            testId,
+            exchangeCount: exchanges.length,
+            exchanges,
+          };
+          claudeAgentCaseHttpTraceByCaseId.set(testCase.id, httpTrace);
+
+          try {
+            const finalResponse = assertFinalClaudeAgentMessageBetaResponseOk(httpTrace, testCase.id, expectedModel);
+            const statusDetail = `message_api_status=${formatClaudeAgentResponseStatus(finalResponse)}`;
+            const detailParts = [statusDetail];
+            if (detail) {
+              detailParts.push(detail);
+            }
+            if (runError) {
+              detailParts.push(`sdk_error_ignored="${truncate(formatError(runError), 160)}"`);
+            }
+            return detailParts.join(', ');
+          } catch (statusError) {
+            if (runError instanceof Error && statusError instanceof Error) {
+              statusError.message = `${statusError.message}; sdk_error=${formatError(runError)}`;
+            }
+            throw statusError;
           }
-          return detailParts.join(', ');
-        } catch (statusError) {
-          if (runError instanceof Error && statusError instanceof Error) {
-            statusError.message = `${statusError.message}; sdk_error=${formatError(runError)}`;
-          }
-          throw statusError;
+        } finally {
+          unregisterTestPluginCase(testId);
         }
       },
     };

@@ -2,6 +2,8 @@ import { appendFileSync, writeFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 
 import type { HttpTraceExchange, TestCaseHttpTrace } from '../../types';
+import type { PluginRequestParams } from '../../types';
+import { runTestPluginBeforeCase } from '../plugins';
 import { getCurrentProvider } from './provider-context';
 import { getActiveTestContext } from './test-context';
 
@@ -102,6 +104,53 @@ function collectResponseHeaders(headers: Headers): Record<string, string> {
     responseHeaders[key] = value;
   });
   return responseHeaders;
+}
+
+function headersEqual(
+  left: Record<string, string> | undefined,
+  right: Record<string, string> | undefined,
+): boolean {
+  const leftEntries = Object.entries(left ?? {});
+  const rightEntries = Object.entries(right ?? {});
+  if (leftEntries.length !== rightEntries.length) {
+    return false;
+  }
+
+  for (const [key, value] of leftEntries) {
+    if (right?.[key] !== value) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function createFetchInit(
+  init: RequestInit | undefined,
+  request: PluginRequestParams,
+  originalRequest: PluginRequestParams,
+): RequestInit | undefined {
+  const urlChanged = request.url !== originalRequest.url;
+  const methodChanged = request.method !== originalRequest.method;
+  const headersChanged = !headersEqual(request.headers, originalRequest.headers);
+  const bodyChanged = request.body !== originalRequest.body;
+
+  if (!urlChanged && !methodChanged && !headersChanged && !bodyChanged) {
+    return init;
+  }
+
+  const nextInit: RequestInit = { ...(init ?? {}) };
+  nextInit.method = request.method;
+  nextInit.headers = request.headers;
+
+  if (bodyChanged) {
+    if (request.body === undefined) {
+      delete nextInit.body;
+    } else {
+      nextInit.body = request.body;
+    }
+  }
+
+  return nextInit;
 }
 
 function serializeBodyForLog(body: RequestInit['body']): string | undefined {
@@ -293,19 +342,44 @@ function createInstrumentedFetch(resolveProvider: () => string): typeof fetch {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     const method = init?.method ?? (input instanceof Request ? input.method : 'GET');
     const requestHeaders = normalizeHeaders(init?.headers);
-    const sanitizedRequestHeaders = requestHeaders ? sanitizeHeaders(requestHeaders) : undefined;
     const requestBody = serializeBodyForLog(init?.body);
-    const streamRequested = looksLikeStreamingRequest(url, requestHeaders, requestBody);
     const requestId = testId ? buildTraceRequestId(testId) : undefined;
+    const requestIndex = testId ? ensureCapturedHttpTrace(testId).trace.exchanges.length + 1 : 1;
+    const originalPluginRequest: PluginRequestParams = {
+      url,
+      method,
+      headers: requestHeaders ?? {},
+      body: requestBody,
+    };
+    const pluginRequest = testId && activeTestContext
+      ? await runTestPluginBeforeCase({
+          provider,
+          testId,
+          id: activeTestContext.caseId ?? testId,
+          name: activeTestContext.caseId ?? testId,
+          description: activeTestContext.description ?? '',
+          requestId,
+          requestIndex,
+          request: originalPluginRequest,
+        })
+      : originalPluginRequest;
+    const fetchInit = createFetchInit(init, pluginRequest, originalPluginRequest);
+    const fetchInput: string | URL | Request = pluginRequest.url !== url ? pluginRequest.url : input;
+    const sanitizedRequestHeaders = sanitizeHeaders(pluginRequest.headers);
+    const streamRequested = looksLikeStreamingRequest(
+      pluginRequest.url,
+      pluginRequest.headers,
+      pluginRequest.body,
+    );
 
     if (testId && requestId) {
       createTraceExchange(testId, requestId, {
         requestId,
         testId,
-        url,
-        method,
-        headers: sanitizedRequestHeaders ?? {},
-        body: requestBody,
+        url: pluginRequest.url,
+        method: pluginRequest.method,
+        headers: sanitizedRequestHeaders,
+        body: pluginRequest.body,
       });
     }
 
@@ -318,18 +392,18 @@ function createInstrumentedFetch(resolveProvider: () => string): typeof fetch {
     if (requestId) {
       requestLines.push(`  Request ID: ${requestId}`);
     }
-    requestLines.push(`  URL: ${url}`);
-    requestLines.push(`  Method: ${method}`);
+    requestLines.push(`  URL: ${pluginRequest.url}`);
+    requestLines.push(`  Method: ${pluginRequest.method}`);
 
-    if (sanitizedRequestHeaders) {
+    if (Object.keys(sanitizedRequestHeaders).length > 0) {
       requestLines.push(
         `  Headers: ${JSON.stringify(sanitizedRequestHeaders, null, 2).replace(/\n/g, '\n  ')}`,
       );
     }
 
-    if (requestBody) {
-      requestLines.push(`  Body: ${truncateLogBody(requestBody).replace(/\n/g, '\n  ')}`);
-    } else if (init?.body) {
+    if (pluginRequest.body) {
+      requestLines.push(`  Body: ${truncateLogBody(pluginRequest.body).replace(/\n/g, '\n  ')}`);
+    } else if (fetchInit?.body) {
       requestLines.push('  Body: [Unable to serialize]');
     }
     logRequest(requestLines);
@@ -337,7 +411,7 @@ function createInstrumentedFetch(resolveProvider: () => string): typeof fetch {
     const startTime = Date.now();
 
     try {
-      const response = await originalFetch(input, init);
+      const response = await originalFetch(fetchInput, fetchInit);
       const duration = Date.now() - startTime;
       const responseHeaders = collectResponseHeaders(response.headers);
       const exchange = testId && requestId ? getCapturedHttpTraceExchange(testId, requestId) : undefined;
@@ -348,7 +422,7 @@ function createInstrumentedFetch(resolveProvider: () => string): typeof fetch {
             requestId,
             testId,
             kind: 'response',
-            url,
+            url: pluginRequest.url,
             status: response.status,
             statusText: response.statusText,
             durationMs: duration,
@@ -366,7 +440,7 @@ function createInstrumentedFetch(resolveProvider: () => string): typeof fetch {
         if (requestId) {
           responseLines.push(`  Request ID: ${requestId}`);
         }
-        responseLines.push(`  URL: ${url}`);
+        responseLines.push(`  URL: ${pluginRequest.url}`);
         responseLines.push(`  Status: ${response.status} ${response.statusText}`);
         responseLines.push(`  Duration: ${duration}ms`);
         responseLines.push(
@@ -395,7 +469,7 @@ function createInstrumentedFetch(resolveProvider: () => string): typeof fetch {
           requestId,
           testId,
           kind: 'error',
-          url,
+          url: pluginRequest.url,
           durationMs: duration,
           headers: {},
           error: errorMessage,
@@ -411,7 +485,7 @@ function createInstrumentedFetch(resolveProvider: () => string): typeof fetch {
       if (requestId) {
         errorLines.push(`  Request ID: ${requestId}`);
       }
-      errorLines.push(`  URL: ${url}`);
+      errorLines.push(`  URL: ${pluginRequest.url}`);
       errorLines.push(`  Duration: ${duration}ms`);
       errorLines.push(`  Error: ${errorMessage}`);
       logError(errorLines);
