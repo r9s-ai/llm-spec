@@ -54,10 +54,11 @@ pnpm dlx tsx src/billing-audit/fetch-billing.ts <startTime> <endTime>
 BILLING_START_TIME=1780970357 BILLING_END_TIME=1780970377 pnpm dlx tsx src/billing-audit/fetch-billing.ts
 ```
 
-`url` 和 `bearerToken` 由 `fetchBilling` 自动从以下环境变量读取（通过 `loadDotEnvIfPresent()` 加载 `.env` 文件）：
+`url`、`bearerToken` 和 `user_id` 由 `fetchBilling` 自动从以下环境变量读取（通过 `loadDotEnvIfPresent()` 加载 `.env` 文件）：
 
 - `BILLING_BASE_URL` — billing API 地址
 - `BILLING_API_KEY` — bearer token
+- `BILLING_USER_ID` — 可选；存在时会作为 `user_id` query 参数传给 billing API
 
 查询成功后会保存：
 

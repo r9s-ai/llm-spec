@@ -9,6 +9,7 @@ export const DEFAULT_BILLING_ARTIFACT_PATH = 'src/billing-audit/data/billing.jso
 interface FetchBillingOptions {
   url?: string;
   bearerToken?: string;
+  userId?: string;
   /** Unix timestamp in seconds. */
   startTime: string;
   /** Unix timestamp in seconds. */
@@ -35,6 +36,7 @@ function assertUnixTimeSeconds(name: string, value: string): void {
 export async function fetchBilling({
   url,
   bearerToken,
+  userId,
   startTime,
   endTime,
   outputPath,
@@ -43,6 +45,7 @@ export async function fetchBilling({
   const resolvedUrl = url ?? firstNonEmptyEnv('BILLING_BASE_URL');
   const resolvedBearerToken =
     bearerToken ?? firstNonEmptyEnv('BILLING_API_KEY');
+  const resolvedUserId = userId ?? firstNonEmptyEnv('BILLING_USER_ID');
 
   if (!resolvedUrl) {
     throw new Error('missing billing url (pass url or set BILLING_BASE_URL)');
@@ -56,6 +59,9 @@ export async function fetchBilling({
   const parsedUrl = new URL(resolvedUrl);
   parsedUrl.searchParams.set('start_time', startTime);
   parsedUrl.searchParams.set('end_time', endTime);
+  if (resolvedUserId) {
+    parsedUrl.searchParams.set('user_id', resolvedUserId);
+  }
 
   const resp = await fetch(parsedUrl, {
     headers: {
@@ -87,6 +93,9 @@ async function runCli(): Promise<void> {
     );
     console.error(
       '  Also accepts BILLING_START_TIME / BILLING_END_TIME env vars.',
+    );
+    console.error(
+      '  Optionally accepts BILLING_USER_ID as the user_id query parameter.',
     );
     process.exit(2);
   }
