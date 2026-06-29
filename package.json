@@ -2,6 +2,8 @@
   "name": "llm-spec-monorepo",
   "version": "1.0.0",
   "private": true,
+  "author": "r9s.ai",
+  "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@9.15.1",
   "workspaces": [

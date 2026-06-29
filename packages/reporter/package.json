@@ -2,6 +2,8 @@
   "name": "@llm-spec/reporter",
   "private": true,
   "version": "0.0.0",
+  "author": "r9s.ai",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",

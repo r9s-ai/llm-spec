@@ -18,8 +18,8 @@
     "fetch-docs": "node dist/scripts/fetch-docs.mjs"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "r9s.ai",
+  "license": "MIT",
   "description": "LLM specification testing and validation tool",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.131",
