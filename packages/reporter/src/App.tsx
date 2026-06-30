@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   AlertCircle,
@@ -24,6 +24,20 @@ import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 
 type AppView = 'console' | 'reporter'
+type ConsoleLogLevel = 'log' | 'info' | 'warn' | 'error'
+
+interface ConsoleLogEntry {
+  id: number
+  time: string
+  level: ConsoleLogLevel
+  message: string
+}
+
+interface IncomingConsoleLog {
+  level: ConsoleLogLevel
+  time?: string
+  message: string
+}
 
 const DEFAULT_CONSOLE_STATUS: PlatformConsoleStatus = {
   running: false,
@@ -52,6 +66,9 @@ export default function App() {
   const [siteControls, setSiteControls] = useState<ReactNode | null>(null)
   const [reporterHome, setReporterHome] = useState<ReactNode | null>(null)
   const [sidebarExpanded, setSidebarExpanded] = useState(false)
+  const [consoleOpen, setConsoleOpen] = useState(false)
+  const [consoleLogs, setConsoleLogs] = useState<ConsoleLogEntry[]>([])
+  const nextConsoleLogId = useRef(1)
 
   useEffect(() => {
     if (report) {
@@ -65,6 +82,27 @@ export default function App() {
     loadReport(data)
     setActiveView('reporter')
   }, [loadReport])
+
+  const appendConsoleLogs = useCallback((entries: IncomingConsoleLog[]) => {
+    if (entries.length === 0) {
+      return
+    }
+    const nextEntries = entries.map((entry) => {
+      const id = nextConsoleLogId.current
+      nextConsoleLogId.current += 1
+      return {
+        id,
+        level: entry.level,
+        time: formatLogTime(entry.time),
+        message: entry.message,
+      }
+    })
+    setConsoleLogs((current) => [...current, ...nextEntries].slice(-300))
+  }, [])
+
+  const handleClearConsole = useCallback(() => {
+    setConsoleLogs([])
+  }, [])
 
   const handleLoadFile = useCallback(async (file: File) => {
     setActiveProvider('__overview__')
@@ -105,6 +143,7 @@ export default function App() {
               onStatusChange={setConsoleStatus}
               onSiteControlsChange={setSiteControls}
               onReporterHomeChange={setReporterHome}
+              onConsoleLogs={appendConsoleLogs}
               loading={loading}
               error={error}
             />
@@ -125,9 +164,12 @@ export default function App() {
 
       <StatusBar
         status={consoleStatus}
-        activeView={activeView}
-        hasReport={Boolean(report)}
         siteControls={siteControls}
+        consoleLogs={consoleLogs}
+        consoleOpen={consoleOpen}
+        onToggleConsole={() => { setConsoleOpen((current) => !current) }}
+        onCloseConsole={() => { setConsoleOpen(false) }}
+        onClearConsole={handleClearConsole}
       />
 
       {traceCase && (
@@ -135,6 +177,14 @@ export default function App() {
       )}
     </div>
   )
+}
+
+function formatLogTime(value?: string): string {
+  const date = value ? new Date(value) : new Date()
+  if (Number.isNaN(date.getTime())) {
+    return value ?? ''
+  }
+  return date.toLocaleTimeString([], { hour12: false })
 }
 
 interface ActivityBarProps {
@@ -335,12 +385,23 @@ function ReporterPage({
 
 interface StatusBarProps {
   status: PlatformConsoleStatus
-  activeView: AppView
-  hasReport: boolean
   siteControls: ReactNode | null
+  consoleLogs: ConsoleLogEntry[]
+  consoleOpen: boolean
+  onToggleConsole: () => void
+  onCloseConsole: () => void
+  onClearConsole: () => void
 }
 
-function StatusBar({ status, activeView, hasReport, siteControls }: StatusBarProps) {
+function StatusBar({
+  status,
+  siteControls,
+  consoleLogs,
+  consoleOpen,
+  onToggleConsole,
+  onCloseConsole,
+  onClearConsole,
+}: StatusBarProps) {
   const hasFailure = status.hasRunProgress && status.failed > 0
   const statusTone = status.error
     ? 'bg-[#c42b1c]'
@@ -353,7 +414,15 @@ function StatusBar({ status, activeView, hasReport, siteControls }: StatusBarPro
   const progressWidth = `${status.hasRunProgress ? status.percent : 0}%`
 
   return (
-    <footer className="flex h-8 w-full items-center overflow-hidden bg-[#007acc] text-xs text-white">
+    <>
+      {consoleOpen && (
+        <ConsoleLogPanel
+          logs={consoleLogs}
+          onClose={onCloseConsole}
+          onClear={onClearConsole}
+        />
+      )}
+      <footer className="flex h-8 w-full items-center overflow-hidden bg-[#007acc] text-xs text-white">
       <div
         className={cn('flex h-full w-8 shrink-0 items-center justify-center', statusTone)}
         title={status.error ? status.error : status.statusText}
@@ -387,10 +456,21 @@ function StatusBar({ status, activeView, hasReport, siteControls }: StatusBarPro
         )}
       </div>
 
-      <div className="hidden h-full shrink-0 items-center border-l border-white/20 px-3 text-white/90 md:flex">
-        {activeView === 'console' ? <TerminalSquare className="mr-1.5 h-3.5 w-3.5" /> : <BarChart3 className="mr-1.5 h-3.5 w-3.5" />}
-        {activeView === 'console' ? 'Console' : hasReport ? 'Reporter' : 'Reporter: empty'}
-      </div>
+      <button
+        type="button"
+        className="flex h-full shrink-0 items-center border-l border-white/20 px-2 text-white/90 transition-colors hover:bg-white/10 hover:text-white sm:px-3"
+        onClick={onToggleConsole}
+        aria-expanded={consoleOpen}
+        aria-label="Toggle console logs"
+      >
+        <TerminalSquare className="mr-1.5 h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Console</span>
+        {consoleLogs.length > 0 && (
+          <span className="ml-1.5 rounded-sm bg-white/20 px-1 text-[10px] leading-4 text-white">
+            {consoleLogs.length}
+          </span>
+        )}
+      </button>
       <div className="hidden h-full shrink-0 items-center border-l border-white/20 px-3 text-white/90 lg:flex">
         {status.enabledTargets} target{status.enabledTargets === 1 ? '' : 's'}
       </div>
@@ -409,6 +489,74 @@ function StatusBar({ status, activeView, hasReport, siteControls }: StatusBarPro
           <span className="truncate">{status.backendStatus}</span>
         </div>
       )}
-    </footer>
+      </footer>
+    </>
+  )
+}
+
+interface ConsoleLogPanelProps {
+  logs: ConsoleLogEntry[]
+  onClose: () => void
+  onClear: () => void
+}
+
+function ConsoleLogPanel({ logs, onClose, onClear }: ConsoleLogPanelProps) {
+  const endRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: 'end' })
+  }, [logs])
+
+  return (
+    <div className="fixed bottom-10 right-3 z-50 flex h-[min(24rem,calc(100vh-5rem))] w-[min(48rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-lg border border-slate-700 bg-[#111827] text-slate-100 shadow-2xl">
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-slate-700 bg-[#0f172a] px-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <TerminalSquare className="h-4 w-4 shrink-0 text-sky-300" />
+          <span className="truncate text-sm font-semibold">Console</span>
+          <span className="rounded-sm bg-slate-700 px-1.5 py-0.5 text-[10px] text-slate-300">
+            {logs.length} lines
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            className="rounded px-2 py-1 text-xs text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+            onClick={onClear}
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            className="rounded px-2 py-1 text-xs text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 font-mono text-xs leading-5">
+        {logs.length === 0 ? (
+          <div className="py-6 text-center text-slate-500">No logs</div>
+        ) : (
+          logs.map((log) => (
+            <div key={log.id} className="grid grid-cols-[4.75rem_4.25rem_minmax(0,1fr)] gap-2 border-b border-slate-800/70 py-1 last:border-b-0">
+              <span className="text-slate-500">{log.time}</span>
+              <span className={cn(
+                'uppercase',
+                log.level === 'error' && 'text-rose-300',
+                log.level === 'warn' && 'text-amber-300',
+                log.level === 'info' && 'text-sky-300',
+                log.level === 'log' && 'text-slate-300',
+              )}
+              >
+                {log.level}
+              </span>
+              <span className="min-w-0 break-words text-slate-200">{log.message}</span>
+            </div>
+          ))
+        )}
+        <div ref={endRef} />
+      </div>
+    </div>
   )
 }

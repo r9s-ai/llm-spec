@@ -326,6 +326,16 @@ export interface BackendJobStatusResponse {
   finishedAt?: string
   error?: string
   progress: BackendJobProgress
+  logs?: BackendJobLogEntry[]
   summary?: RunSummary
   historyEntry?: BackendRunHistoryEntry
+}
+
+export type BackendJobLogLevel = 'log' | 'info' | 'warn' | 'error'
+
+export interface BackendJobLogEntry {
+  id: number
+  time: string
+  level: BackendJobLogLevel
+  message: string
 }

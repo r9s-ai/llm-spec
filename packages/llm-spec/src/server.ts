@@ -3,6 +3,7 @@ import { readdir, readFile, mkdir, stat, unlink, writeFile } from 'node:fs/promi
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { basename, dirname, extname, resolve as resolvePath, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inspect } from 'node:util';
 
 import { formatError, resolveRuntimeConfig } from './api-sdk-tester';
 import { createTestPluginManager } from './api-sdk-tester/plugins';
@@ -27,6 +28,8 @@ const RUN_HISTORY_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
 const RUN_HISTORY_LIST_LIMIT = 200;
 const RUN_JOB_LIST_LIMIT = 100;
 const RUN_JOB_RETENTION_MS = 24 * 60 * 60 * 1000;
+const RUN_JOB_LOG_LIMIT = 1000;
+const RUN_JOB_LOG_MESSAGE_LIMIT = 8000;
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
 
 const CASE_FILTER_ENV_KEYS = ['TARGET_CASES', 'TEST_CASES', 'CASE_IDS'] as const;
@@ -36,6 +39,14 @@ const runJobs = new Map<string, BackendRunJob>();
 
 type BackendRunJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 type BackendRunTargetStatus = 'pending' | 'running' | 'complete';
+type BackendRunJobLogLevel = 'log' | 'info' | 'warn' | 'error';
+
+interface BackendRunJobLogEntry {
+  id: number;
+  time: string;
+  level: BackendRunJobLogLevel;
+  message: string;
+}
 
 interface RunHistoryEntry {
   id: string;
@@ -126,6 +137,8 @@ interface BackendRunJob {
   finishedAt?: string;
   request: BackendRunJobRequest;
   progressTargets: BackendRunTargetProgress[];
+  logs: BackendRunJobLogEntry[];
+  nextLogId: number;
   error?: string;
   summary?: RunSummary;
   historyEntry?: RunHistoryEntry;
@@ -792,6 +805,67 @@ function summarizeJobProgress(job: BackendRunJob): BackendRunJobProgress {
   };
 }
 
+function formatConsoleArg(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (value instanceof Error) {
+    return value.stack ?? value.message;
+  }
+  return inspect(value, {
+    colors: false,
+    depth: 5,
+    breakLength: 140,
+    compact: true,
+  });
+}
+
+function appendJobLog(job: BackendRunJob, level: BackendRunJobLogLevel, args: readonly unknown[]): void {
+  const rawMessage = args.map(formatConsoleArg).join(' ');
+  const message = rawMessage.length > RUN_JOB_LOG_MESSAGE_LIMIT
+    ? `${rawMessage.slice(0, RUN_JOB_LOG_MESSAGE_LIMIT)}... [truncated]`
+    : rawMessage;
+  job.logs.push({
+    id: job.nextLogId,
+    time: new Date().toISOString(),
+    level,
+    message,
+  });
+  job.nextLogId += 1;
+  if (job.logs.length > RUN_JOB_LOG_LIMIT) {
+    job.logs.splice(0, job.logs.length - RUN_JOB_LOG_LIMIT);
+  }
+}
+
+async function captureJobConsole<T>(job: BackendRunJob, fn: () => Promise<T>): Promise<T> {
+  const original = {
+    log: console.log,
+    info: console.info,
+    warn: console.warn,
+    error: console.error,
+  };
+
+  const patch = (level: BackendRunJobLogLevel) => (
+    (...args: unknown[]) => {
+      appendJobLog(job, level, args);
+    }
+  );
+
+  console.log = patch('log') as typeof console.log;
+  console.info = patch('info') as typeof console.info;
+  console.warn = patch('warn') as typeof console.warn;
+  console.error = patch('error') as typeof console.error;
+
+  try {
+    return await fn();
+  } finally {
+    console.log = original.log;
+    console.info = original.info;
+    console.warn = original.warn;
+    console.error = original.error;
+  }
+}
+
 function buildJobTargetBody(request: BackendRunJobRequest, target: BackendRunJobTarget): JsonRecord {
   const base: JsonRecord = {
     kind: target.kind,
@@ -1065,6 +1139,7 @@ function serializeRunJob(job: BackendRunJob, includeSummary = true): JsonRecord 
     finishedAt: job.finishedAt,
     error: job.error,
     progress: summarizeJobProgress(job),
+    logs: job.logs,
     summary: includeSummary ? job.summary : undefined,
     historyEntry: job.historyEntry,
   };
@@ -1163,6 +1238,8 @@ function createBackendRunJob(request: BackendRunJobRequest): BackendRunJob {
     createdAt: new Date().toISOString(),
     request,
     progressTargets: request.targets.map(createJobTargetProgress),
+    logs: [],
+    nextLogId: 1,
   };
   runJobs.set(id, job);
   void runBackendRunJob(job);
@@ -1172,24 +1249,26 @@ function createBackendRunJob(request: BackendRunJobRequest): BackendRunJob {
 async function runBackendRunJob(job: BackendRunJob): Promise<void> {
   try {
     await withRunLock(async () => {
-      const merged = await executeBackendRunRequest(job.request, {
-        onProgress: (target, event) => { applyJobProgressEvent(job, target, event); },
-        onTargetComplete: (target) => { completeJobTarget(job, target); },
-        onTargetError: (target, targetError) => { failJobTarget(job, target, targetError); },
-      });
-      job.summary = merged;
+      await captureJobConsole(job, async () => {
+        const merged = await executeBackendRunRequest(job.request, {
+          onProgress: (target, event) => { applyJobProgressEvent(job, target, event); },
+          onTargetComplete: (target) => { completeJobTarget(job, target); },
+          onTargetError: (target, targetError) => { failJobTarget(job, target, targetError); },
+        });
+        job.summary = merged;
 
-      if (job.request.persistResult) {
-        try {
-          job.historyEntry = await persistRunSummary(merged);
-        } catch (historyError: unknown) {
-          job.error = `Failed to save backend run history: ${formatError(historyError)}`;
-          console.error(job.error);
+        if (job.request.persistResult) {
+          try {
+            job.historyEntry = await persistRunSummary(merged);
+          } catch (historyError: unknown) {
+            job.error = `Failed to save backend run history: ${formatError(historyError)}`;
+            console.error(job.error);
+          }
         }
-      }
 
-      job.status = 'completed';
-      job.finishedAt = new Date().toISOString();
+        job.status = 'completed';
+        job.finishedAt = new Date().toISOString();
+      });
     }, () => {
       job.status = 'running';
       job.startedAt = new Date().toISOString();

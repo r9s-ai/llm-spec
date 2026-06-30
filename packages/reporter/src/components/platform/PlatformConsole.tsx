@@ -64,6 +64,7 @@ import {
 import { cn } from '@/lib/utils'
 import type {
   AgentProvider,
+  BackendJobLogEntry,
   BackendJobRequest,
   BackendJobStatusResponse,
   BackendRunHistoryEntry,
@@ -78,6 +79,8 @@ import type {
 
 type StandardExecutionMode = 'browser' | 'backend'
 type RunTargetKind = 'standard' | 'agent'
+type ConsoleLogLevel = 'log' | 'info' | 'warn' | 'error'
+type InternalLogLevel = ConsoleLogLevel | 'success' | 'warning'
 
 interface StandardRunTarget {
   id: string
@@ -137,6 +140,7 @@ interface PlatformConsoleProps {
   onStatusChange?: (status: PlatformConsoleStatus) => void
   onSiteControlsChange?: (controls: ReactNode | null) => void
   onReporterHomeChange?: (content: ReactNode | null) => void
+  onConsoleLogs?: (logs: Array<{ level: ConsoleLogLevel; message: string; time?: string }>) => void
   loading: boolean
   error: string | null
 }
@@ -1211,6 +1215,11 @@ function saveActiveBackendJob(job: ActiveBackendJob | null): void {
     return
   }
   localStorage.setItem(ACTIVE_BACKEND_JOB_STORAGE_KEY, JSON.stringify(job))
+}
+
+function isMissingBackendJobError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /Backend job status failed:\s*job not found/i.test(message)
 }
 
 function sanitizeDownloadNamePart(value: string, fallback: string): string {
@@ -2360,12 +2369,20 @@ function delay(ms: number): Promise<void> {
   })
 }
 
+function normalizeBackendLogLevel(log: BackendJobLogEntry): ConsoleLogLevel {
+  if (log.level === 'warn' || log.level === 'error' || log.level === 'info') {
+    return log.level
+  }
+  return 'log'
+}
+
 export function PlatformConsole({
   onReport,
   onLoadFile,
   onStatusChange,
   onSiteControlsChange,
   onReporterHomeChange,
+  onConsoleLogs,
   loading,
   error,
 }: PlatformConsoleProps) {
@@ -2391,6 +2408,29 @@ export function PlatformConsole({
   const siteImportInputRef = useRef<HTMLInputElement | null>(null)
   const initialProfileLoadedRef = useRef(false)
   const backendJobPollingRef = useRef<string | null>(null)
+  const publishedBackendLogIdsRef = useRef<Set<string>>(new Set())
+  const writeLog = useCallback((level: InternalLogLevel, message: string) => {
+    void level
+    void message
+  }, [])
+  const publishBackendLogs = useCallback((job: BackendJobStatusResponse) => {
+    const nextLogs: Array<{ level: ConsoleLogLevel; message: string; time?: string }> = []
+    for (const log of job.logs ?? []) {
+      const key = `${job.id}:${log.id}`
+      if (publishedBackendLogIdsRef.current.has(key)) {
+        continue
+      }
+      publishedBackendLogIdsRef.current.add(key)
+      nextLogs.push({
+        level: normalizeBackendLogLevel(log),
+        message: log.message,
+        time: log.time,
+      })
+    }
+    if (nextLogs.length > 0) {
+      onConsoleLogs?.(nextLogs)
+    }
+  }, [onConsoleLogs])
 
   useEffect(() => {
     if (initialProfileLoadedRef.current) {
@@ -2595,7 +2635,8 @@ export function PlatformConsole({
     setProfileName(name)
     setConfigDialogOpen(false)
     setEditingProfileName(null)
-  }, [editingProfileName, profileName, profiles, siteConfig])
+    writeLog('success', `Saved site profile: ${name}`)
+  }, [editingProfileName, profileName, profiles, siteConfig, writeLog])
 
   const handleLoadProfile = useCallback((profile: SavedProfile) => {
     setSiteConfig(profile.config)
@@ -2606,7 +2647,8 @@ export function PlatformConsole({
     setProfileName(profile.name)
     setLocalError(null)
     setBackendStatus(null)
-  }, [])
+    writeLog('info', `Loaded site profile: ${profile.name}`)
+  }, [writeLog])
 
   const handleEditProfile = useCallback((profile: SavedProfile) => {
     setSiteConfig(profile.config)
@@ -2619,7 +2661,8 @@ export function PlatformConsole({
     setLocalError(null)
     setBackendStatus(null)
     setConfigDialogOpen(true)
-  }, [])
+    writeLog('info', `Editing site profile: ${profile.name}`)
+  }, [writeLog])
 
   const handleDeleteProfile = useCallback((name: string) => {
     const updated = profiles.filter((profile) => profile.name !== name)
@@ -2634,7 +2677,8 @@ export function PlatformConsole({
     if (editingProfileName === name) {
       setEditingProfileName(null)
     }
-  }, [editingProfileName, profileName, profiles, selectedProfileName])
+    writeLog('warning', `Deleted site profile: ${name}`)
+  }, [editingProfileName, profileName, profiles, selectedProfileName, writeLog])
 
   const handleExportSites = useCallback(() => {
     const payload: SitesExportPayload = {
@@ -2690,12 +2734,15 @@ export function PlatformConsole({
       }
       setLocalError(null)
       setBackendStatus('Sites imported')
+      writeLog('success', `Imported ${payload.profiles.length} site profile${payload.profiles.length === 1 ? '' : 's'}`)
     } catch (importError) {
-      setLocalError(`Sites import failed: ${formatUnknownError(importError)}`)
+      const message = `Sites import failed: ${formatUnknownError(importError)}`
+      setLocalError(message)
+      writeLog('error', message)
     } finally {
       event.target.value = ''
     }
-  }, [])
+  }, [writeLog])
 
   const handleAddConfiguration = useCallback(() => {
     setSelectedProfileName(null)
@@ -2704,7 +2751,8 @@ export function PlatformConsole({
     setLocalError(null)
     setBackendStatus(null)
     setConfigDialogOpen(true)
-  }, [])
+    writeLog('info', 'Creating new site profile')
+  }, [writeLog])
 
   const siteControls = useMemo(() => (
     <div className="flex h-full items-center">
@@ -2787,15 +2835,20 @@ export function PlatformConsole({
     backendJobPollingRef.current = jobRef.id
     setRunning(true)
     setLocalError(null)
+    writeLog('info', `Watching backend job ${jobRef.id}`)
 
     try {
       let job = initialJob ?? await loadBackendJobStatus(jobRef.backendUrl, jobRef.id)
+      publishBackendLogs(job)
       setRunProgress(job.progress)
+      writeLog('info', `${job.progress.statusText}: ${job.progress.detailText}`)
 
       while (!isBackendJobTerminal(job)) {
         await delay(1000)
         job = await loadBackendJobStatus(jobRef.backendUrl, jobRef.id)
+        publishBackendLogs(job)
         setRunProgress(job.progress)
+        writeLog('info', `${job.progress.statusText}: ${job.progress.detailText}`)
       }
 
       if (job.status === 'completed') {
@@ -2803,27 +2856,42 @@ export function PlatformConsole({
           onReport(job.summary)
         }
         setBackendStatus(`Backend job ${job.id} complete`)
+        writeLog('success', `Backend job ${job.id} complete`)
         try {
           setHistoryItems(await listBackendRunHistory(jobRef.backendUrl))
           setHistoryError(null)
         } catch (historyErrorValue) {
-          setHistoryError(historyErrorValue instanceof Error ? historyErrorValue.message : String(historyErrorValue))
+          const historyMessage = historyErrorValue instanceof Error ? historyErrorValue.message : String(historyErrorValue)
+          setHistoryError(historyMessage)
+          writeLog('warning', `Failed to refresh backend history: ${historyMessage}`)
         }
       } else {
-        setLocalError(job.error ?? `Backend job ${job.id} failed`)
+        const message = job.error ?? `Backend job ${job.id} failed`
+        setLocalError(message)
+        writeLog('error', message)
       }
 
       saveActiveBackendJob(null)
       setActiveBackendJob(null)
     } catch (jobError) {
-      setLocalError(jobError instanceof Error ? jobError.message : String(jobError))
+      const message = jobError instanceof Error ? jobError.message : String(jobError)
+      if (isMissingBackendJobError(jobError)) {
+        saveActiveBackendJob(null)
+        setActiveBackendJob(null)
+        setRunProgress(EMPTY_RUN_PROGRESS)
+        setLocalError(null)
+        setBackendStatus(`Previous backend job ${jobRef.id} is no longer available`)
+        return
+      }
+      setLocalError(message)
+      writeLog('error', message)
     } finally {
       if (backendJobPollingRef.current === jobRef.id) {
         backendJobPollingRef.current = null
       }
       setRunning(false)
     }
-  }, [onReport])
+  }, [onReport, publishBackendLogs, writeLog])
 
   useEffect(() => {
     if (!activeBackendJob) {
@@ -2836,6 +2904,7 @@ export function PlatformConsole({
     setRunning(true)
     setLocalError(null)
     setRunProgress(EMPTY_RUN_PROGRESS)
+    writeLog('info', `Starting run with ${activeTargets.length} enabled target${activeTargets.length === 1 ? '' : 's'}`)
     try {
       if (activeTargets.length === 0) {
         throw new Error('Enable at least one matrix target before running tests')
@@ -2864,6 +2933,7 @@ export function PlatformConsole({
           runSnapshot,
         ))
         const jobRef = { id: initialJob.id, backendUrl: siteConfig.backendUrl }
+        writeLog('success', `Created backend job ${initialJob.id}`)
         saveActiveBackendJob(jobRef)
         setActiveBackendJob(jobRef)
         await waitForBackendJob(jobRef, initialJob)
@@ -2910,19 +2980,24 @@ export function PlatformConsole({
           : Math.min(event.completed, progress.total)
         if (event.phase === 'case-start') {
           progress.currentCase = event.caseId ?? event.description
+          writeLog('info', `${getRunTargetLabel(target)} started ${progress.currentCase}`)
         }
         if (event.phase === 'case-complete') {
           progress.currentCase = event.caseId ?? event.description
           if (event.status === 'passed') {
             progress.passed += 1
+            writeLog('success', `${getRunTargetLabel(target)} passed ${progress.currentCase}`)
           } else if (event.status === 'failed') {
             progress.failed += 1
+            writeLog('error', `${getRunTargetLabel(target)} failed ${progress.currentCase}`)
           } else if (event.status === 'skipped') {
             progress.skipped += 1
+            writeLog('warning', `${getRunTargetLabel(target)} skipped ${progress.currentCase}`)
           }
         }
         if (event.phase === 'provider-complete') {
           progress.currentCase = `${event.provider} complete`
+          writeLog('success', `${event.provider} complete`)
         }
         publishProgress()
       }
@@ -2934,6 +3009,7 @@ export function PlatformConsole({
       for (const target of activeTargets) {
         const model = getRunTargetModel(target)
         const modelLabel = getRunTargetModelLabel(target)
+        writeLog('info', `Running ${getRunTargetLabel(target)} with ${modelLabel}`)
         try {
           if (target.kind === 'standard') {
             const config: PlatformRunConfig = {
@@ -2966,6 +3042,7 @@ export function PlatformConsole({
             })
             summaries.push(report)
             completeTarget(target)
+            writeLog('success', `${getRunTargetLabel(target)} complete`)
           } else {
             summaries.push(await runBackendCases(siteConfig.backendUrl, {
               kind: 'agent',
@@ -2986,9 +3063,11 @@ export function PlatformConsole({
               runSnapshot,
             }, { onProgress: progressHandlerFor(target) }))
             completeTarget(target)
+            writeLog('success', `${getRunTargetLabel(target)} complete`)
           }
         } catch (targetError) {
           failTarget(target, targetError)
+          writeLog('error', `${getRunTargetLabel(target)} failed: ${formatUnknownError(targetError)}`)
           summaries.push(failedRunSummary(getRunTargetLabel(target), modelLabel, targetError))
         }
       }
@@ -2998,66 +3077,89 @@ export function PlatformConsole({
       if (runUsesBackend) {
         try {
           await saveBackendRunReport(siteConfig.backendUrl, merged)
+          writeLog('success', 'Saved backend run history')
         } catch (historyErrorValue) {
           console.error('Failed to save backend run history', historyErrorValue)
+          writeLog('warning', `Failed to save backend run history: ${formatUnknownError(historyErrorValue)}`)
         }
       }
       onReport(merged)
+      writeLog('success', `Run complete: ${merged.totalPassed} passed / ${merged.totalFailed} failed / ${merged.totalSkipped} skipped`)
     } catch (runError) {
-      setLocalError(runError instanceof Error ? runError.message : String(runError))
+      const message = runError instanceof Error ? runError.message : String(runError)
+      setLocalError(message)
+      writeLog('error', message)
     } finally {
       setRunning(false)
     }
-  }, [activeTargets, onReport, runDraft, selectedProfileName, siteConfig, waitForBackendJob])
+  }, [activeTargets, onReport, runDraft, selectedProfileName, siteConfig, waitForBackendJob, writeLog])
 
   const handleCheckBackend = useCallback(async () => {
     setBackendStatus(null)
     setLocalError(null)
+    writeLog('info', `Checking backend ${siteConfig.backendUrl}`)
     try {
       const health = await checkBackendHealth(siteConfig.backendUrl)
-      setBackendStatus(health.ok ? `${health.service ?? 'backend'} online` : 'backend unavailable')
+      const message = health.ok ? `${health.service ?? 'backend'} online` : 'backend unavailable'
+      setBackendStatus(message)
+      writeLog(health.ok ? 'success' : 'warning', message)
     } catch (healthError) {
-      setLocalError(healthError instanceof Error ? healthError.message : String(healthError))
+      const message = healthError instanceof Error ? healthError.message : String(healthError)
+      setLocalError(message)
+      writeLog('error', message)
     }
-  }, [siteConfig.backendUrl])
+  }, [siteConfig.backendUrl, writeLog])
 
   const handleRefreshHistory = useCallback(async () => {
     setHistoryLoading(true)
     setHistoryError(null)
+    writeLog('info', 'Refreshing backend history')
     try {
-      setHistoryItems(await listBackendRunHistory(siteConfig.backendUrl))
+      const items = await listBackendRunHistory(siteConfig.backendUrl)
+      setHistoryItems(items)
+      writeLog('success', `Loaded ${items.length} backend history record${items.length === 1 ? '' : 's'}`)
     } catch (historyErrorValue) {
-      setHistoryError(historyErrorValue instanceof Error ? historyErrorValue.message : String(historyErrorValue))
+      const message = historyErrorValue instanceof Error ? historyErrorValue.message : String(historyErrorValue)
+      setHistoryError(message)
+      writeLog('error', `Failed to refresh backend history: ${message}`)
     } finally {
       setHistoryLoading(false)
     }
-  }, [siteConfig.backendUrl])
+  }, [siteConfig.backendUrl, writeLog])
 
   const handleLoadHistoryReport = useCallback(async (id: string) => {
     setHistoryLoading(true)
     setHistoryError(null)
+    writeLog('info', `Loading backend history report ${id}`)
     try {
       onReport(await loadBackendRunHistoryReport(siteConfig.backendUrl, id))
+      writeLog('success', `Loaded backend history report ${id}`)
     } catch (historyErrorValue) {
-      setHistoryError(historyErrorValue instanceof Error ? historyErrorValue.message : String(historyErrorValue))
+      const message = historyErrorValue instanceof Error ? historyErrorValue.message : String(historyErrorValue)
+      setHistoryError(message)
+      writeLog('error', `Failed to load backend history report ${id}: ${message}`)
     } finally {
       setHistoryLoading(false)
     }
-  }, [onReport, siteConfig.backendUrl])
+  }, [onReport, siteConfig.backendUrl, writeLog])
 
   const handleExportHistoryReport = useCallback(async (entry: BackendRunHistoryEntry) => {
     setHistoryLoading(true)
     setHistoryError(null)
+    writeLog('info', `Exporting backend history report ${formatHistoryTitle(entry)}`)
     try {
       const report = await loadBackendRunHistoryReport(siteConfig.backendUrl, entry.id)
       const baseName = entry.fileName.replace(/\.json$/i, '') || entry.id
       downloadJsonFile(`${sanitizeDownloadNamePart(baseName, 'history')}.json`, sanitizeRunSummaryForExport(report))
+      writeLog('success', `Exported backend history report ${formatHistoryTitle(entry)}`)
     } catch (historyErrorValue) {
-      setHistoryError(formatUnknownError(historyErrorValue))
+      const message = formatUnknownError(historyErrorValue)
+      setHistoryError(message)
+      writeLog('error', `Failed to export backend history report: ${message}`)
     } finally {
       setHistoryLoading(false)
     }
-  }, [siteConfig.backendUrl])
+  }, [siteConfig.backendUrl, writeLog])
 
   const handleDeleteHistoryReport = useCallback(async (entry: BackendRunHistoryEntry) => {
     if (!window.confirm(`Delete history record "${formatHistoryTitle(entry)}"?`)) {
@@ -3066,15 +3168,19 @@ export function PlatformConsole({
 
     setHistoryLoading(true)
     setHistoryError(null)
+    writeLog('warning', `Deleting backend history report ${formatHistoryTitle(entry)}`)
     try {
       await deleteBackendRunHistory(siteConfig.backendUrl, entry.id)
       setHistoryItems((current) => current.filter((item) => item.id !== entry.id))
+      writeLog('success', `Deleted backend history report ${formatHistoryTitle(entry)}`)
     } catch (historyErrorValue) {
-      setHistoryError(formatUnknownError(historyErrorValue))
+      const message = formatUnknownError(historyErrorValue)
+      setHistoryError(message)
+      writeLog('error', `Failed to delete backend history report: ${message}`)
     } finally {
       setHistoryLoading(false)
     }
-  }, [siteConfig.backendUrl])
+  }, [siteConfig.backendUrl, writeLog])
 
   useEffect(() => {
     if (requiresBackend) {
@@ -3085,10 +3191,11 @@ export function PlatformConsole({
   const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
+      writeLog('info', `Loading JSON report ${file.name}`)
       void onLoadFile(file)
       event.target.value = ''
     }
-  }, [onLoadFile])
+  }, [onLoadFile, writeLog])
 
   const reporterHome = useMemo(() => (
     <div className="space-y-5">
