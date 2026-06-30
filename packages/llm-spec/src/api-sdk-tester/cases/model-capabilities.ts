@@ -82,7 +82,9 @@ export function supportsExtendedThinking(model: string): boolean {
   return (
     normalized.includes('claude-4') ||
     normalized.includes('claude-opus-4') ||
-    normalized.includes('claude-sonnet-4')
+    normalized.includes('claude-sonnet-4') ||
+    normalized.includes('claude-fable') ||
+    normalized.includes('claude-mythos')
   );
 }
 
@@ -92,6 +94,7 @@ export function supportsAnthropicServerTools(model: string): boolean {
     normalized.includes('claude-opus-4') ||
     normalized.includes('claude-sonnet-4') ||
     normalized.includes('claude-haiku-4') ||
+    normalized.includes('claude-fable') ||
     normalized.includes('claude-mythos')
   );
 }
@@ -206,6 +209,8 @@ export function selectCaseForModel({
     if (
       (
         caseId === 'tool_result_tool_reference' ||
+        caseId === 'web_search_20260209_max_uses' ||
+        caseId === 'web_search_tool_result_error_query_too_long' ||
         caseId === 'web_fetch_20260309_use_cache' ||
         caseId === 'web_fetch_tool_result_error_url_not_in_prior_context'
       ) &&

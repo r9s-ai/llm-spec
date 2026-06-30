@@ -9,6 +9,7 @@ import type {
   R9SBillingAuditModelComparison,
   R9SBillingAuditRemoteRecord,
   R9SBillingAuditReport,
+  R9SBillingAuditToolCallCounts,
   R9SBillingAuditUsageSummary,
   R9SBillingAuditUsageTotals,
   TestLifecyclePlugin,
@@ -22,7 +23,8 @@ const USAGE_PATH = '/api/v1/portal/management/usage';
 const PAGE_SIZE = 100;
 const MAX_PAGES = 100;
 const MAX_BILLING_RESPONSE_BYTES = 32 * 1024 * 1024;
-const BILLING_FETCH_DELAY_MS = 5_000;
+const BILLING_FETCH_DELAY_MS = 10_000;
+const R9S_BILLING_ID_MODULUS = 9_223_372_036_854_775_808n;
 const USAGE_METRIC_KEYS: readonly UsageMetricKey[] = [
   'inputTokens',
   'outputTokens',
@@ -40,6 +42,7 @@ const USAGE_METRIC_LABELS: Record<UsageMetricKey, string> = {
   cachedTokens: 'cached tokens',
   totalTokens: 'total tokens',
 };
+const RESPONSE_ID_HEADER_NAME = 'x-request-id';
 
 interface ExtractedUsage {
   model?: string;
@@ -50,6 +53,24 @@ interface BillingFetchResult {
   endpoint: string;
   totalAvailable: number;
   records: R9SBillingAuditRemoteRecord[];
+}
+
+interface GroupableBillingRecord {
+  id?: string;
+  requestId?: string;
+  caseId?: string;
+  responseId?: string;
+  model: string;
+  usage: R9SBillingAuditUsageTotals;
+  toolCalls?: R9SBillingAuditToolCallCounts;
+}
+
+interface ResponseUsageGroup<T extends GroupableBillingRecord> {
+  responseId?: string;
+  models: Set<string>;
+  records: T[];
+  usage: R9SBillingAuditUsageTotals;
+  toolCalls: R9SBillingAuditToolCallCounts;
 }
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -73,6 +94,21 @@ function numberValue(value: unknown): number {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function optionalRecord(value: unknown): JsonRecord | undefined {
+  if (isRecord(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return isRecord(parsed) ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 function delay(ms: number): Promise<void> {
@@ -162,6 +198,56 @@ function addUsageTotals(target: R9SBillingAuditUsageTotals, value: R9SBillingAud
   }
 }
 
+function addToolCallCount(target: R9SBillingAuditToolCallCounts, toolName: string | undefined, count: number | undefined): void {
+  const normalizedToolName = toolName?.trim();
+  if (
+    !normalizedToolName ||
+    isIgnoredToolCallMetricKey(normalizedToolName) ||
+    count === undefined ||
+    !Number.isFinite(count) ||
+    count === 0
+  ) {
+    return;
+  }
+  target[normalizedToolName] = (target[normalizedToolName] ?? 0) + count;
+}
+
+function mergeToolCallCounts(
+  target: R9SBillingAuditToolCallCounts,
+  value: R9SBillingAuditToolCallCounts | undefined,
+): void {
+  for (const [toolName, count] of Object.entries(value ?? {})) {
+    addToolCallCount(target, toolName, count);
+  }
+}
+
+function cloneToolCallCounts(value: R9SBillingAuditToolCallCounts | undefined): R9SBillingAuditToolCallCounts | undefined {
+  const entries = Object.entries(value ?? {})
+    .filter(([toolName, count]) => !isIgnoredToolCallMetricKey(toolName) && Number.isFinite(count) && count !== 0)
+    .sort(([left], [right]) => left.localeCompare(right));
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function diffToolCallCounts(
+  remote: R9SBillingAuditToolCallCounts | undefined,
+  local: R9SBillingAuditToolCallCounts | undefined,
+): R9SBillingAuditToolCallCounts | undefined {
+  const normalizedRemote = cloneToolCallCounts(remote) ?? {};
+  const normalizedLocal = cloneToolCallCounts(local) ?? {};
+  const toolNames = new Set([
+    ...Object.keys(normalizedRemote),
+    ...Object.keys(normalizedLocal),
+  ]);
+  const diff: R9SBillingAuditToolCallCounts = {};
+  for (const toolName of toolNames) {
+    const value = (normalizedRemote[toolName] ?? 0) - (normalizedLocal[toolName] ?? 0);
+    if (value !== 0) {
+      diff[toolName] = value;
+    }
+  }
+  return cloneToolCallCounts(diff);
+}
+
 function diffNumber(remote: number | undefined, local: number | undefined): number | undefined {
   return remote !== undefined && local !== undefined ? remote - local : undefined;
 }
@@ -185,8 +271,48 @@ function usageDiffMatched(diff: R9SBillingAuditUsageTotals): boolean {
   return COMPARED_USAGE_METRIC_KEYS.every((key) => diff[key] === 0);
 }
 
+function toolCallDiffMatched(diff: R9SBillingAuditToolCallCounts | undefined): boolean {
+  return Object.keys(diff ?? {}).length === 0;
+}
+
 function formatUsageNumber(value: number | undefined): string {
   return value === undefined ? 'not fetched' : String(value);
+}
+
+function formatComparisonModels(
+  comparison: R9SBillingAuditModelComparison,
+  side: 'local' | 'remote',
+): string {
+  const models = side === 'local' ? comparison.localModels : comparison.remoteModels;
+  if (models && models.length > 0) {
+    return models.join(',');
+  }
+  return hasAnyUsageMetric(side === 'local' ? comparison.local : comparison.remote)
+    ? comparison.model
+    : 'not found';
+}
+
+function formatComparisonResponseId(comparison: R9SBillingAuditModelComparison): string {
+  return comparison.responseId ?? 'not found';
+}
+
+function formatToolCallCountNumber(value: number, signed: boolean): string {
+  if (!signed) {
+    return String(value);
+  }
+  return value > 0 ? `+${String(value)}` : String(value);
+}
+
+function formatToolCallCounts(
+  toolCalls: R9SBillingAuditToolCallCounts | undefined,
+  options: { signed?: boolean } = {},
+): string {
+  const entries = Object.entries(toolCalls ?? {})
+    .filter(([toolName, count]) => !isIgnoredToolCallMetricKey(toolName) && Number.isFinite(count) && count !== 0)
+    .sort(([left], [right]) => left.localeCompare(right));
+  return entries.length > 0
+    ? entries.map(([toolName, count]) => `${toolName}:${formatToolCallCountNumber(count, options.signed === true)}`).join(',')
+    : 'none';
 }
 
 function summarizeUsage<T extends { model: string; usage: R9SBillingAuditUsageTotals }>(
@@ -211,27 +337,90 @@ function summarizeUsage<T extends { model: string; usage: R9SBillingAuditUsageTo
   };
 }
 
-function compareUsageByModel(
-  local: R9SBillingAuditUsageSummary,
-  remote: R9SBillingAuditUsageSummary,
-): R9SBillingAuditModelComparison[] {
-  const models = new Set([
-    ...Object.keys(local.byModel),
-    ...Object.keys(remote.byModel),
-  ]);
+function sortedModelList(group: ResponseUsageGroup<GroupableBillingRecord> | undefined): string[] | undefined {
+  if (!group || group.models.size === 0) {
+    return undefined;
+  }
+  return Array.from(group.models).sort((left, right) => left.localeCompare(right));
+}
 
-  return Array.from(models)
-    .sort((left, right) => left.localeCompare(right))
-    .map((model) => {
-      const localTotals = cloneUsageTotals(local.byModel[model] ?? emptyUsageTotals());
-      const remoteTotals = cloneUsageTotals(remote.byModel[model] ?? emptyUsageTotals());
+function billingRecordFallbackKey(record: GroupableBillingRecord, index: number, side: 'local' | 'remote'): string {
+  return `${side}:${record.id ?? record.requestId ?? record.caseId ?? record.model}:${index}`;
+}
+
+function groupUsageByResponseId<T extends GroupableBillingRecord>(
+  records: readonly T[],
+  side: 'local' | 'remote',
+): Map<string, ResponseUsageGroup<T>> {
+  const groups = new Map<string, ResponseUsageGroup<T>>();
+
+  records.forEach((record, index) => {
+    const responseId = record.responseId?.trim();
+    const key = responseId ? `response:${responseId}` : billingRecordFallbackKey(record, index, side);
+    const group = groups.get(key) ?? {
+      responseId,
+      models: new Set<string>(),
+      records: [],
+      usage: zeroUsageTotals(),
+      toolCalls: {},
+    };
+    group.models.add(record.model);
+    group.records.push(record);
+    addUsageTotals(group.usage, record.usage);
+    mergeToolCallCounts(group.toolCalls, record.toolCalls);
+    groups.set(key, group);
+  });
+
+  return groups;
+}
+
+function comparisonModel(
+  localGroup: ResponseUsageGroup<R9SBillingAuditLocalRecord> | undefined,
+  remoteGroup: ResponseUsageGroup<R9SBillingAuditRemoteRecord> | undefined,
+  responseId: string | undefined,
+): string {
+  const localModels = sortedModelList(localGroup);
+  const remoteModels = sortedModelList(remoteGroup);
+  return localModels?.[0] ?? remoteModels?.[0] ?? responseId ?? 'unknown';
+}
+
+function compareUsageByResponseId(
+  localRecords: readonly R9SBillingAuditLocalRecord[],
+  remoteRecords: readonly R9SBillingAuditRemoteRecord[],
+): R9SBillingAuditModelComparison[] {
+  const localGroups = groupUsageByResponseId(localRecords, 'local');
+  const remoteGroups = groupUsageByResponseId(remoteRecords, 'remote');
+  const keys = new Set(localGroups.keys());
+
+  return Array.from(keys)
+    .sort((left, right) => {
+      const leftResponseId = localGroups.get(left)?.responseId ?? remoteGroups.get(left)?.responseId ?? left;
+      const rightResponseId = localGroups.get(right)?.responseId ?? remoteGroups.get(right)?.responseId ?? right;
+      return leftResponseId.localeCompare(rightResponseId);
+    })
+    .map((key) => {
+      const localGroup = localGroups.get(key);
+      const remoteGroup = remoteGroups.get(key);
+      const responseId = localGroup?.responseId ?? remoteGroup?.responseId;
+      const localTotals = cloneUsageTotals(localGroup?.usage ?? emptyUsageTotals());
+      const remoteTotals = cloneUsageTotals(remoteGroup?.usage ?? emptyUsageTotals());
       const diff = diffUsageTotals(remoteTotals, localTotals);
+      const localToolCalls = cloneToolCallCounts(localGroup?.toolCalls);
+      const remoteToolCalls = cloneToolCallCounts(remoteGroup?.toolCalls);
+      const toolCallDiff = diffToolCallCounts(remoteToolCalls, localToolCalls);
       return {
-        model,
-        matched: usageDiffMatched(diff),
+        responseId,
+        model: comparisonModel(localGroup, remoteGroup, responseId),
+        localModels: sortedModelList(localGroup),
+        remoteModels: sortedModelList(remoteGroup),
+        matched: usageDiffMatched(diff) && toolCallDiffMatched(toolCallDiff),
         local: localTotals,
         remote: remoteTotals,
         diff,
+        localToolCalls,
+        remoteToolCalls,
+        toolCallDiff,
+        toolCalls: remoteToolCalls,
       };
     });
 }
@@ -277,10 +466,285 @@ function parseJsonPayloads(body: string | undefined): JsonRecord[] {
   return payloads;
 }
 
+function recordArray(value: unknown): JsonRecord[] {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function explicitToolNameFromRecord(record: JsonRecord): string | undefined {
+  return optionalString(record.name)
+    ?? optionalString(record.tool_name)
+    ?? optionalString(record.toolName)
+    ?? optionalString(record.function_name)
+    ?? optionalString(record.functionName)
+    ?? optionalString(nestedOptionalRecord(record, 'function')?.name)
+    ?? optionalString(nestedOptionalRecord(record, 'tool')?.name)
+    ?? optionalString(record.tool);
+}
+
+function localToolNameFromRecord(
+  record: JsonRecord,
+  fallbackName?: string,
+  options: { allowTypeFallback?: boolean } = {},
+): string | undefined {
+  const explicitName = explicitToolNameFromRecord(record);
+  const fallbackType = options.allowTypeFallback ? optionalString(record.type) : undefined;
+  return toolNameFromKey(explicitName)
+    ?? toolNameFromKey(fallbackName)
+    ?? toolNameFromKey(fallbackType);
+}
+
+function localToolCallIdentity(
+  source: string,
+  record: JsonRecord,
+  fallbackKey: string,
+  toolName: string,
+): string {
+  const stableId = optionalString(record.id)
+    ?? optionalString(record.call_id)
+    ?? optionalString(record.callId);
+  if (stableId) {
+    return `stable:${stableId}:${toolName}`;
+  }
+  const index = optionalNumber(record.index);
+  return `${source}:${index !== undefined ? `index:${String(index)}` : fallbackKey}:${toolName}`;
+}
+
+function addLocalToolCall(
+  target: R9SBillingAuditToolCallCounts,
+  seen: Set<string>,
+  source: string,
+  record: JsonRecord,
+  fallbackKey: string,
+  fallbackName?: string,
+  options: { allowTypeFallback?: boolean } = {},
+): void {
+  const toolName = localToolNameFromRecord(record, fallbackName, options);
+  if (!toolName) {
+    return;
+  }
+  const identity = localToolCallIdentity(source, record, fallbackKey, toolName);
+  if (seen.has(identity)) {
+    return;
+  }
+  seen.add(identity);
+  addToolCallCount(target, toolName, 1);
+}
+
+function collectOpenAIChatToolCallsFromMessage(
+  message: JsonRecord,
+  target: R9SBillingAuditToolCallCounts,
+  seen: Set<string>,
+  source: string,
+): void {
+  recordArray(message.tool_calls).forEach((toolCall, index) => {
+    addLocalToolCall(target, seen, source, toolCall, `tool_calls:${String(index)}`, undefined, {
+      allowTypeFallback: false,
+    });
+  });
+
+  const functionCall = optionalRecord(message.function_call);
+  if (functionCall) {
+    addLocalToolCall(target, seen, source, functionCall, 'function_call', undefined, {
+      allowTypeFallback: false,
+    });
+  }
+}
+
+function collectOpenAIChatToolCalls(
+  payload: JsonRecord,
+  target: R9SBillingAuditToolCallCounts,
+  seen: Set<string>,
+): void {
+  recordArray(payload.choices).forEach((choice, choiceIndex) => {
+    const choiceKey = optionalNumber(choice.index) ?? choiceIndex;
+    const message = optionalRecord(choice.message);
+    if (message) {
+      collectOpenAIChatToolCallsFromMessage(message, target, seen, `chat:message:${String(choiceKey)}`);
+    }
+    const delta = optionalRecord(choice.delta);
+    if (delta) {
+      collectOpenAIChatToolCallsFromMessage(delta, target, seen, `chat:delta:${String(choiceKey)}`);
+    }
+  });
+}
+
+function isResponsesToolCallRecord(record: JsonRecord): boolean {
+  const type = optionalString(record.type);
+  if (!type) {
+    return false;
+  }
+  const normalized = toSnakeCase(type);
+  return normalized === 'tool_call'
+    || normalized === 'function_call'
+    || normalized.endsWith('_call');
+}
+
+function collectResponsesOutputItems(
+  value: unknown,
+  target: R9SBillingAuditToolCallCounts,
+  seen: Set<string>,
+  source: string,
+): void {
+  recordArray(value).forEach((item, index) => {
+    if (!isResponsesToolCallRecord(item)) {
+      return;
+    }
+    addLocalToolCall(target, seen, source, item, `output:${String(index)}`, undefined, {
+      allowTypeFallback: true,
+    });
+  });
+}
+
+function collectOpenAIResponsesToolCalls(
+  payload: JsonRecord,
+  target: R9SBillingAuditToolCallCounts,
+  seen: Set<string>,
+): void {
+  collectResponsesOutputItems(payload.output, target, seen, 'responses:output');
+  const response = optionalRecord(payload.response);
+  if (response) {
+    collectResponsesOutputItems(response.output, target, seen, 'responses:response.output');
+  }
+
+  const item = optionalRecord(payload.item);
+  if (item && isResponsesToolCallRecord(item)) {
+    addLocalToolCall(target, seen, 'responses:item', item, 'item', undefined, {
+      allowTypeFallback: true,
+    });
+  }
+
+  if (isResponsesToolCallRecord(payload)) {
+    addLocalToolCall(target, seen, 'responses:payload', payload, 'payload', undefined, {
+      allowTypeFallback: true,
+    });
+  }
+}
+
+function isAnthropicToolUseRecord(record: JsonRecord): boolean {
+  return toSnakeCase(optionalString(record.type) ?? '') === 'tool_use';
+}
+
+function collectAnthropicContentBlocks(
+  value: unknown,
+  target: R9SBillingAuditToolCallCounts,
+  seen: Set<string>,
+  source: string,
+): void {
+  recordArray(value).forEach((block, index) => {
+    if (!isAnthropicToolUseRecord(block)) {
+      return;
+    }
+    addLocalToolCall(target, seen, source, block, `content:${String(index)}`, undefined, {
+      allowTypeFallback: true,
+    });
+  });
+}
+
+function collectAnthropicMessagesToolCalls(
+  payload: JsonRecord,
+  target: R9SBillingAuditToolCallCounts,
+  seen: Set<string>,
+): void {
+  collectAnthropicContentBlocks(payload.content, target, seen, 'anthropic:content');
+  const message = optionalRecord(payload.message);
+  if (message) {
+    collectAnthropicContentBlocks(message.content, target, seen, 'anthropic:message.content');
+  }
+
+  const contentBlock = optionalRecord(payload.content_block);
+  if (contentBlock && isAnthropicToolUseRecord(contentBlock)) {
+    const index = optionalNumber(payload.index);
+    addLocalToolCall(
+      target,
+      seen,
+      'anthropic:content_block',
+      contentBlock,
+      index === undefined ? 'content_block' : `content_block:${String(index)}`,
+      undefined,
+      { allowTypeFallback: true },
+    );
+  }
+
+  if (isAnthropicToolUseRecord(payload)) {
+    addLocalToolCall(target, seen, 'anthropic:payload', payload, 'payload', undefined, {
+      allowTypeFallback: true,
+    });
+  }
+}
+
+function collectGeminiToolCalls(
+  payload: JsonRecord,
+  target: R9SBillingAuditToolCallCounts,
+  seen: Set<string>,
+): void {
+  recordArray(payload.candidates).forEach((candidate, candidateIndex) => {
+    const content = optionalRecord(candidate.content);
+    recordArray(content?.parts).forEach((part, partIndex) => {
+      const functionCall = optionalRecord(part.functionCall) ?? optionalRecord(part.function_call);
+      if (!functionCall) {
+        return;
+      }
+      addLocalToolCall(
+        target,
+        seen,
+        'gemini:function_call',
+        functionCall,
+        `${String(candidateIndex)}:${String(partIndex)}`,
+        undefined,
+        { allowTypeFallback: false },
+      );
+    });
+  });
+}
+
+function localToolCallsFromPayloads(payloads: readonly JsonRecord[]): R9SBillingAuditToolCallCounts | undefined {
+  const counts: R9SBillingAuditToolCallCounts = {};
+  const seen = new Set<string>();
+
+  for (const payload of payloads) {
+    collectOpenAIChatToolCalls(payload, counts, seen);
+    collectOpenAIResponsesToolCalls(payload, counts, seen);
+    collectAnthropicMessagesToolCalls(payload, counts, seen);
+    collectGeminiToolCalls(payload, counts, seen);
+  }
+
+  return cloneToolCallCounts(counts);
+}
+
 function modelFromPayload(payload: JsonRecord): string | undefined {
   const response = isRecord(payload.response) ? payload.response : undefined;
   const message = isRecord(payload.message) ? payload.message : undefined;
   return optionalString(payload.model) ?? optionalString(response?.model) ?? optionalString(message?.model);
+}
+
+function responseIdFromHeaders(headers: Record<string, string>): string | undefined {
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.trim().toLowerCase() === RESPONSE_ID_HEADER_NAME) {
+      return optionalString(value);
+    }
+  }
+  return undefined;
+}
+
+function responseIdFromUnknownHeaders(value: unknown): string | undefined {
+  const headers = optionalRecord(value);
+  if (!headers) {
+    return undefined;
+  }
+
+  for (const [name, headerValue] of Object.entries(headers)) {
+    if (name.trim().toLowerCase() === RESPONSE_ID_HEADER_NAME) {
+      return optionalString(headerValue);
+    }
+  }
+  return undefined;
+}
+
+function billingIdFromXRequestId(xRequestId: string | undefined): string | undefined {
+  if (!xRequestId || !/^\d+$/.test(xRequestId)) {
+    return undefined;
+  }
+  return (BigInt(xRequestId) % R9S_BILLING_ID_MODULUS).toString();
 }
 
 function usageFromOpenAIUsage(usage: JsonRecord): R9SBillingAuditUsageTotals | undefined {
@@ -411,10 +875,15 @@ function extractExchangeUsage(
     return undefined;
   }
 
-  const usage = extractUsage(parseJsonPayloads(exchange.response.body), context.provider);
+  const payloads = parseJsonPayloads(exchange.response.body);
+  const usage = extractUsage(payloads, context.provider);
   if (!usage) {
     return undefined;
   }
+
+  const xRequestId = responseIdFromHeaders(exchange.response.headers);
+  const billingId = billingIdFromXRequestId(xRequestId);
+  const toolCalls = localToolCallsFromPayloads(payloads);
 
   return {
     provider: context.provider,
@@ -424,7 +893,10 @@ function extractExchangeUsage(
     name: context.name,
     description: context.description,
     requestId: exchange.request.requestId ?? exchange.response.requestId,
+    xRequestId,
+    responseId: billingId,
     usage: usage.usage,
+    toolCalls,
   };
 }
 
@@ -464,8 +936,8 @@ function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function nestedRecord(value: JsonRecord, key: string): JsonRecord | undefined {
-  return isRecord(value[key]) ? value[key] : undefined;
+function nestedOptionalRecord(value: JsonRecord, key: string): JsonRecord | undefined {
+  return optionalRecord(value[key]);
 }
 
 function numberFromRecords(records: readonly JsonRecord[], keys: readonly string[]): number | undefined {
@@ -480,24 +952,361 @@ function numberFromRecords(records: readonly JsonRecord[], keys: readonly string
   return undefined;
 }
 
+function stringFromRecords(records: readonly JsonRecord[], keys: readonly string[]): string | undefined {
+  for (const record of records) {
+    for (const key of keys) {
+      const value = optionalString(record[key]);
+      if (value !== undefined) {
+        return value;
+      }
+    }
+  }
+  return undefined;
+}
+
+function toSnakeCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[\s.-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+}
+
+function isToolBillingMetricKey(key: string | undefined): boolean {
+  if (!key) {
+    return false;
+  }
+  const normalized = toSnakeCase(key);
+  return normalized === 'amount'
+    || normalized === 'price'
+    || normalized === 'cost'
+    || normalized.endsWith('_amount')
+    || normalized.endsWith('_price')
+    || normalized.endsWith('_cost');
+}
+
+function isIgnoredToolCallMetricKey(key: string | undefined): boolean {
+  if (!key) {
+    return false;
+  }
+  const normalized = toSnakeCase(key);
+  if (!normalized) {
+    return false;
+  }
+  if (isToolBillingMetricKey(normalized) || normalized.endsWith('_token') || normalized.endsWith('_tokens')) {
+    return true;
+  }
+  return [
+    'amount',
+    'price',
+    'cost',
+    'input',
+    'output',
+    'cached',
+    'cache',
+    'prompt',
+    'completion',
+    'discount',
+    'request_time',
+    'status_code',
+    'channel_id',
+    'token_id',
+    'user_id',
+    'custom_user_id',
+    'id',
+  ].includes(normalized);
+}
+
+function isToolContainerKey(key: string | undefined): boolean {
+  if (!key) {
+    return false;
+  }
+  const normalized = toSnakeCase(key);
+  return [
+    'usage',
+    'tool',
+    'tools',
+    'tool_call',
+    'tool_calls',
+    'tool_call_count',
+    'tool_call_counts',
+    'tool_usage',
+    'tools_usage',
+    'server_tool_usage',
+    'server_tool_call_usage',
+  ].includes(normalized);
+}
+
+function toolNameFromKey(key: string | undefined): string | undefined {
+  if (!key) {
+    return undefined;
+  }
+
+  let normalized = toSnakeCase(key);
+  if (!normalized || isIgnoredToolCallMetricKey(normalized)) {
+    return undefined;
+  }
+
+  const genericKeys = new Set([
+    'usage',
+    'tool',
+    'tools',
+    'tool_call',
+    'tool_calls',
+    'tool_call_count',
+    'tool_call_counts',
+    'tool_usage',
+    'tools_usage',
+    'server_tool_usage',
+    'server_tool_call_usage',
+    'count',
+    'counts',
+    'call_count',
+    'call_counts',
+    'calls',
+    'usage_count',
+    'usage_counts',
+    'total',
+    'total_count',
+    'total_counts',
+  ]);
+  if (genericKeys.has(normalized)) {
+    return undefined;
+  }
+
+  normalized = normalized
+    .replace(/^(tool|tools|server_tool|server_tools)_/, '')
+    .replace(/_(call|calls|usage|use|uses|count|counts|total|total_count)+$/g, '')
+    .replace(/_(tool|tools)$/, '');
+
+  if (!normalized || genericKeys.has(normalized)) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function genericToolCountNameFromKey(key: string | undefined): string | undefined {
+  if (!key) {
+    return undefined;
+  }
+  const normalized = toSnakeCase(key);
+  return [
+    'tool',
+    'tools',
+    'tool_call',
+    'tool_calls',
+    'tool_call_count',
+    'tool_call_counts',
+    'tool_usage',
+    'tools_usage',
+    'server_tool_usage',
+    'server_tool_call_usage',
+  ].includes(normalized)
+    ? normalized
+    : undefined;
+}
+
+function toolCallCountTotal(value: R9SBillingAuditToolCallCounts): number {
+  return Object.values(value).reduce((total, count) => (
+    Number.isFinite(count) ? total + count : total
+  ), 0);
+}
+
+function countFromRecord(record: JsonRecord): number | undefined {
+  return firstNumber(
+    record.count,
+    record.call_count,
+    record.callCount,
+    record.calls,
+    record.total_count,
+    record.totalCount,
+    record.usage_count,
+    record.usageCount,
+  );
+}
+
+function isCountKey(key: string): boolean {
+  return [
+    'count',
+    'counts',
+    'call_count',
+    'call_counts',
+    'calls',
+    'total_count',
+    'total_counts',
+    'usage_count',
+    'usage_counts',
+  ].includes(toSnakeCase(key));
+}
+
+function nameFromToolRecord(record: JsonRecord): string | undefined {
+  return optionalString(record.name)
+    ?? optionalString(record.tool_name)
+    ?? optionalString(record.toolName)
+    ?? optionalString(record.function_name)
+    ?? optionalString(record.functionName)
+    ?? optionalString(nestedOptionalRecord(record, 'function')?.name)
+    ?? optionalString(nestedOptionalRecord(record, 'tool')?.name)
+    ?? optionalString(record.tool)
+    ?? optionalString(record.type);
+}
+
+function hasToolIdentity(record: JsonRecord): boolean {
+  return nameFromToolRecord(record) !== undefined;
+}
+
+function hasToolBillingMetrics(record: JsonRecord): boolean {
+  return Object.keys(record).some(isToolBillingMetricKey);
+}
+
+function isToolIdentityKey(key: string): boolean {
+  return [
+    'name',
+    'type',
+    'tool',
+    'tool_name',
+    'function',
+    'function_name',
+  ].includes(toSnakeCase(key));
+}
+
+function collectToolCallCounts(
+  value: unknown,
+  target: R9SBillingAuditToolCallCounts,
+  contextKey?: string,
+  contextToolName?: string,
+): void {
+  const contextContainer = isToolContainerKey(contextKey);
+  const contextCallArray = toSnakeCase(contextKey ?? '') === 'tool_calls';
+  const inheritedToolName = contextToolName ?? toolNameFromKey(contextKey);
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (!isRecord(item)) {
+        continue;
+      }
+      const itemToolName = toolNameFromKey(nameFromToolRecord(item)) ?? inheritedToolName;
+      const itemCount = countFromRecord(item);
+      if (itemCount !== undefined) {
+        addToolCallCount(target, itemToolName, itemCount);
+        continue;
+      } else if (itemToolName && (contextContainer || hasToolIdentity(item))) {
+        addToolCallCount(target, itemToolName, 1);
+        continue;
+      } else if (contextCallArray) {
+        addToolCallCount(target, itemToolName ?? 'tool_calls', 1);
+        continue;
+      }
+      collectToolCallCounts(item, target, contextKey, itemToolName);
+    }
+    return;
+  }
+
+  const record = optionalRecord(value);
+  if (!record) {
+    return;
+  }
+
+  const countBeforeRecord = toolCallCountTotal(target);
+  const recordToolName = toolNameFromKey(nameFromToolRecord(record)) ?? inheritedToolName;
+  const recordCount = countFromRecord(record);
+  if (recordCount !== undefined && recordToolName) {
+    addToolCallCount(target, recordToolName, recordCount);
+  }
+  const namedRecordConsumed = recordCount !== undefined && Boolean(recordToolName);
+  if (!namedRecordConsumed && recordToolName && (contextContainer || contextToolName !== undefined || hasToolIdentity(record))) {
+    addToolCallCount(target, recordToolName, 1);
+  }
+  const recordCountConsumed = Boolean(recordToolName) && (recordCount !== undefined || contextContainer || contextToolName !== undefined || hasToolIdentity(record));
+
+  for (const [key, rawValue] of Object.entries(record)) {
+    if (isIgnoredToolCallMetricKey(key)) {
+      continue;
+    }
+    if (recordCountConsumed && isToolIdentityKey(key)) {
+      continue;
+    }
+    if (recordCountConsumed && isCountKey(key)) {
+      continue;
+    }
+    const keyToolName = toolNameFromKey(key);
+    const keyContainer = isToolContainerKey(key);
+    const childToolName = keyToolName ?? (keyContainer || contextContainer ? undefined : recordToolName);
+
+    const numericValue = optionalNumber(rawValue);
+    if (numericValue !== undefined) {
+      if (keyToolName) {
+        addToolCallCount(target, keyToolName, numericValue);
+      } else if (genericToolCountNameFromKey(key)) {
+        addToolCallCount(target, genericToolCountNameFromKey(key), numericValue);
+      } else if (isCountKey(key) && recordToolName) {
+        addToolCallCount(target, recordToolName, numericValue);
+      }
+      continue;
+    }
+
+    if (keyContainer || keyToolName || recordToolName) {
+      collectToolCallCounts(rawValue, target, key, childToolName);
+    }
+  }
+
+  if (!recordToolName && contextContainer && toolCallCountTotal(target) === countBeforeRecord) {
+    addToolCallCount(
+      target,
+      genericToolCountNameFromKey(contextKey),
+      recordCount ?? (hasToolBillingMetrics(record) ? 1 : undefined),
+    );
+  }
+}
+
+function toolCallCountsFromExt(ext: unknown): R9SBillingAuditToolCallCounts | undefined {
+  const counts: R9SBillingAuditToolCallCounts = {};
+  collectToolCallCounts(ext, counts);
+  return cloneToolCallCounts(counts);
+}
+
 function normalizeBillingRecord(value: unknown): R9SBillingAuditRemoteRecord | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
 
-  const usageRecord = nestedRecord(value, 'usage');
-  const billingRecord = nestedRecord(value, 'billing');
-  const tokenRecord = nestedRecord(value, 'tokens');
-  const records = [value, usageRecord, billingRecord, tokenRecord].filter(isRecord);
-  const model =
-    optionalString(value.model) ??
-    optionalString(value.model_name) ??
-    optionalString(value.modelName);
+  const usageRecord = nestedOptionalRecord(value, 'usage');
+  const billingRecord = nestedOptionalRecord(value, 'billing');
+  const tokenRecord = nestedOptionalRecord(value, 'tokens');
+  const extRecord = optionalRecord(value.ext);
+  const metadataRecord = nestedOptionalRecord(value, 'metadata') ?? (extRecord ? nestedOptionalRecord(extRecord, 'metadata') : undefined);
+  const responseRecord = nestedOptionalRecord(value, 'response') ?? (extRecord ? nestedOptionalRecord(extRecord, 'response') : undefined);
+  const requestRecord = nestedOptionalRecord(value, 'request') ?? (extRecord ? nestedOptionalRecord(extRecord, 'request') : undefined);
+  const responseHeadersRecord =
+    optionalRecord(value.response_headers) ??
+    optionalRecord(value.responseHeaders) ??
+    optionalRecord(responseRecord?.headers) ??
+    (extRecord
+      ? optionalRecord(extRecord.response_headers) ??
+        optionalRecord(extRecord.responseHeaders) ??
+        optionalRecord(nestedOptionalRecord(extRecord, 'response')?.headers)
+      : undefined);
+  const records = [
+    responseRecord,
+    value,
+    extRecord,
+    metadataRecord,
+    requestRecord,
+    usageRecord,
+    billingRecord,
+    tokenRecord,
+  ].filter(isRecord);
+  const model = stringFromRecords(records, ['model', 'model_name', 'modelName']);
   if (!model) {
     return undefined;
   }
+  const id = optionalString(value.id);
+  const xRequestId = responseIdFromUnknownHeaders(responseHeadersRecord);
+  const responseId = id ?? billingIdFromXRequestId(xRequestId);
 
-  const inputTokens = numberFromRecords(records, [
+  const nonCachedInputTokens = numberFromRecords(records, [
     'input_token',
     'input_tokens',
     'inputToken',
@@ -525,6 +1334,10 @@ function normalizeBillingRecord(value: unknown): R9SBillingAuditRemoteRecord | u
     'cache_read_input_tokens',
     'cachedContentTokenCount',
   ]);
+  const inputTokens =
+    nonCachedInputTokens === undefined && cachedTokens === undefined
+      ? undefined
+      : (nonCachedInputTokens ?? 0) + (cachedTokens ?? 0);
   const totalTokens =
     numberFromRecords(records, [
       'total_token',
@@ -532,7 +1345,7 @@ function normalizeBillingRecord(value: unknown): R9SBillingAuditRemoteRecord | u
       'totalToken',
       'totalTokens',
       'totalTokenCount',
-    ]) ?? sumIfAllKnown(inputTokens, outputTokens, cachedTokens);
+    ]) ?? sumIfAllKnown(inputTokens, outputTokens);
   const amount = numberFromRecords(records, ['amount', 'cost']);
   const totalAmount = numberFromRecords(records, ['total_amount', 'totalAmount', 'total_cost', 'totalCost']);
   const usage: R9SBillingAuditUsageTotals = {};
@@ -548,7 +1361,9 @@ function normalizeBillingRecord(value: unknown): R9SBillingAuditRemoteRecord | u
   }
 
   const record: R9SBillingAuditRemoteRecord = {
-    id: optionalString(value.id),
+    id,
+    xRequestId,
+    responseId,
     requestTime: optionalNumber(value.request_time),
     userId: optionalString(value.user_id),
     customUserId: optionalString(value.custom_user_id),
@@ -556,6 +1371,7 @@ function normalizeBillingRecord(value: unknown): R9SBillingAuditRemoteRecord | u
     model,
     modelType: optionalString(value.model_type),
     usage,
+    toolCalls: toolCallCountsFromExt(value.ext),
   };
   if (value.ext !== undefined) {
     record.ext = value.ext;
@@ -688,6 +1504,7 @@ function createLocalSummary(records: readonly R9SBillingAuditLocalRecord[]): R9S
     records: records.map((record) => ({
       ...record,
       usage: cloneUsageTotals(record.usage),
+      toolCalls: cloneToolCallCounts(record.toolCalls),
     })),
   };
 }
@@ -733,8 +1550,51 @@ function appendMissingUsageWarnings(
   warnings.push(`${label} usage was not fetched for ${missing.length} record(s): ${examples}${suffix}.`);
 }
 
+function appendMissingResponseIdWarnings(
+  warnings: string[],
+  label: string,
+  missingLabel: string,
+  records: ReadonlyArray<{
+    model: string;
+    id?: string;
+    requestId?: string;
+    caseId?: string;
+    responseId?: string;
+  }>,
+): void {
+  const missing = records.filter((record) => !record.responseId);
+  if (missing.length === 0) {
+    return;
+  }
+
+  const examples = missing
+    .slice(0, 3)
+    .map(recordIdentifier)
+    .join('; ');
+  const suffix = missing.length > 3 ? `; +${missing.length - 3} more` : '';
+  warnings.push(`${label} ${missingLabel} was not found for ${missing.length} record(s): ${examples}${suffix}.`);
+}
+
+function appendUnmatchedRemoteResponseWarnings(
+  warnings: string[],
+  localRecords: readonly R9SBillingAuditLocalRecord[],
+  remoteRecords: readonly R9SBillingAuditRemoteRecord[],
+): void {
+  const localResponseIds = new Set(localRecords.map((record) => record.responseId).filter((id): id is string => Boolean(id)));
+  const unmatched = remoteRecords.filter((record) => record.responseId && !localResponseIds.has(record.responseId));
+  if (unmatched.length === 0) {
+    return;
+  }
+
+  const examples = unmatched
+    .slice(0, 3)
+    .map((record) => record.responseId ?? recordIdentifier(record))
+    .join('; ');
+  const suffix = unmatched.length > 3 ? `; +${unmatched.length - 3} more` : '';
+  warnings.push(`R9S billing records were not matched to local billing id values for ${unmatched.length} record(s): ${examples}${suffix}.`);
+}
+
 function buildWarnings(
-  config: R9SBillingAuditConfig,
   localRecords: readonly R9SBillingAuditLocalRecord[],
   remoteRecords: readonly R9SBillingAuditRemoteRecord[],
 ): string[] {
@@ -745,14 +1605,11 @@ function buildWarnings(
   if (remoteRecords.length === 0) {
     warnings.push('No R9S billing records were returned for the queried window.');
   }
-  if (!config.tokenId && config.apiKey) {
-    warnings.push('R9S usage query did not include a token_id filter. Set billingAudit.tokenId or R9S_TOKEN_ID to scope by API key id.');
-  }
-  if (!config.tokenId && !config.apiKey) {
-    warnings.push('R9S usage query did not include a token_id filter because no API key was configured.');
-  }
   appendMissingUsageWarnings(warnings, 'Local trace', localRecords);
   appendMissingUsageWarnings(warnings, 'R9S billing', remoteRecords);
+  appendMissingResponseIdWarnings(warnings, 'Local trace', 'X-Request-Id-derived billing id', localRecords);
+  appendMissingResponseIdWarnings(warnings, 'R9S billing', 'billing id', remoteRecords);
+  appendUnmatchedRemoteResponseWarnings(warnings, localRecords, remoteRecords);
   return warnings;
 }
 
@@ -784,10 +1641,16 @@ function logAuditReport(report: R9SBillingAuditReport): void {
   for (const comparison of report.comparisons) {
     console.log(
       [
+        `billingId=${formatComparisonResponseId(comparison)}`,
         `model=${comparison.model}`,
+        `localModels=${formatComparisonModels(comparison, 'local')}`,
+        `r9sModels=${formatComparisonModels(comparison, 'remote')}`,
         `inputDiff=${formatUsageNumber(comparison.diff.inputTokens)}`,
         `outputDiff=${formatUsageNumber(comparison.diff.outputTokens)}`,
         `cachedDiff=${formatUsageNumber(comparison.diff.cachedTokens)}`,
+        `localToolCalls=${formatToolCallCounts(comparison.localToolCalls)}`,
+        `r9sToolCalls=${formatToolCallCounts(comparison.remoteToolCalls ?? comparison.toolCalls)}`,
+        `toolCallDiff=${formatToolCallCounts(comparison.toolCallDiff, { signed: true })}`,
       ].join(' '),
     );
   }
@@ -835,11 +1698,11 @@ export function createR9SBillingAuditPlugin(config: R9SBillingAuditConfig | unde
           totalAvailable: fetched.totalAvailable,
           records: fetched.records,
         };
-        comparisons = compareUsageByModel(local, remote);
-        warnings = buildWarnings(config, localRecords, fetched.records);
+        comparisons = compareUsageByResponseId(localRecords, fetched.records);
+        warnings = buildWarnings(localRecords, fetched.records);
       } catch (auditError: unknown) {
         error = formatError(auditError);
-        warnings = buildWarnings(config, localRecords, []);
+        warnings = buildWarnings(localRecords, []);
       }
 
       const report: R9SBillingAuditReport = {

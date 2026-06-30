@@ -8,6 +8,21 @@ import {
   setCurrentProvider,
 } from './environment';
 import { createSetupSkippedSummary, executeProviderCases } from './cases/runtime';
+import { normalizeVersionedApiBaseUrl, removeTrailingApiVersion } from './base-url';
+
+function normalizeAnthropicReportConfig(config: AnthropicProviderConfig): AnthropicProviderConfig {
+  return {
+    ...config,
+    apiBaseUrl: normalizeVersionedApiBaseUrl(config.apiBaseUrl),
+  };
+}
+
+function normalizeAnthropicExecutionConfig(config: AnthropicProviderConfig): AnthropicProviderConfig {
+  return {
+    ...config,
+    apiBaseUrl: removeTrailingApiVersion(normalizeVersionedApiBaseUrl(config.apiBaseUrl)),
+  };
+}
 
 export async function runAnthropicCases(
   config: AnthropicProviderConfig,
@@ -15,13 +30,15 @@ export async function runAnthropicCases(
   concurrency: number = 1,
   onProgress?: RunProgressHandler,
 ): Promise<ProviderSummary> {
+  const reportConfig = normalizeAnthropicReportConfig(config);
+  const executionConfig = normalizeAnthropicExecutionConfig(config);
   setCurrentProvider('anthropic');
 
-  if (!config.apiKey) {
+  if (!reportConfig.apiKey) {
     return createSetupSkippedSummary(
       'anthropic',
-      config.model,
-      config.apiBaseUrl,
+      reportConfig.model,
+      reportConfig.apiBaseUrl,
       ANTHROPIC_MESSAGE_PARAMS,
       'missing API key (set ANTHROPIC_API_KEY or API_KEY)',
       onProgress,
@@ -29,20 +46,20 @@ export async function runAnthropicCases(
   }
 
   const client = new Anthropic({
-    apiKey: config.apiKey,
-    baseURL: config.apiBaseUrl,
-    timeout: config.timeoutMs,
+    apiKey: executionConfig.apiKey,
+    baseURL: executionConfig.apiBaseUrl,
+    timeout: executionConfig.timeoutMs,
     maxRetries: 0,
     fetch: createLoggingFetch('anthropic'),
-    ...(config.customHeaders ? { defaultHeaders: config.customHeaders } : {}),
+    ...(executionConfig.customHeaders ? { defaultHeaders: executionConfig.customHeaders } : {}),
   });
 
-  const cases = buildAnthropicCases({ client, config });
+  const cases = buildAnthropicCases({ client, config: executionConfig });
 
   return executeProviderCases(
     'anthropic',
-    config.model,
-    config.apiBaseUrl,
+    reportConfig.model,
+    reportConfig.apiBaseUrl,
     ANTHROPIC_MESSAGE_PARAMS,
     cases,
     failFast,

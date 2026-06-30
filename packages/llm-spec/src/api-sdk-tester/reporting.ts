@@ -1,6 +1,9 @@
 import type {
   HttpTraceExchange,
   ProviderSummary,
+  R9SBillingAuditModelComparison,
+  R9SBillingAuditToolCallCounts,
+  R9SBillingAuditUsageTotals,
   RunSummary,
   TestCaseHttpTrace,
   TestCaseResult,
@@ -37,6 +40,83 @@ function formatDuration(ms: number): string {
 
 function formatNumber(value: number | undefined): string {
   return value === undefined ? 'not fetched' : Intl.NumberFormat('en-US').format(value);
+}
+
+function hasAnyUsageMetric(value: R9SBillingAuditUsageTotals): boolean {
+  return value.inputTokens !== undefined
+    || value.outputTokens !== undefined
+    || value.cachedTokens !== undefined
+    || value.totalTokens !== undefined;
+}
+
+function comparisonModels(
+  comparison: R9SBillingAuditModelComparison,
+  side: 'local' | 'remote',
+): string {
+  const models = side === 'local' ? comparison.localModels : comparison.remoteModels;
+  if (models && models.length > 0) {
+    return models.join(', ');
+  }
+  return hasAnyUsageMetric(side === 'local' ? comparison.local : comparison.remote)
+    ? comparison.model
+    : 'not found';
+}
+
+function comparisonResponseId(comparison: R9SBillingAuditModelComparison): string {
+  return comparison.responseId ?? 'not found';
+}
+
+function normalizeToolCallName(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[\s.-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+}
+
+function isIgnoredToolCallName(value: string): boolean {
+  const normalized = normalizeToolCallName(value);
+  return normalized === 'amount'
+    || normalized === 'price'
+    || normalized === 'cost'
+    || normalized.endsWith('_amount')
+    || normalized.endsWith('_price')
+    || normalized.endsWith('_cost');
+}
+
+function formatSignedNumber(value: number): string {
+  return value > 0 ? `+${formatNumber(value)}` : formatNumber(value);
+}
+
+function formatToolCallCounts(
+  toolCalls: R9SBillingAuditToolCallCounts | undefined,
+  options: { signed?: boolean } = {},
+): string {
+  const entries = Object.entries(toolCalls ?? {})
+    .filter(([toolName, count]) => !isIgnoredToolCallName(toolName) && Number.isFinite(count) && count !== 0)
+    .sort(([left], [right]) => left.localeCompare(right));
+  return entries.length > 0
+    ? entries.map(([toolName, count]) => `${toolName}: ${options.signed ? formatSignedNumber(count) : formatNumber(count)}`).join(', ')
+    : 'none';
+}
+
+function remoteToolCalls(comparison: R9SBillingAuditModelComparison): R9SBillingAuditToolCallCounts | undefined {
+  return comparison.remoteToolCalls ?? comparison.toolCalls;
+}
+
+function hasComparisonToolCalls(comparison: R9SBillingAuditModelComparison): boolean {
+  return formatToolCallCounts(comparison.localToolCalls) !== 'none'
+    || formatToolCallCounts(remoteToolCalls(comparison)) !== 'none'
+    || formatToolCallCounts(comparison.toolCallDiff, { signed: true }) !== 'none';
+}
+
+function renderToolCallComparisonHtml(comparison: R9SBillingAuditModelComparison): string {
+  const diff = formatToolCallCounts(comparison.toolCallDiff, { signed: true });
+  const diffClass = diff === 'none' ? 'muted' : 'diff-nonzero';
+  return `<div><strong>Local:</strong> ${escapeHtml(formatToolCallCounts(comparison.localToolCalls))}</div>
+    <div><strong>R9S:</strong> ${escapeHtml(formatToolCallCounts(remoteToolCalls(comparison)))}</div>
+    <div><strong>Diff:</strong> <span class="${diffClass}">${escapeHtml(diff)}</span></div>`;
 }
 
 function formatAmount(value: number | undefined): string {
@@ -281,15 +361,22 @@ function appendBillingAuditText(lines: string[], summary: RunSummary): void {
     lines.push(`warning: ${warning}`);
   }
   for (const comparison of audit.comparisons) {
-    lines.push(
-      [
-        `- model=${comparison.model}`,
+    const parts = [
+        `- billingId=${comparisonResponseId(comparison)}`,
+        `model=${comparison.model}`,
+        `localModels=${comparisonModels(comparison, 'local')}`,
+        `r9sModels=${comparisonModels(comparison, 'remote')}`,
         `matched=${String(comparison.matched)}`,
         `inputDiff=${formatNumber(comparison.diff.inputTokens)}`,
         `outputDiff=${formatNumber(comparison.diff.outputTokens)}`,
         `cachedDiff=${formatNumber(comparison.diff.cachedTokens)}`,
-      ].join(' '),
-    );
+    ];
+    if (hasComparisonToolCalls(comparison)) {
+      parts.push(`localToolCalls=${formatToolCallCounts(comparison.localToolCalls)}`);
+      parts.push(`r9sToolCalls=${formatToolCallCounts(remoteToolCalls(comparison))}`);
+      parts.push(`toolCallDiff=${formatToolCallCounts(comparison.toolCallDiff, { signed: true })}`);
+    }
+    lines.push(parts.join(' '));
   }
 }
 
@@ -299,16 +386,22 @@ function renderBillingAuditHtml(summary: RunSummary): string {
     return '';
   }
 
+  const showToolCallColumn = audit.comparisons.some(hasComparisonToolCalls);
   const comparisonRows = audit.comparisons.length > 0
     ? audit.comparisons.map((comparison) => `<tr>
-  <td><code>${escapeHtml(comparison.model)}</code></td>
+  <td>
+    <div><strong>R9S Billing ID:</strong> <code>${escapeHtml(comparisonResponseId(comparison))}</code></div>
+    <div><strong>Local:</strong> <code>${escapeHtml(comparisonModels(comparison, 'local'))}</code></div>
+    <div><strong>R9S:</strong> <code>${escapeHtml(comparisonModels(comparison, 'remote'))}</code></div>
+  </td>
   <td>${comparison.matched ? 'yes' : 'no'}</td>
   <td>${escapeHtml(formatNumber(comparison.local.inputTokens))}/${escapeHtml(formatNumber(comparison.remote.inputTokens))}</td>
   <td>${escapeHtml(formatNumber(comparison.local.outputTokens))}/${escapeHtml(formatNumber(comparison.remote.outputTokens))}</td>
   <td>${escapeHtml(formatNumber(comparison.local.cachedTokens))}/${escapeHtml(formatNumber(comparison.remote.cachedTokens))}</td>
   <td>${escapeHtml(formatNumber(comparison.diff.inputTokens))} / ${escapeHtml(formatNumber(comparison.diff.outputTokens))} / ${escapeHtml(formatNumber(comparison.diff.cachedTokens))}</td>
+  ${showToolCallColumn ? `<td>${renderToolCallComparisonHtml(comparison)}</td>` : ''}
 </tr>`).join('\n')
-    : `<tr><td colspan="6" class="muted">No model comparison rows.</td></tr>`;
+    : `<tr><td colspan="${showToolCallColumn ? '7' : '6'}" class="muted">No model comparison rows.</td></tr>`;
 
   const warnings = audit.warnings.length > 0
     ? `<ul class="audit-warnings">${audit.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>`
@@ -329,12 +422,13 @@ ${warnings}
 <table>
 <thead>
 <tr>
-  <th>Model</th>
+  <th>R9S Billing ID / Model Mapping</th>
   <th>Matched</th>
   <th>Input Local/R9S</th>
   <th>Output Local/R9S</th>
   <th>Cached Local/R9S</th>
   <th>Diff In/Out/Cached</th>
+  ${showToolCallColumn ? '<th>Tool Calls</th>' : ''}
 </tr>
 </thead>
 <tbody>
@@ -706,6 +800,10 @@ ${caseTable}
   .meta, .muted {
     color: #475569;
     font-size: 13px;
+  }
+  .diff-nonzero {
+    color: #be123c;
+    font-weight: 700;
   }
   table {
     width: 100%;

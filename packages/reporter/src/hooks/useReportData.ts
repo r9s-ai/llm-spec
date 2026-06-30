@@ -251,7 +251,7 @@ const SAMPLE_DATA: RunSummary = {
     },
     {
       provider: 'anthropic',
-      model: 'claude-3-5-haiku-latest',
+      model: 'claude-haiku-4-5',
       apiBaseUrl: 'https://api.anthropic.com/v1',
       startedAt: '2026-03-30T10:01:00.000Z',
       finishedAt: '2026-03-30T10:02:30.000Z',
@@ -277,7 +277,7 @@ const SAMPLE_DATA: RunSummary = {
                   method: 'POST',
                   headers: anthropicHeaders,
                   body: req(anthropicBaseUrl, {
-                    model: 'claude-3-5-haiku-latest',
+                    model: 'claude-haiku-4-5',
                     max_tokens: 1024,
                     messages: [{ role: 'user', content: 'Say hello!' }],
                   }),
@@ -293,7 +293,7 @@ const SAMPLE_DATA: RunSummary = {
                     id: 'msg_basic_001',
                     type: 'message',
                     role: 'assistant',
-                    model: 'claude-3-5-haiku-latest',
+                    model: 'claude-haiku-4-5',
                     content: [{ type: 'text', text: 'Hi there! How can I assist you?' }],
                     stop_reason: 'end_turn',
                     stop_sequence: null,
@@ -322,7 +322,7 @@ const SAMPLE_DATA: RunSummary = {
                   method: 'POST',
                   headers: anthropicHeaders,
                   body: req(anthropicBaseUrl, {
-                    model: 'claude-3-5-haiku-latest',
+                    model: 'claude-haiku-4-5',
                     max_tokens: 1024,
                     system: 'You are a helpful math tutor. Always show your work step by step.',
                     messages: [{ role: 'user', content: 'What is 15 * 23?' }],
@@ -339,7 +339,7 @@ const SAMPLE_DATA: RunSummary = {
                     id: 'msg_system_001',
                     type: 'message',
                     role: 'assistant',
-                    model: 'claude-3-5-haiku-latest',
+                    model: 'claude-haiku-4-5',
                     content: [{ type: 'text', text: "Let me calculate 15 × 23:\n\nStep 1: Break it down: 15 × 23 = 15 × 20 + 15 × 3\nStep 2: 15 × 20 = 300\nStep 3: 15 × 3 = 45\nStep 4: 300 + 45 = 345\n\nThe answer is **345**." }],
                     stop_reason: 'end_turn',
                     usage: { input_tokens: 28, output_tokens: 65 },
@@ -367,7 +367,7 @@ const SAMPLE_DATA: RunSummary = {
                   method: 'POST',
                   headers: anthropicHeaders,
                   body: req(anthropicBaseUrl, {
-                    model: 'claude-3-5-haiku-latest',
+                    model: 'claude-haiku-4-5',
                     max_tokens: 1024,
                     stream: true,
                     messages: [{ role: 'user', content: 'Tell me a short joke.' }],

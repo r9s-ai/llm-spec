@@ -24,6 +24,7 @@ export const OPENAI_RESPONSES_PARAMS = [
   'max_tool_calls',
   'metadata',
   'model',
+  'moderation',
   'parallel_tool_calls',
   'previous_response_id',
   'prompt',
@@ -236,6 +237,27 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
             input: 'Reply with exactly: ok',
             max_output_tokens: 32,
           });
+          return summarizeOpenAIResponses(response);
+        },
+      },
+      'responses_moderation': {
+        description: 'responses moderation model',
+        covers: ['moderation'],
+        precondition: () =>
+          compatibilityGateway
+            ? `moderation is not reliably supported on compatibility gateways: ${config.apiBaseUrl ?? '(unknown)'}`
+            : undefined,
+        run: async () => {
+          const response = await client.responses.create(
+            {
+              model: config.model,
+              input: 'Reply with exactly: ok',
+              moderation: {
+                model: 'omni-moderation-latest',
+              },
+              max_output_tokens: 32,
+            } as never,
+          );
           return summarizeOpenAIResponses(response);
         },
       },

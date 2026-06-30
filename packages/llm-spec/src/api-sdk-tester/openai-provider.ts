@@ -23,6 +23,14 @@ import {
   setCurrentProvider,
 } from './environment';
 import { createSetupSkippedSummary, executeProviderCases } from './cases/runtime';
+import { normalizeVersionedApiBaseUrl } from './base-url';
+
+function normalizeOpenAIProviderConfig(config: OpenAIProviderConfig): OpenAIProviderConfig {
+  return {
+    ...config,
+    apiBaseUrl: normalizeVersionedApiBaseUrl(config.apiBaseUrl),
+  };
+}
 
 function createOpenAIClient(config: OpenAIProviderConfig): OpenAI {
   return new OpenAI({
@@ -52,34 +60,35 @@ export async function runOpenAIChatCases(
   concurrency: number = 1,
   onProgress?: RunProgressHandler,
 ): Promise<ProviderSummary> {
-  const providerLabel = openAIProviderLabel(config, 'chatCompletions');
+  const runConfig = normalizeOpenAIProviderConfig(config);
+  const providerLabel = openAIProviderLabel(runConfig, 'chatCompletions');
 
-  if (!config.apiKey) {
+  if (!runConfig.apiKey) {
     return createSetupSkippedSummary(
       providerLabel,
-      config.model,
-      config.apiBaseUrl,
+      runConfig.model,
+      runConfig.apiBaseUrl,
       OPENAI_CHAT_PARAMS,
-      missingOpenAICompatibleKeyMessage(config),
+      missingOpenAICompatibleKeyMessage(runConfig),
       onProgress,
     );
   }
 
-  const client = createOpenAIClient(config);
+  const client = createOpenAIClient(runConfig);
   setCurrentProvider(providerLabel);
-  const protocolCases = buildOpenAIChatCases({ client, config });
+  const protocolCases = buildOpenAIChatCases({ client, config: runConfig });
   const chatCompletionsCases = [...protocolCases];
 
-  if (isGeminiOpenAICompatibilityTarget(config.model)) {
-    chatCompletionsCases.push(...buildGeminiOpenAIChatCases({ client, config }));
-  } else if (config.provider === 'xai' || !isOpenAICompatibilityGateway(config.apiBaseUrl)) {
-    chatCompletionsCases.push(...buildOfficialOpenAIChatCases({ client, config }));
+  if (isGeminiOpenAICompatibilityTarget(runConfig.model)) {
+    chatCompletionsCases.push(...buildGeminiOpenAIChatCases({ client, config: runConfig }));
+  } else if (runConfig.provider === 'xai' || !isOpenAICompatibilityGateway(runConfig.apiBaseUrl)) {
+    chatCompletionsCases.push(...buildOfficialOpenAIChatCases({ client, config: runConfig }));
   }
 
   return executeProviderCases(
     providerLabel,
-    config.model,
-    config.apiBaseUrl,
+    runConfig.model,
+    runConfig.apiBaseUrl,
     OPENAI_CHAT_PARAMS,
     chatCompletionsCases,
     failFast,
@@ -94,37 +103,38 @@ export async function runOpenAIResponsesCases(
   concurrency: number = 1,
   onProgress?: RunProgressHandler,
 ): Promise<ProviderSummary> {
-  const providerLabel = openAIProviderLabel(config, 'responses');
+  const runConfig = normalizeOpenAIProviderConfig(config);
+  const providerLabel = openAIProviderLabel(runConfig, 'responses');
 
-  if (!config.apiKey) {
+  if (!runConfig.apiKey) {
     return createSetupSkippedSummary(
       providerLabel,
-      config.model,
-      config.apiBaseUrl,
+      runConfig.model,
+      runConfig.apiBaseUrl,
       OPENAI_RESPONSES_PARAMS,
-      missingOpenAICompatibleKeyMessage(config),
+      missingOpenAICompatibleKeyMessage(runConfig),
       onProgress,
     );
   }
 
-  if (isGeminiOpenAICompatibilityTarget(config.model)) {
+  if (isGeminiOpenAICompatibilityTarget(runConfig.model)) {
     return createSetupSkippedSummary(
       providerLabel,
-      config.model,
-      config.apiBaseUrl,
+      runConfig.model,
+      runConfig.apiBaseUrl,
       OPENAI_RESPONSES_PARAMS,
       'Gemini OpenAI compatibility coverage in gemini.md only targets chat.completions',
       onProgress,
     );
   }
 
-  const client = createOpenAIClient(config);
+  const client = createOpenAIClient(runConfig);
   setCurrentProvider(providerLabel);
-  const responsesCases = buildOpenAIResponsesCases({ client, config });
+  const responsesCases = buildOpenAIResponsesCases({ client, config: runConfig });
   return executeProviderCases(
     providerLabel,
-    config.model,
-    config.apiBaseUrl,
+    runConfig.model,
+    runConfig.apiBaseUrl,
     OPENAI_RESPONSES_PARAMS,
     responsesCases,
     failFast,
@@ -139,37 +149,38 @@ export async function runOpenAIExtendedCases(
   concurrency: number = 1,
   onProgress?: RunProgressHandler,
 ): Promise<ProviderSummary> {
-  const providerLabel = openAIProviderLabel(config, 'extended');
+  const runConfig = normalizeOpenAIProviderConfig(config);
+  const providerLabel = openAIProviderLabel(runConfig, 'extended');
 
-  if (!config.apiKey) {
+  if (!runConfig.apiKey) {
     return createSetupSkippedSummary(
       providerLabel,
-      config.model,
-      config.apiBaseUrl,
+      runConfig.model,
+      runConfig.apiBaseUrl,
       OPENAI_EXTENDED_PARAMS,
-      missingOpenAICompatibleKeyMessage(config),
+      missingOpenAICompatibleKeyMessage(runConfig),
       onProgress,
     );
   }
 
-  if (isGeminiOpenAICompatibilityTarget(config.model)) {
+  if (isGeminiOpenAICompatibilityTarget(runConfig.model)) {
     return createSetupSkippedSummary(
       providerLabel,
-      config.model,
-      config.apiBaseUrl,
+      runConfig.model,
+      runConfig.apiBaseUrl,
       OPENAI_EXTENDED_PARAMS,
       'Gemini OpenAI compatibility coverage only targets chat.completions',
       onProgress,
     );
   }
 
-  const client = createOpenAIClient(config);
+  const client = createOpenAIClient(runConfig);
   setCurrentProvider(providerLabel);
-  const extendedCases = buildOpenAIExtendedCases({ client, config });
+  const extendedCases = buildOpenAIExtendedCases({ client, config: runConfig });
   return executeProviderCases(
     providerLabel,
-    config.model,
-    config.apiBaseUrl,
+    runConfig.model,
+    runConfig.apiBaseUrl,
     OPENAI_EXTENDED_PARAMS,
     extendedCases,
     failFast,

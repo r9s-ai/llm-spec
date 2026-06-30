@@ -703,6 +703,32 @@ export function buildOfficialOpenAIChatCases({ client, config }: OpenAICaseConte
           return summarizeOpenAIResponse(response);
         },
       },
+      'moderation': {
+        description: 'moderation model',
+        covers: ['moderation'],
+        precondition: () =>
+          compatibilityGateway
+            ? `moderation is not reliably supported on compatibility gateways: ${config.apiBaseUrl ?? '(unknown)'}`
+            : undefined,
+        run: async () => {
+          const response = await client.chat.completions.create(
+            {
+              model: config.model,
+              messages: [
+                {
+                  role: 'user',
+                  content: 'Reply with exactly: ok',
+                },
+              ],
+              moderation: {
+                model: 'omni-moderation-latest',
+              },
+              max_completion_tokens: outputLimit(32),
+            } as never,
+          );
+          return summarizeOpenAIResponse(response);
+        },
+      },
       'audio_modalities': {
         description: 'modalities + audio',
         covers: ['modalities', 'audio'],

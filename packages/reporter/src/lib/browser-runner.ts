@@ -259,13 +259,82 @@ function defaultBaseUrl(apiType: StandardApiType): string {
   return 'https://api.openai.com/v1'
 }
 
-function appendEndpoint(baseUrl: string | undefined, fallbackBaseUrl: string, endpointPath: string): string {
-  const cleanBase = (baseUrl?.trim() || fallbackBaseUrl).replace(/\/+$/, '')
+function trimTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, '')
+}
+
+function normalizePathSegments(pathname: string): string[] {
+  return pathname.split('/').filter(Boolean)
+}
+
+function normalizeVersionedApiBaseUrl(baseUrl: string, apiVersion = 'v1'): string {
+  const cleanBase = trimTrailingSlashes(baseUrl.trim())
+  if (!cleanBase) {
+    return cleanBase
+  }
+
+  try {
+    const url = new URL(cleanBase)
+    const segments = normalizePathSegments(url.pathname)
+    const lastSegment = segments[segments.length - 1]?.toLowerCase()
+    if (lastSegment !== apiVersion.toLowerCase()) {
+      segments.push(apiVersion)
+    }
+    url.pathname = segments.length > 0 ? `/${segments.join('/')}` : `/${apiVersion}`
+    return trimTrailingSlashes(url.toString())
+  } catch {
+    return cleanBase.toLowerCase().endsWith(`/${apiVersion.toLowerCase()}`)
+      ? cleanBase
+      : `${cleanBase}/${apiVersion}`
+  }
+}
+
+function usesVersionedApiBaseUrl(apiType: StandardApiType): boolean {
+  return apiType === 'openai.chat'
+    || apiType === 'openai.responses'
+    || apiType === 'anthropic.messages'
+}
+
+function normalizeBaseUrlForApiType(baseUrl: string, apiType: StandardApiType): string {
+  return usesVersionedApiBaseUrl(apiType)
+    ? normalizeVersionedApiBaseUrl(baseUrl)
+    : trimTrailingSlashes(baseUrl)
+}
+
+function endpointPathForApiType(apiType: StandardApiType): string | undefined {
+  if (apiType === 'openai.chat') {
+    return '/chat/completions'
+  }
+  if (apiType === 'openai.responses') {
+    return '/responses'
+  }
+  if (apiType === 'anthropic.messages') {
+    return '/messages'
+  }
+  return undefined
+}
+
+function normalizeConfiguredBaseUrlForApiType(baseUrl: string, apiType: StandardApiType): string {
+  const cleanBase = trimTrailingSlashes(baseUrl)
+  const endpointPath = endpointPathForApiType(apiType)
+  if (endpointPath && cleanBase.endsWith(endpointPath)) {
+    return cleanBase
+  }
+  return normalizeBaseUrlForApiType(cleanBase, apiType)
+}
+
+function appendEndpoint(
+  baseUrl: string | undefined,
+  fallbackBaseUrl: string,
+  endpointPath: string,
+  apiType: StandardApiType,
+): string {
+  const cleanBase = trimTrailingSlashes(baseUrl?.trim() || fallbackBaseUrl)
   const cleanPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`
   if (cleanBase.endsWith(cleanPath)) {
     return cleanBase
   }
-  return `${cleanBase}${cleanPath}`
+  return `${normalizeBaseUrlForApiType(cleanBase, apiType)}${cleanPath}`
 }
 
 function buildGeminiEndpoint(config: BrowserRunConfig, model = config.model): string {
@@ -646,7 +715,7 @@ function summarizeGemini(text: string): string {
 }
 
 function buildOpenAIChatCases(config: BrowserRunConfig): BrowserCase[] {
-  const url = appendEndpoint(config.apiBaseUrl, defaultBaseUrl(config.apiType), '/chat/completions')
+  const url = appendEndpoint(config.apiBaseUrl, defaultBaseUrl(config.apiType), '/chat/completions', config.apiType)
   const headers = buildOpenAIHeaders(config)
   const cases: BrowserCase[] = [
     {
@@ -732,7 +801,7 @@ function buildOpenAIChatCases(config: BrowserRunConfig): BrowserCase[] {
 }
 
 function buildOpenAIResponsesCases(config: BrowserRunConfig): BrowserCase[] {
-  const url = appendEndpoint(config.apiBaseUrl, defaultBaseUrl(config.apiType), '/responses')
+  const url = appendEndpoint(config.apiBaseUrl, defaultBaseUrl(config.apiType), '/responses', config.apiType)
   const headers = buildOpenAIHeaders(config)
   const cases: BrowserCase[] = [
     {
@@ -799,7 +868,7 @@ function buildOpenAIResponsesCases(config: BrowserRunConfig): BrowserCase[] {
 }
 
 function buildAnthropicCases(config: BrowserRunConfig): BrowserCase[] {
-  const url = appendEndpoint(config.apiBaseUrl, defaultBaseUrl(config.apiType), '/messages')
+  const url = appendEndpoint(config.apiBaseUrl, defaultBaseUrl(config.apiType), '/messages', config.apiType)
   const headers = buildAnthropicHeaders(config)
   return [
     {
@@ -976,9 +1045,13 @@ function buildTrace(testId: string, exchanges: HttpTraceExchange[]): TestCaseHtt
   }
 }
 
-async function runCase(provider: string, testCase: BrowserCase): Promise<TestCaseResult> {
+async function runCase(
+  provider: string,
+  testCase: BrowserCase,
+  options: { forceRunPreconditionedCase?: boolean } = {},
+): Promise<TestCaseResult> {
   const started = performance.now()
-  const skipReason = testCase.precondition?.()
+  const skipReason = options.forceRunPreconditionedCase ? undefined : testCase.precondition?.()
   if (skipReason) {
     return {
       id: testCase.id,
@@ -1058,6 +1131,7 @@ export async function runBrowserStandardCases(config: BrowserRunConfig): Promise
   const startedAt = new Date().toISOString()
   const provider = providerNameForApiType(config.apiType)
   const allParams = PARAMS[config.apiType]
+  const forceRunPreconditionedCases = Boolean(config.targetCases?.trim())
   const builtCases = buildCases(config).map((testCase) => ({
     ...testCase,
     testModel: testCase.testModel ?? config.model,
@@ -1068,7 +1142,7 @@ export async function runBrowserStandardCases(config: BrowserRunConfig): Promise
     : filteredCases.filter((testCase) =>
       isCaseRecommendedForModel(config.apiType, testCase.id, testCase.testModel ?? config.model),
     )
-  const apiBaseUrl = config.apiBaseUrl ?? defaultBaseUrl(config.apiType)
+  const apiBaseUrl = normalizeConfiguredBaseUrlForApiType(config.apiBaseUrl ?? defaultBaseUrl(config.apiType), config.apiType)
   const progressTotal = Math.max(cases.length, 1)
 
   config.onProgress?.({
@@ -1102,7 +1176,9 @@ export async function runBrowserStandardCases(config: BrowserRunConfig): Promise
         completed: completedCases,
         total: progressTotal,
       })
-      const result = await runCase(provider, testCase)
+      const result = await runCase(provider, testCase, {
+        forceRunPreconditionedCase: forceRunPreconditionedCases,
+      })
       caseResults.push(result)
       completedCases += 1
       config.onProgress?.({

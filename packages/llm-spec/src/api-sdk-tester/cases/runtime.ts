@@ -173,9 +173,13 @@ async function collectCaseHttpTrace(testId: string): Promise<TestCaseResult['htt
   return consumeCapturedHttpTrace(testId);
 }
 
-async function runCase(provider: string, testCase: TestCase): Promise<TestCaseResult> {
+async function runCase(
+  provider: string,
+  testCase: TestCase,
+  options: { forceRunPreconditionedCase?: boolean } = {},
+): Promise<TestCaseResult> {
   const started = Date.now();
-  const skipReason = testCase.precondition?.();
+  const skipReason = options.forceRunPreconditionedCase ? undefined : testCase.precondition?.();
   if (skipReason) {
     return {
       id: testCase.id,
@@ -400,7 +404,9 @@ export async function executeProviderCases(
         completed: completedCases,
         total: progressTotal,
       });
-      const result = await runCase(provider, testCase);
+      const result = await runCase(provider, testCase, {
+        forceRunPreconditionedCase: Boolean(filterEnv),
+      });
       caseResults.push(result);
       completedCases += 1;
       onProgress?.({
@@ -436,7 +442,9 @@ export async function executeProviderCases(
           completed: completedCases,
           total: progressTotal,
         });
-        const result = await runCase(provider, testCase);
+        const result = await runCase(provider, testCase, {
+          forceRunPreconditionedCase: Boolean(filterEnv),
+        });
         caseResults[index] = result;
         completedCases += 1;
         onProgress?.({

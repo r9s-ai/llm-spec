@@ -502,7 +502,7 @@ function normalizeAgentProvider(value: string | undefined): AgentProvider {
 
 function defaultModelForApiType(apiType: TargetApiType): string {
   if (apiType === 'anthropic.messages') {
-    return 'claude-3-5-haiku-latest';
+    return 'claude-haiku-4-5';
   }
   if (apiType === 'gemini.generateContent') {
     return 'gemini-2.5-flash';

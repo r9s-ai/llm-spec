@@ -501,7 +501,7 @@ export function resolveRuntimeConfig(): RuntimeConfig {
     provider: 'anthropic',
     apiKey: firstNonEmptyEnv('ANTHROPIC_API_KEY', 'API_KEY'),
     apiBaseUrl: firstNonEmptyEnv('ANTHROPIC_API_BASE_URL', 'ANTHROPIC_BASE_URL', 'API_BASE_URL'),
-    model: firstNonEmptyEnv('ANTHROPIC_MODEL') ?? 'claude-3-5-haiku-latest',
+    model: firstNonEmptyEnv('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5',
     opusModel: firstNonEmptyEnv('ANTHROPIC_OPUS_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL'),
     haikuModel: firstNonEmptyEnv('ANTHROPIC_HAIKU_MODEL'),
     fastModeModel: firstNonEmptyEnv('ANTHROPIC_FAST_MODE_MODEL', 'ANTHROPIC_OPUS_MODEL'),

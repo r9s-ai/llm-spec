@@ -115,6 +115,8 @@ export interface R9SBillingAuditUsageTotals {
   totalAmount?: number
 }
 
+export type R9SBillingAuditToolCallCounts = Record<string, number>
+
 export interface R9SBillingAuditLocalRecord {
   provider: string
   model: string
@@ -123,11 +125,16 @@ export interface R9SBillingAuditLocalRecord {
   name: string
   description: string
   requestId?: string
+  xRequestId?: string
+  responseId?: string
   usage: R9SBillingAuditUsageTotals
+  toolCalls?: R9SBillingAuditToolCallCounts
 }
 
 export interface R9SBillingAuditRemoteRecord {
   id?: string
+  xRequestId?: string
+  responseId?: string
   requestTime?: number
   userId?: string
   customUserId?: string
@@ -135,6 +142,7 @@ export interface R9SBillingAuditRemoteRecord {
   model: string
   modelType?: string
   usage: R9SBillingAuditUsageTotals
+  toolCalls?: R9SBillingAuditToolCallCounts
   ext?: unknown
 }
 
@@ -145,11 +153,18 @@ export interface R9SBillingAuditUsageSummary {
 }
 
 export interface R9SBillingAuditModelComparison {
+  responseId?: string
   model: string
+  localModels?: string[]
+  remoteModels?: string[]
   matched: boolean
   local: R9SBillingAuditUsageTotals
   remote: R9SBillingAuditUsageTotals
   diff: R9SBillingAuditUsageTotals
+  localToolCalls?: R9SBillingAuditToolCallCounts
+  remoteToolCalls?: R9SBillingAuditToolCallCounts
+  toolCallDiff?: R9SBillingAuditToolCallCounts
+  toolCalls?: R9SBillingAuditToolCallCounts
 }
 
 export interface R9SBillingAuditReport {

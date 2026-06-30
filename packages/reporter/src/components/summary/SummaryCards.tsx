@@ -1,6 +1,11 @@
 import { motion } from 'motion/react'
 import { ShieldCheck, Activity, AlertCircle, ReceiptText } from 'lucide-react'
-import type { RunSummary } from '@/types'
+import type {
+  R9SBillingAuditModelComparison,
+  R9SBillingAuditToolCallCounts,
+  R9SBillingAuditUsageTotals,
+  RunSummary,
+} from '@/types'
 
 interface SummaryCardsProps {
   report: RunSummary
@@ -8,6 +13,20 @@ interface SummaryCardsProps {
 
 function formatInteger(value: number | undefined): string {
   return value === undefined ? 'not fetched' : new Intl.NumberFormat('en-US').format(value)
+}
+
+function formatSignedInteger(value: number | undefined): string {
+  if (value === undefined) {
+    return 'not fetched'
+  }
+  const formatted = new Intl.NumberFormat('en-US').format(Math.abs(value))
+  if (value > 0) {
+    return `+${formatted}`
+  }
+  if (value < 0) {
+    return `-${formatted}`
+  }
+  return '0'
 }
 
 function formatAmount(value: number | undefined): string {
@@ -28,10 +47,184 @@ function auditStatusClass(status: string): string {
   return 'bg-amber-100 text-amber-700'
 }
 
+function hasAnyUsageMetric(value: R9SBillingAuditUsageTotals): boolean {
+  return value.inputTokens !== undefined ||
+    value.outputTokens !== undefined ||
+    value.cachedTokens !== undefined ||
+    value.totalTokens !== undefined
+}
+
+function comparisonModels(comparison: R9SBillingAuditModelComparison, side: 'local' | 'remote'): string[] {
+  const models = side === 'local' ? comparison.localModels : comparison.remoteModels
+  if (models && models.length > 0) {
+    return models
+  }
+  return hasAnyUsageMetric(side === 'local' ? comparison.local : comparison.remote) ? [comparison.model] : []
+}
+
+function normalizeToolCallName(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[\s.-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase()
+}
+
+function isIgnoredToolCallName(value: string): boolean {
+  const normalized = normalizeToolCallName(value)
+  return normalized === 'amount' ||
+    normalized === 'price' ||
+    normalized === 'cost' ||
+    normalized.endsWith('_amount') ||
+    normalized.endsWith('_price') ||
+    normalized.endsWith('_cost')
+}
+
+function toolCallEntries(toolCalls: R9SBillingAuditToolCallCounts | undefined): Array<[string, number]> {
+  return Object.entries(toolCalls ?? {})
+    .filter(([toolName, count]) => !isIgnoredToolCallName(toolName) && Number.isFinite(count) && count !== 0)
+    .sort(([left], [right]) => left.localeCompare(right))
+}
+
+function remoteToolCalls(comparison: R9SBillingAuditModelComparison): R9SBillingAuditToolCallCounts | undefined {
+  return comparison.remoteToolCalls ?? comparison.toolCalls
+}
+
+function hasToolCalls(comparison: R9SBillingAuditModelComparison): boolean {
+  return toolCallEntries(comparison.localToolCalls).length > 0 ||
+    toolCallEntries(remoteToolCalls(comparison)).length > 0 ||
+    toolCallEntries(comparison.toolCallDiff).length > 0
+}
+
+function ModelSide(props: { label: string; models: string[]; missingLabel: string }) {
+  return (
+    <div className="flex min-w-0 items-start gap-2">
+      <span className="mt-0.5 w-12 shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-center text-[11px] font-semibold uppercase text-slate-500">
+        {props.label}
+      </span>
+      {props.models.length > 0 ? (
+        <div className="min-w-0 space-y-1">
+          {props.models.map((model) => (
+            <code key={model} className="block break-all rounded bg-slate-50 px-1.5 py-0.5 font-mono text-xs text-slate-700">
+              {model}
+            </code>
+          ))}
+        </div>
+      ) : (
+        <span className="text-xs text-slate-400">{props.missingLabel}</span>
+      )}
+    </div>
+  )
+}
+
+function ModelMapping({ comparison }: { comparison: R9SBillingAuditModelComparison }) {
+  return (
+    <div className="min-w-[260px] space-y-2">
+      <div className="flex min-w-0 items-start gap-2">
+        <span className="mt-0.5 w-12 shrink-0 rounded bg-slate-900 px-1.5 py-0.5 text-center text-[11px] font-semibold uppercase text-white">
+          Bill
+        </span>
+        {comparison.responseId ? (
+          <code className="block min-w-0 break-all rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-800">
+            {comparison.responseId}
+          </code>
+        ) : (
+          <span className="text-xs text-slate-400">No billing id</span>
+        )}
+      </div>
+      <ModelSide label="Local" models={comparisonModels(comparison, 'local')} missingLabel="No local record" />
+      <ModelSide label="R9S" models={comparisonModels(comparison, 'remote')} missingLabel="No R9S record" />
+    </div>
+  )
+}
+
+function UsageTotalsBlock(props: { totals: R9SBillingAuditUsageTotals; signed?: boolean; highlightNonZero?: boolean }) {
+  const rows = [
+    { label: 'Input', value: props.totals.inputTokens },
+    { label: 'Output', value: props.totals.outputTokens },
+    { label: 'Cached', value: props.totals.cachedTokens },
+  ]
+
+  return (
+    <div className="min-w-[130px] space-y-1">
+      {rows.map((row) => {
+        const hasDiff = props.highlightNonZero && row.value !== undefined && row.value !== 0
+        return (
+          <div key={row.label} className="flex items-center justify-between gap-3">
+            <span className="text-xs text-slate-500">{row.label}</span>
+            <span className={`font-medium tabular-nums ${hasDiff ? 'text-rose-700' : 'text-slate-800'}`}>
+              {props.signed ? formatSignedInteger(row.value) : formatInteger(row.value)}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function DiffTotalsBlock({ comparison }: { comparison: R9SBillingAuditModelComparison }) {
+  return (
+    <UsageTotalsBlock totals={comparison.diff} signed highlightNonZero />
+  )
+}
+
+function ToolCallsBlock(props: {
+  toolCalls: R9SBillingAuditToolCallCounts | undefined
+  signed?: boolean
+  highlightNonZero?: boolean
+}) {
+  const entries = toolCallEntries(props.toolCalls)
+  const formatCount = props.signed ? formatSignedInteger : formatInteger
+  const emptyLabel = props.signed ? '0' : 'none'
+
+  if (entries.length === 0) {
+    return <span className="text-xs text-slate-400">{emptyLabel}</span>
+  }
+
+  return (
+    <div className="min-w-[140px] space-y-1">
+      {entries.map(([toolName, count]) => {
+        const hasDiff = props.highlightNonZero && count !== 0
+        return (
+          <div key={toolName} className="flex items-center justify-between gap-3">
+            <code className="break-all rounded bg-slate-50 px-1.5 py-0.5 font-mono text-xs text-slate-700">
+              {toolName}
+            </code>
+            <span className={`font-medium tabular-nums ${hasDiff ? 'text-rose-700' : 'text-slate-800'}`}>
+              {props.signed ? formatCount(count) : `x${formatCount(count)}`}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function ToolCallsComparisonBlock({ comparison }: { comparison: R9SBillingAuditModelComparison }) {
+  return (
+    <div className="min-w-[180px] space-y-2">
+      <div className="grid grid-cols-[42px_minmax(0,1fr)] gap-2">
+        <span className="text-xs font-semibold uppercase text-slate-500">Local</span>
+        <ToolCallsBlock toolCalls={comparison.localToolCalls} />
+      </div>
+      <div className="grid grid-cols-[42px_minmax(0,1fr)] gap-2">
+        <span className="text-xs font-semibold uppercase text-slate-500">R9S</span>
+        <ToolCallsBlock toolCalls={remoteToolCalls(comparison)} />
+      </div>
+      <div className="grid grid-cols-[42px_minmax(0,1fr)] gap-2">
+        <span className="text-xs font-semibold uppercase text-slate-500">Diff</span>
+        <ToolCallsBlock toolCalls={comparison.toolCallDiff} signed highlightNonZero />
+      </div>
+    </div>
+  )
+}
+
 export function SummaryCards({ report }: SummaryCardsProps) {
   const total = report.totalPassed + report.totalFailed + report.totalSkipped
   const score = total > 0 ? Math.round((report.totalPassed / total) * 100) : 0
   const audit = report.billingAudit
+  const showToolCalls = Boolean(audit?.comparisons.some(hasToolCalls))
 
   return (
     <>
@@ -161,25 +354,35 @@ export function SummaryCards({ report }: SummaryCardsProps) {
               <table className="min-w-full text-left text-sm">
                 <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
                   <tr>
-                    <th className="py-2 pr-4 font-semibold">Model</th>
-                    <th className="py-2 pr-4 font-semibold">Local In/Out/Cached</th>
-                    <th className="py-2 pr-4 font-semibold">R9S In/Out/Cached</th>
-                    <th className="py-2 pr-4 font-semibold">Diff In/Out/Cached</th>
+                    <th className="py-2 pr-4 font-semibold">R9S Billing ID / Model Mapping</th>
+                    <th className="py-2 pr-4 font-semibold">Local Usage</th>
+                    <th className="py-2 pr-4 font-semibold">R9S Usage</th>
+                    <th className="py-2 pr-4 font-semibold">Difference</th>
+                    {showToolCalls && (
+                      <th className="py-2 pr-4 font-semibold">Tool Calls</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {audit.comparisons.map((comparison) => (
-                    <tr key={comparison.model}>
-                      <td className="py-2 pr-4 font-mono text-xs text-slate-700">{comparison.model}</td>
-                      <td className="py-2 pr-4 text-slate-700">
-                        {formatInteger(comparison.local.inputTokens)} / {formatInteger(comparison.local.outputTokens)} / {formatInteger(comparison.local.cachedTokens)}
+                  {audit.comparisons.map((comparison, index) => (
+                    <tr key={`${comparison.responseId ?? comparison.model}-${index}`}>
+                      <td className="py-3 pr-5 align-top">
+                        <ModelMapping comparison={comparison} />
                       </td>
-                      <td className="py-2 pr-4 text-slate-700">
-                        {formatInteger(comparison.remote.inputTokens)} / {formatInteger(comparison.remote.outputTokens)} / {formatInteger(comparison.remote.cachedTokens)}
+                      <td className="py-3 pr-5 align-top">
+                        <UsageTotalsBlock totals={comparison.local} />
                       </td>
-                      <td className={comparison.matched ? 'py-2 pr-4 text-emerald-700' : 'py-2 pr-4 text-rose-700'}>
-                        {formatInteger(comparison.diff.inputTokens)} / {formatInteger(comparison.diff.outputTokens)} / {formatInteger(comparison.diff.cachedTokens)}
+                      <td className="py-3 pr-5 align-top">
+                        <UsageTotalsBlock totals={comparison.remote} />
                       </td>
+                      <td className="py-3 pr-4 align-top">
+                        <DiffTotalsBlock comparison={comparison} />
+                      </td>
+                      {showToolCalls && (
+                        <td className="py-3 pr-4 align-top">
+                          <ToolCallsComparisonBlock comparison={comparison} />
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

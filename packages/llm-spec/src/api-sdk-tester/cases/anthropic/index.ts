@@ -1,13 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type Anthropic from '@anthropic-ai/sdk';
+import * as ClaudeAgentSdk from '@anthropic-ai/claude-agent-sdk';
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
-import {
-  unstable_v2_createSession as rawUnstableV2CreateSession,
-  unstable_v2_prompt as rawUnstableV2Prompt,
-  unstable_v2_resumeSession as rawUnstableV2ResumeSession,
-  type SDKSessionOptions,
-} from '@anthropic-ai/claude-agent-sdk';
 
 import type {
   HttpTraceExchange,
@@ -75,12 +70,39 @@ export interface ClaudeAgentCaseContext {
   config: ClaudeAgentProviderConfig;
 }
 
-type ClaudeAgentSessionOptions = SDKSessionOptions & {
+type ClaudeAgentPromptResult = any;
+
+type ClaudeAgentSession = {
+  sessionId: string;
+  send: (message: string) => Promise<void>;
+  stream: () => AsyncGenerator<any>;
+  close: () => void;
+};
+
+type ClaudeAgentSessionOptions = {
+  model?: string;
+  env?: Record<string, string | undefined>;
+  allowedTools?: readonly string[];
+  disallowedTools?: readonly string[];
+  permissionMode?: string;
   betas?: readonly string[];
   thinking?: unknown;
   effort?: string;
   mcpServers?: unknown;
   outputFormat?: unknown;
+  [key: string]: unknown;
+};
+
+type LegacyClaudeAgentSdk = {
+  unstable_v2_prompt: (
+    message: string,
+    options: ClaudeAgentSessionOptions,
+  ) => Promise<ClaudeAgentPromptResult>;
+  unstable_v2_createSession: (options: ClaudeAgentSessionOptions) => ClaudeAgentSession;
+  unstable_v2_resumeSession: (
+    sessionId: string,
+    options: ClaudeAgentSessionOptions,
+  ) => ClaudeAgentSession;
 };
 
 const CLAUDE_AGENT_TEST_ID_ENV_KEY = 'LLM_SPEC_TEST_ID';
@@ -96,6 +118,33 @@ const claudeAgentTestContext = new AsyncLocalStorage<string>();
 let claudeAgentCaseExecutionCounter = 0;
 
 const claudeAgentCaseHttpTraceByCaseId = new Map<string, TestCaseHttpTrace>();
+const claudeAgentSdkExports = ClaudeAgentSdk as unknown as Record<string, unknown>;
+
+function getLegacyClaudeAgentSdk(): LegacyClaudeAgentSdk | undefined {
+  const unstableV2Prompt = claudeAgentSdkExports.unstable_v2_prompt;
+  const unstableV2CreateSession = claudeAgentSdkExports.unstable_v2_createSession;
+  const unstableV2ResumeSession = claudeAgentSdkExports.unstable_v2_resumeSession;
+
+  if (
+    typeof unstableV2Prompt !== 'function' ||
+    typeof unstableV2CreateSession !== 'function' ||
+    typeof unstableV2ResumeSession !== 'function'
+  ) {
+    return undefined;
+  }
+
+  return {
+    unstable_v2_prompt: unstableV2Prompt as LegacyClaudeAgentSdk['unstable_v2_prompt'],
+    unstable_v2_createSession: unstableV2CreateSession as LegacyClaudeAgentSdk['unstable_v2_createSession'],
+    unstable_v2_resumeSession: unstableV2ResumeSession as LegacyClaudeAgentSdk['unstable_v2_resumeSession'],
+  };
+}
+
+function getLegacyClaudeAgentSdkSkipReason(): string | undefined {
+  return getLegacyClaudeAgentSdk()
+    ? undefined
+    : '@anthropic-ai/claude-agent-sdk no longer exports unstable_v2_* APIs; skip legacy Claude Agent SDK cases';
+}
 
 function resolveAnthropicMessageModelScope(caseId: string, config: AnthropicProviderConfig): string {
   if (caseId.startsWith('different_model_opus')) {
@@ -964,6 +1013,107 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
           } | null;
         }).stop_details;
         return `stop_details=${stopDetails?.type ?? 'none'}, category=${stopDetails?.category ?? 'n/a'}, ${summarizeAnthropicResponse(response)}`;
+      },
+    },
+    'web_search_20260209_max_uses': {
+      description: 'web_search_20260209 allowed_domains/max_uses/user_location',
+      covers: [
+        'tools',
+        'tools.web_search_20260209.allowed_domains',
+        'tools.web_search_20260209.max_uses',
+        'tools.web_search_20260209.user_location',
+      ],
+      precondition: () =>
+        supportsAnthropicServerTools(config.model)
+          ? undefined
+          : `web_search_20260209 coverage requires Claude 4 or later server-tool-aware models; current=${config.model}`,
+      run: async () => {
+        const response = await createMessage({
+          model: config.model,
+          max_tokens: 256,
+          messages: [
+            {
+              role: 'user',
+              content: 'Use web_search to search anthropic.com for Claude and answer in one short sentence.',
+            },
+          ],
+          tools: [
+            {
+              name: 'web_search',
+              type: 'web_search_20260209',
+              allowed_domains: ['anthropic.com'],
+              max_uses: 1,
+              user_location: {
+                type: 'approximate',
+                city: 'San Francisco',
+                region: 'California',
+                country: 'US',
+                timezone: 'America/Los_Angeles',
+              },
+            },
+          ],
+        });
+        return summarizeAnthropicResponse(response);
+      },
+    },
+    'web_search_tool_result_error_query_too_long': {
+      description: 'web_search_tool_result error_code query_too_long',
+      covers: [
+        'messages',
+        'tools',
+        'messages.web_search_tool_result.error_code.query_too_long',
+      ],
+      precondition: () =>
+        supportsAnthropicServerTools(config.model)
+          ? undefined
+          : `web_search_tool_result coverage requires Claude 4 or later server-tool-aware models; current=${config.model}`,
+      run: async () => {
+        const response = await createMessage({
+          model: config.model,
+          max_tokens: 64,
+          tools: [
+            {
+              name: 'web_search',
+              type: 'web_search_20260209',
+              max_uses: 1,
+            },
+          ],
+          messages: [
+            {
+              role: 'user',
+              content: 'Please search the web and summarize the result.',
+            },
+            {
+              role: 'assistant',
+              content: [
+                {
+                  type: 'server_tool_use',
+                  id: 'srvtoolu_llm_spec_search_1',
+                  name: 'web_search',
+                  input: { query: 'llm spec web search query' },
+                },
+              ],
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'web_search_tool_result',
+                  tool_use_id: 'srvtoolu_llm_spec_search_1',
+                  content: {
+                    type: 'web_search_tool_result_error',
+                    error_code: 'query_too_long',
+                  },
+                },
+              ],
+            },
+            {
+              role: 'user',
+              content: 'Reply with exactly: ok',
+            },
+          ],
+        });
+        return summarizeAnthropicResponse(response);
       },
     },
     'web_fetch_20260309_use_cache': {
@@ -2104,15 +2254,27 @@ export function buildClaudeAgentCases({ config }: ClaudeAgentCaseContext): TestC
   }
 
   async function unstable_v2_prompt(message: string, options: ClaudeAgentSessionOptions) {
-    return rawUnstableV2Prompt(message, normalizeClaudeAgentSessionOptions(options));
+    const legacySdk = getLegacyClaudeAgentSdk();
+    if (!legacySdk) {
+      throw new Error(getLegacyClaudeAgentSdkSkipReason());
+    }
+    return legacySdk.unstable_v2_prompt(message, normalizeClaudeAgentSessionOptions(options));
   }
 
   function unstable_v2_createSession(options: ClaudeAgentSessionOptions) {
-    return rawUnstableV2CreateSession(normalizeClaudeAgentSessionOptions(options));
+    const legacySdk = getLegacyClaudeAgentSdk();
+    if (!legacySdk) {
+      throw new Error(getLegacyClaudeAgentSdkSkipReason());
+    }
+    return legacySdk.unstable_v2_createSession(normalizeClaudeAgentSessionOptions(options));
   }
 
   function unstable_v2_resumeSession(sessionId: string, options: ClaudeAgentSessionOptions) {
-    return rawUnstableV2ResumeSession(
+    const legacySdk = getLegacyClaudeAgentSdk();
+    if (!legacySdk) {
+      throw new Error(getLegacyClaudeAgentSdkSkipReason());
+    }
+    return legacySdk.unstable_v2_resumeSession(
       sessionId,
       normalizeClaudeAgentSessionOptions(options),
     );
@@ -4139,6 +4301,7 @@ Please proceed.`,
       protocol: 'claude-agent',
       modelScope,
       testModel: expectedModel,
+      precondition: () => testCase.precondition?.() ?? getLegacyClaudeAgentSdkSkipReason(),
       run: async () => {
         const testId = createClaudeAgentTestId(testCase.id);
         let detail: string | undefined;

@@ -36,6 +36,7 @@ export const OPENAI_CHAT_PARAMS = [
   'max_tokens',
   'metadata',
   'modalities',
+  'moderation',
   'n',
   'parallel_tool_calls',
   'prediction',
