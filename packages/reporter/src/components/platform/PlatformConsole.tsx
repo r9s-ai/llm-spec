@@ -4,8 +4,6 @@ import {
   Bot,
   Check,
   ChevronsUpDown,
-  Cloud,
-  Database,
   Download,
   Eye,
   EyeOff,
@@ -136,8 +134,28 @@ interface ActiveBackendJob {
 interface PlatformConsoleProps {
   onReport: (report: RunSummary) => void
   onLoadFile: (file: File) => void | Promise<void>
-  onLoadSample: () => void
+  onStatusChange?: (status: PlatformConsoleStatus) => void
+  onSiteControlsChange?: (controls: ReactNode | null) => void
+  onReporterHomeChange?: (content: ReactNode | null) => void
   loading: boolean
+  error: string | null
+}
+
+export interface PlatformConsoleStatus {
+  running: boolean
+  hasRunProgress: boolean
+  statusText: string
+  detailText: string
+  percent: number
+  passed: number
+  failed: number
+  skipped: number
+  enabledTargets: number
+  siteName: string
+  executionSummary: string
+  requiresBackend: boolean
+  backendStatus: string | null
+  activeBackendJobId: string | null
   error: string | null
 }
 
@@ -1557,15 +1575,25 @@ function ConfigurationSelector(props: {
   onEdit: (profile: SavedProfile) => void
   onDelete: (name: string) => void
   onExport: (profile: SavedProfile) => void
+  compact?: boolean
 }) {
-  const { profiles, selectedName, onSelect, onAdd, onEdit, onDelete, onExport } = props
+  const { profiles, selectedName, onSelect, onAdd, onEdit, onDelete, onExport, compact } = props
   const [open, setOpen] = useState(false)
   const selectedProfile = profiles.find((profile) => profile.name === selectedName)
 
   if (profiles.length === 0) {
     return (
-      <Button type="button" onClick={onAdd} className="w-full sm:w-auto">
-        <Plus className="w-4 h-4" />
+      <Button
+        type="button"
+        variant={compact ? 'ghost' : 'default'}
+        onClick={onAdd}
+        className={cn(
+          compact
+            ? 'h-8 rounded-none px-2 text-xs text-white hover:bg-white/10 hover:text-white'
+            : 'w-full sm:w-auto',
+        )}
+      >
+        <Plus className="h-4 w-4" />
         Add Site
       </Button>
     )
@@ -1579,7 +1607,12 @@ function ConfigurationSelector(props: {
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="h-10 w-full justify-between gap-3 sm:w-72"
+          className={cn(
+            'justify-between gap-3',
+            compact
+              ? 'h-8 w-40 rounded-none border-0 bg-transparent px-2 text-xs text-white hover:bg-white/10 hover:text-white focus-visible:ring-white/50 sm:w-48'
+              : 'h-10 w-full sm:w-72',
+          )}
         >
           <span className="min-w-0 truncate text-left">
             {selectedProfile?.name ?? 'Select site'}
@@ -1587,7 +1620,11 @@ function ConfigurationSelector(props: {
           <ChevronsUpDown className="h-4 w-4 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-0">
+      <PopoverContent
+        align={compact ? 'start' : 'end'}
+        side={compact ? 'top' : undefined}
+        className="w-[min(22rem,calc(100vw-2rem))] p-0"
+      >
         <div className="border-b border-slate-100 px-3 py-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sites</span>
         </div>
@@ -2323,7 +2360,15 @@ function delay(ms: number): Promise<void> {
   })
 }
 
-export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, error }: PlatformConsoleProps) {
+export function PlatformConsole({
+  onReport,
+  onLoadFile,
+  onStatusChange,
+  onSiteControlsChange,
+  onReporterHomeChange,
+  loading,
+  error,
+}: PlatformConsoleProps) {
   const [profiles, setProfiles] = useState<SavedProfile[]>(() => loadProfiles())
   const [profileName, setProfileName] = useState('')
   const [selectedProfileName, setSelectedProfileName] = useState<string | null>(() => {
@@ -2342,7 +2387,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
   const [historyItems, setHistoryItems] = useState<BackendRunHistoryEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const reporterFileInputRef = useRef<HTMLInputElement | null>(null)
   const siteImportInputRef = useRef<HTMLInputElement | null>(null)
   const initialProfileLoadedRef = useRef(false)
   const backendJobPollingRef = useRef<string | null>(null)
@@ -2414,21 +2459,47 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
   const displayError = localError ?? error
   const hasRunProgress = runProgress.total > 0
   const progressStatusText = running || hasRunProgress ? runProgress.statusText : 'Ready'
-  const progressDotColor = running
-    ? 'bg-blue-500'
-    : hasRunProgress && runProgress.failed > 0
-      ? 'bg-rose-500'
-      : 'bg-emerald-500'
-  const progressBarColor = running
-    ? 'bg-blue-500'
-    : hasRunProgress && runProgress.failed > 0
-      ? 'bg-rose-500'
-      : 'bg-emerald-500'
-  const progressTextColor = running
-    ? 'text-blue-700'
-    : hasRunProgress && runProgress.failed > 0
-      ? 'text-rose-700'
-      : 'text-slate-600'
+  const progressDetailText = hasRunProgress
+    ? `${runProgress.detailText} (${runProgress.percent}%)`
+    : 'Waiting for a run'
+  const statusSiteName = selectedProfile?.name ?? 'Unsaved site'
+
+  useEffect(() => {
+    onStatusChange?.({
+      running,
+      hasRunProgress,
+      statusText: progressStatusText,
+      detailText: progressDetailText,
+      percent: hasRunProgress ? runProgress.percent : 0,
+      passed: runProgress.passed,
+      failed: runProgress.failed,
+      skipped: runProgress.skipped,
+      enabledTargets: activeTargets.length,
+      siteName: statusSiteName,
+      executionSummary,
+      requiresBackend,
+      backendStatus,
+      activeBackendJobId: activeBackendJob?.id ?? null,
+      error: displayError,
+    })
+  }, [
+    activeBackendJob?.id,
+    activeTargets.length,
+    backendStatus,
+    displayError,
+    executionSummary,
+    hasRunProgress,
+    onStatusChange,
+    progressDetailText,
+    progressStatusText,
+    requiresBackend,
+    runProgress.failed,
+    runProgress.passed,
+    runProgress.percent,
+    runProgress.skipped,
+    running,
+    statusSiteName,
+  ])
 
   const updateSiteConfig = useCallback((patch: Partial<SiteProfileConfig>) => {
     setSiteConfig((current) => ({ ...current, ...patch }))
@@ -2491,13 +2562,6 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
     setRunDraft((current) => ({
       ...current,
       targets: [...current.targets, createStandardRunTarget()],
-    }))
-  }, [])
-
-  const handleAddAgentTarget = useCallback(() => {
-    setRunDraft((current) => ({
-      ...current,
-      targets: [...current.targets, createAgentRunTarget()],
     }))
   }, [])
 
@@ -2641,6 +2705,63 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
     setBackendStatus(null)
     setConfigDialogOpen(true)
   }, [])
+
+  const siteControls = useMemo(() => (
+    <div className="flex h-full items-center">
+      <input
+        ref={siteImportInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(event) => { void handleImportSitesFile(event) }}
+      />
+      <ConfigurationSelector
+        profiles={profiles}
+        selectedName={selectedProfile?.name ?? null}
+        onSelect={handleLoadProfile}
+        onAdd={handleAddConfiguration}
+        onEdit={handleEditProfile}
+        onDelete={handleDeleteProfile}
+        onExport={handleExportSite}
+        compact
+      />
+      <button
+        type="button"
+        className="flex h-8 w-8 items-center justify-center border-l border-white/20 text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+        onClick={() => { siteImportInputRef.current?.click() }}
+        aria-label="Import sites"
+        title="Import sites"
+      >
+        <Upload className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        className="flex h-8 w-8 items-center justify-center border-l border-white/20 text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+        onClick={handleExportSites}
+        aria-label="Export sites"
+        title="Export sites"
+      >
+        <Download className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  ), [
+    handleAddConfiguration,
+    handleDeleteProfile,
+    handleEditProfile,
+    handleExportSite,
+    handleExportSites,
+    handleImportSitesFile,
+    handleLoadProfile,
+    profiles,
+    selectedProfile?.name,
+  ])
+
+  useEffect(() => {
+    onSiteControlsChange?.(siteControls)
+    return () => {
+      onSiteControlsChange?.(null)
+    }
+  }, [onSiteControlsChange, siteControls])
 
   const handleOpenConfiguration = useCallback(() => {
     setProfileName(selectedProfileName ?? profileName)
@@ -2969,54 +3090,151 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
     }
   }, [onLoadFile])
 
+  const reporterHome = useMemo(() => (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-5">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">Reports</h1>
+          <p className="mt-1 text-sm text-slate-500">Load a saved JSON report or open a backend run.</p>
+        </div>
+        <input
+          ref={reporterFileInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        <Button
+          type="button"
+          onClick={() => { reporterFileInputRef.current?.click() }}
+          disabled={loading}
+        >
+          <FileJson className="h-4 w-4" />
+          Load JSON
+        </Button>
+      </div>
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="flex min-w-0 items-center text-base font-bold text-slate-800">
+            <History className="mr-2 h-4 w-4 shrink-0 text-slate-500" />
+            <span className="truncate">Backend History</span>
+          </h2>
+          <button
+            type="button"
+            className="rounded-md p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-50"
+            onClick={() => { void handleRefreshHistory() }}
+            disabled={historyLoading}
+            aria-label="Refresh backend history"
+          >
+            <RefreshCw className={cn('h-4 w-4', historyLoading && 'animate-spin')} />
+          </button>
+        </div>
+
+        {historyError && (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+            {historyError}
+          </div>
+        )}
+
+        <div className="space-y-2">
+          {historyItems.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-8 text-center text-sm text-slate-500">
+              {historyLoading ? 'Loading history...' : 'No saved backend runs'}
+            </div>
+          ) : (
+            historyItems.map((entry) => (
+              <div
+                key={entry.id}
+                className={cn(
+                  'group flex w-full items-start gap-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50',
+                  (historyLoading || running) && 'opacity-50',
+                )}
+              >
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-start gap-3 text-left disabled:pointer-events-none"
+                  onClick={() => { void handleLoadHistoryReport(entry.id) }}
+                  disabled={historyLoading || running}
+                >
+                  <FolderOpen className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 group-hover:text-slate-700" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-slate-800">
+                      {formatHistoryTitle(entry)}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-slate-500">
+                      {formatDateTime(entry.finishedAt)}
+                    </span>
+                    <span className="mt-1 block truncate text-xs text-slate-500">
+                      {formatHistorySubtitle(entry)}
+                    </span>
+                    <span className={cn(
+                      'mt-1 block truncate text-xs font-semibold',
+                      entry.totalFailed > 0 ? 'text-rose-600' : 'text-emerald-600',
+                    )}
+                    >
+                      {formatHistoryOutcome(entry)}
+                    </span>
+                  </span>
+                </button>
+                <div className="flex shrink-0 gap-1">
+                  <button
+                    type="button"
+                    className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:pointer-events-none"
+                    onClick={() => { void handleExportHistoryReport(entry) }}
+                    disabled={historyLoading || running}
+                    aria-label={`Export ${formatHistoryTitle(entry)}`}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 disabled:pointer-events-none"
+                    onClick={() => { void handleDeleteHistoryReport(entry) }}
+                    disabled={historyLoading || running}
+                    aria-label={`Delete ${formatHistoryTitle(entry)}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+    </div>
+  ), [
+    handleDeleteHistoryReport,
+    handleExportHistoryReport,
+    handleFileChange,
+    handleLoadHistoryReport,
+    handleRefreshHistory,
+    historyError,
+    historyItems,
+    historyLoading,
+    loading,
+    running,
+  ])
+
+  useEffect(() => {
+    onReporterHomeChange?.(reporterHome)
+    return () => {
+      onReporterHomeChange?.(null)
+    }
+  }, [onReporterHomeChange, reporterHome])
+
   return (
-    <div className="min-h-screen bg-[#F8F9FB] p-6 font-sans text-slate-900 md:p-10">
-      <div className="mx-auto max-w-[1280px]">
-        <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="h-full overflow-y-auto bg-[#F8F9FB] p-4 font-sans text-slate-900 md:p-6">
+      <div className="mx-auto max-w-[1440px]">
+        <header className="mb-5 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center text-xl font-bold tracking-wide text-slate-900">
             <Layers className="mr-3 h-6 w-6 text-slate-700" />
             LLM Spec Platform
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={siteImportInputRef}
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={(event) => { void handleImportSitesFile(event) }}
-            />
-            <ConfigurationSelector
-              profiles={profiles}
-              selectedName={selectedProfile?.name ?? null}
-              onSelect={handleLoadProfile}
-              onAdd={handleAddConfiguration}
-              onEdit={handleEditProfile}
-              onDelete={handleDeleteProfile}
-              onExport={handleExportSite}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => { siteImportInputRef.current?.click() }}
-              aria-label="Import sites"
-            >
-              <Upload className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={handleExportSites}
-              aria-label="Export sites"
-            >
-              <Download className="h-4 w-4" />
-            </Button>
-          </div>
         </header>
 
-        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
-          <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] lg:col-span-8">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
+          <div className="flex flex-col overflow-hidden rounded-lg border border-slate-200/80 bg-white shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] lg:col-span-12">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6 py-5">
               <h2 className="text-lg font-bold text-slate-800">Run Console</h2>
               <Button type="button" variant="outline" onClick={handleOpenConfiguration}>
@@ -3084,11 +3302,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                   <div className="flex flex-wrap gap-2">
                     <Button type="button" variant="outline" size="sm" onClick={handleAddStandardTarget}>
                       <Plus className="h-4 w-4" />
-                      API Target
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={handleAddAgentTarget}>
-                      <Bot className="h-4 w-4" />
-                      Agent Target
+                      Add Target
                     </Button>
                   </div>
                 </div>
@@ -3220,204 +3434,6 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                 {displayError}
               </div>
             )}
-          </div>
-
-          <div className="space-y-6 lg:col-span-4">
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)]">
-              <h3 className="mb-5 text-lg font-bold text-slate-800">Report</h3>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/json,.json"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-              <div className="space-y-3">
-                <button
-                  type="button"
-                  className="group flex w-full items-center rounded-xl border border-slate-200 px-4 py-3 text-left shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
-                  onClick={() => { fileInputRef.current?.click() }}
-                  disabled={loading}
-                >
-                  <FileJson className="mr-3 h-5 w-5 text-slate-500 group-hover:text-slate-700" />
-                  <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900">Load JSON</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="group flex w-full items-center rounded-xl border border-slate-200 px-4 py-3 text-left shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
-                  onClick={onLoadSample}
-                  disabled={loading}
-                >
-                  <Database className="mr-3 h-5 w-5 text-slate-500 group-hover:text-slate-700" />
-                  <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900">Demo Data</span>
-                </button>
-
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    className="flex items-center px-2 py-1 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
-                    onClick={() => {
-                      setSiteConfig(createDefaultSiteConfig())
-                      setRunDraft(createDefaultRunDraft())
-                      setSelectedProfileName(null)
-                      setProfileName('')
-                      setLocalError(null)
-                      setBackendStatus(null)
-                      setRunProgress(EMPTY_RUN_PROGRESS)
-                    }}
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    Reset Inputs
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)]">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h3 className="flex min-w-0 items-center text-base font-bold text-slate-800">
-                  <History className="mr-2 h-4 w-4 shrink-0 text-slate-500" />
-                  <span className="truncate">Backend History</span>
-                </h3>
-                <button
-                  type="button"
-                  className="rounded-md p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-50"
-                  onClick={() => { void handleRefreshHistory() }}
-                  disabled={historyLoading}
-                  aria-label="Refresh backend history"
-                >
-                  <RefreshCw className={cn('h-4 w-4', historyLoading && 'animate-spin')} />
-                </button>
-              </div>
-
-              {historyError && (
-                <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                  {historyError}
-                </div>
-              )}
-
-              <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
-                {historyItems.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-500">
-                    {historyLoading ? 'Loading history...' : 'No saved backend runs'}
-                  </div>
-                ) : (
-                  historyItems.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className={cn(
-                        'group flex w-full items-start gap-2 rounded-lg border border-slate-200 px-3 py-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50',
-                        (historyLoading || running) && 'opacity-50',
-                      )}
-                    >
-                      <button
-                        type="button"
-                        className="flex min-w-0 flex-1 items-start gap-3 text-left disabled:pointer-events-none"
-                        onClick={() => { void handleLoadHistoryReport(entry.id) }}
-                        disabled={historyLoading || running}
-                      >
-                        <FolderOpen className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 group-hover:text-slate-700" />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-slate-800">
-                            {formatHistoryTitle(entry)}
-                          </span>
-                          <span className="mt-0.5 block truncate text-xs text-slate-500">
-                            {formatDateTime(entry.finishedAt)}
-                          </span>
-                          <span className="mt-1 block truncate text-xs text-slate-500">
-                            {formatHistorySubtitle(entry)}
-                          </span>
-                          <span className={cn(
-                            'mt-1 block truncate text-xs font-semibold',
-                            entry.totalFailed > 0 ? 'text-rose-600' : 'text-emerald-600',
-                          )}
-                          >
-                            {formatHistoryOutcome(entry)}
-                          </span>
-                        </span>
-                      </button>
-                      <div className="flex shrink-0 gap-1">
-                        <button
-                          type="button"
-                          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-900 disabled:pointer-events-none"
-                          onClick={() => { void handleExportHistoryReport(entry) }}
-                          disabled={historyLoading || running}
-                          aria-label={`Export ${formatHistoryTitle(entry)}`}
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 disabled:pointer-events-none"
-                          onClick={() => { void handleDeleteHistoryReport(entry) }}
-                          disabled={historyLoading || running}
-                          aria-label={`Delete ${formatHistoryTitle(entry)}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)]">
-              <h3 className="mb-4 text-base font-bold text-slate-800">Progress</h3>
-
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <span className="relative flex h-3 w-3">
-                    {running && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />}
-                    <span className={cn('relative inline-flex h-3 w-3 rounded-full', progressDotColor)} />
-                  </span>
-                  <span className={cn('text-sm font-semibold', progressTextColor)}>
-                    {progressStatusText}
-                  </span>
-                </div>
-
-                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className={cn('h-full rounded-full transition-[width] duration-300 ease-out', progressBarColor)}
-                    style={{ width: `${hasRunProgress ? runProgress.percent : 0}%` }}
-                  />
-                </div>
-
-                <div className="space-y-1.5 pt-1 text-xs text-slate-500">
-                  <div className="flex items-center gap-2">
-                    <Check className="h-3 w-3 text-slate-400" />
-                    {hasRunProgress
-                      ? `${runProgress.detailText} (${runProgress.percent}%)`
-                      : 'Waiting for a run'}
-                  </div>
-                  {hasRunProgress && (
-                    <div className="flex items-center gap-2">
-                      <Check className="h-3 w-3 text-emerald-500" />
-                      {runProgress.passed} passed, {runProgress.failed} failed, {runProgress.skipped} skipped
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <Cloud className="h-3 w-3 text-slate-400" />
-                    {activeTargets.length} enabled target{activeTargets.length === 1 ? '' : 's'}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Server className="h-3 w-3 text-slate-400" />
-                    {selectedProfile?.name ?? 'Unsaved site'}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {requiresBackend ? <Server className="h-3 w-3 text-slate-400" /> : <Wifi className="h-3 w-3 text-slate-400" />}
-                    {executionSummary}
-                  </div>
-                  {activeBackendJob && (
-                    <div className="flex items-center gap-2">
-                      <Server className="h-3 w-3 text-slate-400" />
-                      Job {activeBackendJob.id}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 

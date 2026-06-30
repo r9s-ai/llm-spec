@@ -1,4 +1,4 @@
-import { Clock, Home, Server } from 'lucide-react'
+import { Clock, RotateCcw, Server } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { RunSummary } from '@/types'
 import { formatDateTime } from '@/lib/format'
@@ -10,7 +10,7 @@ interface HeaderProps {
 
 export function Header({ report, onBackHome }: HeaderProps) {
   return (
-    <header className="flex flex-col gap-6 border-b border-slate-200 pb-6 md:flex-row md:items-center md:justify-between">
+    <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-center md:justify-between">
       <div className="space-y-2">
         <div className="flex items-center gap-3 text-slate-500 mb-2">
           <Server className="w-5 h-5" />
@@ -18,7 +18,7 @@ export function Header({ report, onBackHome }: HeaderProps) {
             {report.providers.length} provider{report.providers.length > 1 ? 's' : ''} tested
           </span>
         </div>
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
           LLM Spec Test Report
         </h1>
         <p className="text-slate-500 max-w-2xl">
@@ -36,9 +36,9 @@ export function Header({ report, onBackHome }: HeaderProps) {
             </span>
           </div>
         </div>
-        <Button variant="outline" onClick={onBackHome} aria-label="Back to home">
-          <Home className="w-4 h-4 mr-2" />
-          Back Home
+        <Button variant="outline" onClick={onBackHome} aria-label="Clear report">
+          <RotateCcw className="mr-2 h-4 w-4" />
+          Clear Report
         </Button>
       </div>
     </header>
