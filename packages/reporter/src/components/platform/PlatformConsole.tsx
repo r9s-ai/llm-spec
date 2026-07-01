@@ -780,6 +780,7 @@ const ACTIVE_BACKEND_JOB_STORAGE_KEY = 'llm-spec-active-backend-job'
 const LEGACY_PROFILE_STORAGE_KEY = 'llm-spec-profiles'
 const LEGACY_LAST_PROFILE_STORAGE_KEY = 'llm-spec-last-profile'
 const DEFAULT_R9S_MANAGER_BASE_URL = 'https://portal-api.r9s.ai'
+const URL_SITE_QUERY_KEYS = ['baseUrl', 'apiBaseUrl', 'apiKey', 'siteName', 'name'] as const
 
 interface SavedProfile {
   name: string
@@ -807,6 +808,10 @@ interface NormalizedSitesImport {
   runDraft?: RunDraft
 }
 
+interface UrlSiteImport {
+  profile: SavedProfile
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -819,8 +824,8 @@ function booleanValue(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
 }
 
-function normalizeStandardExecution(value: unknown): StandardExecutionMode {
-  return value === 'backend' ? 'backend' : 'browser'
+function normalizeStandardExecution(value: unknown, fallback: StandardExecutionMode = 'backend'): StandardExecutionMode {
+  return value === 'browser' || value === 'backend' ? value : fallback
 }
 
 function isStandardApiType(value: unknown): value is StandardApiType {
@@ -842,7 +847,7 @@ function createDefaultSiteConfig(): SiteProfileConfig {
     customHeaders: '{}',
     apiVersion: '',
     backendUrl: DEFAULT_BACKEND_URL,
-    standardExecution: 'browser',
+    standardExecution: 'backend',
     workingDirectory: '',
     skipGitRepoCheck: true,
     testImagePath: '',
@@ -853,10 +858,75 @@ function createDefaultSiteConfig(): SiteProfileConfig {
   }
 }
 
+function firstQueryValue(params: URLSearchParams, keys: readonly string[]): string {
+  for (const key of keys) {
+    const value = params.get(key)
+    if (value?.trim()) {
+      return value.trim()
+    }
+  }
+  return ''
+}
+
+function inferUrlSiteName(apiBaseUrl: string): string {
+  const trimmed = apiBaseUrl.trim()
+  if (!trimmed) {
+    return 'URL Site'
+  }
+
+  try {
+    const url = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`)
+    return `URL Site - ${url.hostname}`
+  } catch {
+    return 'URL Site'
+  }
+}
+
+function readUrlSiteImport(): UrlSiteImport | null {
+  const params = new URLSearchParams(window.location.search)
+  const apiBaseUrl = firstQueryValue(params, ['baseUrl', 'apiBaseUrl'])
+  const apiKey = firstQueryValue(params, ['apiKey'])
+  if (!apiBaseUrl && !apiKey) {
+    return null
+  }
+
+  const name = firstQueryValue(params, ['siteName', 'name']) || inferUrlSiteName(apiBaseUrl)
+  return {
+    profile: {
+      name,
+      savedAt: new Date().toISOString(),
+      config: {
+        ...createDefaultSiteConfig(),
+        apiBaseUrl,
+        apiKey,
+        standardExecution: 'backend',
+      },
+    },
+  }
+}
+
+function upsertProfile(profiles: SavedProfile[], profile: SavedProfile): SavedProfile[] {
+  return [...profiles.filter((item) => item.name !== profile.name), profile]
+}
+
+function removeUrlSiteImportQueryParams(): void {
+  const url = new URL(window.location.href)
+  let changed = false
+  for (const key of URL_SITE_QUERY_KEYS) {
+    if (url.searchParams.has(key)) {
+      url.searchParams.delete(key)
+      changed = true
+    }
+  }
+  if (changed) {
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+  }
+}
+
 function createDefaultRunSettings(): RunSettings {
   return {
     timeoutMs: '600000',
-    concurrency: '1',
+    concurrency: '10',
     failFast: false,
   }
 }
@@ -904,7 +974,7 @@ function normalizeSiteConfig(value: unknown): SiteProfileConfig {
     customHeaders: stringValue(value.customHeaders, defaults.customHeaders),
     apiVersion: stringValue(value.apiVersion, defaults.apiVersion),
     backendUrl: defaults.backendUrl,
-    standardExecution: normalizeStandardExecution(value.standardExecution),
+    standardExecution: normalizeStandardExecution(value.standardExecution, defaults.standardExecution),
     workingDirectory: stringValue(value.workingDirectory, defaults.workingDirectory),
     skipGitRepoCheck: booleanValue(value.skipGitRepoCheck, defaults.skipGitRepoCheck),
     testImagePath: stringValue(value.testImagePath, defaults.testImagePath),
@@ -2386,13 +2456,20 @@ export function PlatformConsole({
   loading,
   error,
 }: PlatformConsoleProps) {
-  const [profiles, setProfiles] = useState<SavedProfile[]>(() => loadProfiles())
-  const [profileName, setProfileName] = useState('')
+  const [urlSiteImport] = useState<UrlSiteImport | null>(() => readUrlSiteImport())
+  const [profiles, setProfiles] = useState<SavedProfile[]>(() => {
+    const storedProfiles = loadProfiles()
+    return urlSiteImport ? upsertProfile(storedProfiles, urlSiteImport.profile) : storedProfiles
+  })
+  const [profileName, setProfileName] = useState(urlSiteImport?.profile.name ?? '')
   const [selectedProfileName, setSelectedProfileName] = useState<string | null>(() => {
+    if (urlSiteImport) {
+      return urlSiteImport.profile.name
+    }
     const savedName = localStorage.getItem(LAST_SITE_NAME_STORAGE_KEY)
     return savedName || localStorage.getItem('llm-spec-last-profile-name') || null
   })
-  const [siteConfig, setSiteConfig] = useState<SiteProfileConfig>(() => loadSiteConfig())
+  const [siteConfig, setSiteConfig] = useState<SiteProfileConfig>(() => urlSiteImport?.profile.config ?? loadSiteConfig())
   const [runDraft, setRunDraft] = useState<RunDraft>(() => loadRunDraft())
   const [configDialogOpen, setConfigDialogOpen] = useState(false)
   const [editingProfileName, setEditingProfileName] = useState<string | null>(null)
@@ -2406,6 +2483,7 @@ export function PlatformConsole({
   const [historyError, setHistoryError] = useState<string | null>(null)
   const reporterFileInputRef = useRef<HTMLInputElement | null>(null)
   const siteImportInputRef = useRef<HTMLInputElement | null>(null)
+  const urlSiteImportAppliedRef = useRef(false)
   const initialProfileLoadedRef = useRef(false)
   const backendJobPollingRef = useRef<string | null>(null)
   const publishedBackendLogIdsRef = useRef<Set<string>>(new Set())
@@ -2431,6 +2509,17 @@ export function PlatformConsole({
       onConsoleLogs?.(nextLogs)
     }
   }, [onConsoleLogs])
+
+  useEffect(() => {
+    if (!urlSiteImport || urlSiteImportAppliedRef.current) {
+      return
+    }
+    urlSiteImportAppliedRef.current = true
+    saveProfiles(profiles)
+    removeUrlSiteImportQueryParams()
+    setBackendStatus('Site config loaded from URL')
+    writeLog('success', `Loaded site config from URL: ${urlSiteImport.profile.name}`)
+  }, [profiles, urlSiteImport, writeLog])
 
   useEffect(() => {
     if (initialProfileLoadedRef.current) {

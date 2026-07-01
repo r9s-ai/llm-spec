@@ -26,7 +26,8 @@
     "@anthropic-ai/sdk": "^0.106.0",
     "@google/genai": "^2.10.0",
     "@openai/codex-sdk": "^0.142.4",
-    "openai": "^6.45.0"
+    "openai": "^6.45.0",
+    "ws":"^8.2.1"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
