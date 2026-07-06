@@ -11,7 +11,12 @@ import type { GoogleGenAI } from '@google/genai';
 
 import { MEDIA_INPUT_FIXTURES, readFixtureBase64 } from '../../fixtures';
 import type { GeminiProviderConfig } from '../../environment';
-import { summarizeGeminiResponse, truncate } from '../runtime';
+import {
+  summarizeGeminiResponse,
+  summarizeGeminiResponseWithJsonValidation,
+  truncate,
+  validateJsonOutput,
+} from '../runtime';
 import type { TestCase } from '../types';
 import { defineCases } from '../define-cases';
 import {
@@ -379,7 +384,7 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
             },
           },
         });
-        return summarizeGeminiResponse(response);
+        return summarizeGeminiResponseWithJsonValidation(response);
       },
     },
     'response_json_schema': {
@@ -401,7 +406,7 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
             },
           },
         });
-        return summarizeGeminiResponse(response);
+        return summarizeGeminiResponseWithJsonValidation(response);
       },
     },
     'safety_settings': {
@@ -809,7 +814,7 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
             text += maybeText;
           }
         }
-        return `chunks=${chunkCount}, text="${truncate(text)}"`;
+        return `chunks=${chunkCount}, ${validateJsonOutput(text, 'Gemini streaming JSON output')}, text="${truncate(text)}"`;
       },
     },
     'response_json_schema_stream': {
@@ -840,7 +845,7 @@ export function buildGeminiCases({ ai, config }: GeminiCaseContext): TestCase[] 
             text += maybeText;
           }
         }
-        return `chunks=${chunkCount}, text="${truncate(text)}"`;
+        return `chunks=${chunkCount}, ${validateJsonOutput(text, 'Gemini streaming JSON output')}, text="${truncate(text)}"`;
       },
     },
     'safety_settings_stream': {

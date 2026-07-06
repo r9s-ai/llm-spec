@@ -14,7 +14,13 @@ import type { AnthropicProviderConfig, ClaudeAgentProviderConfig } from '../../e
 import { getActiveTestContext } from '../../environment';
 import { IMAGE_INPUT_FIXTURES, readFixtureBase64 } from '../../fixtures';
 import { registerTestPluginCase, unregisterTestPluginCase } from '../../plugins';
-import { formatError, summarizeAnthropicResponse, truncate } from '../runtime';
+import {
+  formatError,
+  summarizeAnthropicResponse,
+  summarizeAnthropicResponseWithJsonValidation,
+  truncate,
+  validateJsonOutput,
+} from '../runtime';
 import type { TestCase } from '../types';
 import { defineCases } from '../define-cases';
 import {
@@ -557,7 +563,7 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
             },
           },
         });
-        return summarizeAnthropicResponse(response);
+        return summarizeAnthropicResponseWithJsonValidation(response);
       },
     },
     'service_tier_variants': {
@@ -885,7 +891,7 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
             text += eventObj.delta.text ?? '';
           }
         }
-        return `events=${eventCount}, text="${truncate(text)}"`;
+        return `events=${eventCount}, ${validateJsonOutput(text, 'Anthropic messages streaming JSON output')}, text="${truncate(text)}"`;
       },
     },
     'thinking': {

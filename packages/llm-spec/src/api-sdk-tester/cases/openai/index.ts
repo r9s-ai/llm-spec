@@ -1,5 +1,10 @@
 import { defineCases } from '../define-cases';
-import { summarizeOpenAIResponse, truncate } from '../runtime';
+import {
+  summarizeOpenAIResponse,
+  summarizeOpenAIResponseWithJsonValidation,
+  truncate,
+  validateJsonOutput,
+} from '../runtime';
 import type { TestCase } from '../types';
 import {
   createBaseMessages,
@@ -190,7 +195,7 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
             response_format: { type: 'json_object' },
             max_completion_tokens: outputLimit(48),
           });
-          return summarizeOpenAIResponse(response);
+          return summarizeOpenAIResponseWithJsonValidation(response);
         },
       },
       'response_format_json_schema': {
@@ -218,7 +223,7 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
             },
             max_completion_tokens: outputLimit(64),
           });
-          return summarizeOpenAIResponse(response);
+          return summarizeOpenAIResponseWithJsonValidation(response);
         },
       },
       'tools_and_tool_choice': {
@@ -588,7 +593,7 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
               text += delta;
             }
           }
-          return `chunks=${chunkCount}, text="${truncate(text)}"`;
+          return `chunks=${chunkCount}, ${validateJsonOutput(text, 'OpenAI chat streaming JSON output')}, text="${truncate(text)}"`;
         },
       },
       'response_format_json_schema_stream': {
@@ -628,7 +633,7 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
               text += delta;
             }
           }
-          return `chunks=${chunkCount}, text="${truncate(text)}"`;
+          return `chunks=${chunkCount}, ${validateJsonOutput(text, 'OpenAI chat streaming JSON output')}, text="${truncate(text)}"`;
         },
       },
       'tools_and_tool_choice_stream': {

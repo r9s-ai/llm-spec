@@ -53,6 +53,73 @@ export function formatError(error: unknown): string {
   }
 }
 
+function extractOpenAIChatResponseText(response: unknown): string {
+  const obj = response as {
+    choices?: Array<{
+      message?: {
+        content?: unknown;
+      };
+    }>;
+  };
+
+  const rawContent = obj.choices?.[0]?.message?.content;
+  if (typeof rawContent === 'string') {
+    return rawContent;
+  }
+  if (Array.isArray(rawContent)) {
+    return JSON.stringify(rawContent);
+  }
+  return '';
+}
+
+function extractOpenAIResponsesText(response: unknown): string {
+  const obj = response as {
+    output_text?: unknown;
+  };
+  return typeof obj.output_text === 'string' ? obj.output_text : '';
+}
+
+function extractAnthropicResponseText(response: unknown): string {
+  const obj = response as {
+    content?: Array<{ type?: string; text?: string }>;
+  };
+  return (obj.content ?? [])
+    .filter((item) => item.type === 'text' && typeof item.text === 'string')
+    .map((item) => item.text as string)
+    .join(' ');
+}
+
+function extractGeminiResponseText(response: unknown): string {
+  const obj = response as {
+    text?: string;
+  };
+  return typeof obj.text === 'string' ? obj.text : '';
+}
+
+export function validateJsonOutput(text: string, label = 'JSON output'): string {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error(`${label} is empty; expected valid JSON`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${label} is not valid JSON: ${message}; text="${truncate(trimmed, 200)}"`);
+  }
+
+  if (Array.isArray(parsed)) {
+    return `json=valid, type=array, items=${parsed.length}`;
+  }
+  if (parsed !== null && typeof parsed === 'object') {
+    const keys = Object.keys(parsed);
+    return `json=valid, type=object, keys=${keys.join(',') || '(none)'}`;
+  }
+  return `json=valid, type=${parsed === null ? 'null' : typeof parsed}`;
+}
+
 export function summarizeOpenAIResponse(response: unknown): string {
   const obj = response as {
     choices?: Array<{
@@ -68,15 +135,14 @@ export function summarizeOpenAIResponse(response: unknown): string {
   const finishReason = choice?.finish_reason ?? 'unknown';
   const toolCalls = Array.isArray(choice?.message?.tool_calls) ? choice.message.tool_calls.length : 0;
 
-  let content = '';
-  const rawContent = choice?.message?.content;
-  if (typeof rawContent === 'string') {
-    content = rawContent;
-  } else if (Array.isArray(rawContent)) {
-    content = JSON.stringify(rawContent);
-  }
+  const content = extractOpenAIChatResponseText(response);
 
   return `finish=${finishReason}, tool_calls=${toolCalls}, text="${truncate(content)}"`;
+}
+
+export function summarizeOpenAIResponseWithJsonValidation(response: unknown): string {
+  const content = extractOpenAIChatResponseText(response);
+  return `${summarizeOpenAIResponse(response)}, ${validateJsonOutput(content, 'OpenAI chat JSON output')}`;
 }
 
 export function summarizeOpenAIResponses(response: unknown): string {
@@ -89,8 +155,13 @@ export function summarizeOpenAIResponses(response: unknown): string {
 
   const status = obj.status ?? 'unknown';
   const outputCount = Array.isArray(obj.output) ? obj.output.length : 0;
-  const text = typeof obj.output_text === 'string' ? obj.output_text : '';
+  const text = extractOpenAIResponsesText(response);
   return `status=${status}, output_items=${outputCount}, text="${truncate(text)}"`;
+}
+
+export function summarizeOpenAIResponsesWithJsonValidation(response: unknown): string {
+  const text = extractOpenAIResponsesText(response);
+  return `${summarizeOpenAIResponses(response)}, ${validateJsonOutput(text, 'OpenAI responses JSON output')}`;
 }
 
 export function summarizeAnthropicResponse(response: unknown): string {
@@ -108,10 +179,7 @@ export function summarizeAnthropicResponse(response: unknown): string {
   };
 
   const stopReason = obj.stop_reason ?? 'unknown';
-  const text = (obj.content ?? [])
-    .filter((item) => item.type === 'text' && typeof item.text === 'string')
-    .map((item) => item.text as string)
-    .join(' ');
+  const text = extractAnthropicResponseText(response);
   const toolUseCount = (obj.content ?? []).filter((item) => item.type === 'tool_use').length;
 
   const parts: string[] = [`stop_reason=${stopReason}`, `tool_use=${toolUseCount}`];
@@ -135,6 +203,11 @@ export function summarizeAnthropicResponse(response: unknown): string {
   return parts.join(', ');
 }
 
+export function summarizeAnthropicResponseWithJsonValidation(response: unknown): string {
+  const text = extractAnthropicResponseText(response);
+  return `${summarizeAnthropicResponse(response)}, ${validateJsonOutput(text, 'Anthropic messages JSON output')}`;
+}
+
 export function summarizeGeminiResponse(response: unknown): string {
   const obj = response as {
     text?: string;
@@ -148,7 +221,7 @@ export function summarizeGeminiResponse(response: unknown): string {
       };
     }>;
   };
-  const text = typeof obj.text === 'string' ? obj.text : '';
+  const text = extractGeminiResponseText(response);
   const functionCalls = Array.isArray(obj.functionCalls) ? obj.functionCalls.length : 0;
   const candidates = Array.isArray(obj.candidates) ? obj.candidates.length : 0;
   const mediaParts =
@@ -157,6 +230,11 @@ export function summarizeGeminiResponse(response: unknown): string {
       return total + parts.filter((part) => part.inlineData !== undefined || part.fileData !== undefined).length;
     }, 0) ?? 0;
   return `candidates=${candidates}, function_calls=${functionCalls}, media_parts=${mediaParts}, text="${truncate(text)}"`;
+}
+
+export function summarizeGeminiResponseWithJsonValidation(response: unknown): string {
+  const text = extractGeminiResponseText(response);
+  return `${summarizeGeminiResponse(response)}, ${validateJsonOutput(text, 'Gemini JSON output')}`;
 }
 
 function sanitizeCaseIdPart(value: string): string {

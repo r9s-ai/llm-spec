@@ -1,5 +1,10 @@
 import { defineCases } from '../define-cases';
-import { summarizeOpenAIResponses, truncate } from '../runtime';
+import {
+  summarizeOpenAIResponses,
+  summarizeOpenAIResponsesWithJsonValidation,
+  truncate,
+  validateJsonOutput,
+} from '../runtime';
 import type { TestCase } from '../types';
 import {
   type OpenAICaseContext,
@@ -408,7 +413,7 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
             },
             max_output_tokens: 96,
           });
-          return summarizeOpenAIResponses(response);
+          return summarizeOpenAIResponsesWithJsonValidation(response);
         },
       },
       'responses_text_format_variants': {
@@ -438,7 +443,10 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
               },
               max_output_tokens: 64,
             });
-            results.push(`${variant.name}:${summarizeOpenAIResponses(response)}`);
+            const summary = variant.name === 'json_object'
+              ? summarizeOpenAIResponsesWithJsonValidation(response)
+              : summarizeOpenAIResponses(response);
+            results.push(`${variant.name}:${summary}`);
           }
 
           return results.join(' | ');
@@ -920,7 +928,7 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
               text += eventObj.delta;
             }
           }
-          return `events=${eventCount}, text="${truncate(text)}"`;
+          return `events=${eventCount}, ${validateJsonOutput(text, 'OpenAI responses streaming JSON output')}, text="${truncate(text)}"`;
         },
       },
       'responses_tools_stream': {
