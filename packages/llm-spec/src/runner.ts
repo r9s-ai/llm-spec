@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve as resolvePath } from 'node:path';
 
 import type { ProviderSummary, RunProgressHandler, RunSummary, TestLifecyclePlugin } from './types';
+import { clearUsageCaptures, flushUsageCaptures, isUsageCaptureEnabled } from './billing-audit/usage-capture';
 import {
   formatError,
   initializeRequestLogFile,
@@ -211,6 +212,12 @@ export async function runRuntimeConfig(
   options: RunRuntimeOptions = {},
 ): Promise<RunSummary> {
   const pluginManager = options.pluginManager ?? await createTestPluginManager(config.pluginPaths, createRuntimePlugins(config));
+  initializeRequestLogFile();
+  if (isUsageCaptureEnabled()) {
+    clearUsageCaptures();
+  }
+  installGlobalFetchInterceptor();
+  printRuntimeConfig(config);
 
   return runWithTestPluginManager(pluginManager, async () => {
     initializeRequestLogFile();
@@ -292,6 +299,13 @@ export async function runRuntimeConfig(
     if (options.runAfterRunPlugins !== false) {
       await pluginManager.runAfterRun({ summary });
     }
+  printRunSummary(summary);
+  if (isUsageCaptureEnabled()) {
+    const usageArtifactPath = flushUsageCaptures();
+    if (usageArtifactPath) {
+      console.log(`usage artifact written: ${usageArtifactPath}`);
+    }
+  }
 
     printRunSummary(summary);
 

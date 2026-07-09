@@ -4,6 +4,8 @@ import { resolve as resolvePath } from 'node:path';
 import type { HttpTraceExchange, TestCaseHttpTrace } from '../../types';
 import type { PluginRequestParams } from '../../types';
 import { runTestPluginBeforeCase } from '../plugins';
+import { isUsageCaptureEnabled, recordUsageCapture } from '../../billing-audit/usage-capture';
+import type { AnthropicUsage, GeminiUsage, OpenAIUsage } from '../../billing-audit/type';
 import { getCurrentProvider } from './provider-context';
 import { getActiveTestContext } from './test-context';
 
@@ -258,6 +260,78 @@ function formatBodyLine(body: string | undefined): string {
   return truncateLogBody(body).replace(/\n/g, '\n  ');
 }
 
+function parseJsonObject(text: string | undefined): Record<string, unknown> | undefined {
+  if (!text) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+function parseRequestModel(requestBody: string | undefined): string | undefined {
+  const parsed = parseJsonObject(requestBody);
+  const model = parsed?.model;
+  return typeof model === 'string' && model ? model : undefined;
+}
+
+function captureUsageFromJsonResponse(
+  providerLabel: string,
+  requestBody: string | undefined,
+  responseBody: string | undefined,
+): void {
+  if (!isUsageCaptureEnabled()) {
+    return;
+  }
+
+  const parsed = parseJsonObject(responseBody);
+  if (!parsed) {
+    return;
+  }
+
+  if (providerLabel === 'gemini' && parsed.usageMetadata && typeof parsed.usageMetadata === 'object') {
+    const model = typeof parsed.modelVersion === 'string' ? parsed.modelVersion : parseRequestModel(requestBody);
+    if (model) {
+      recordUsageCapture({
+        provider: 'gemini',
+        model,
+        usage: parsed.usageMetadata as GeminiUsage,
+      });
+    }
+    return;
+  }
+
+  // openai family — label may be bare 'openai' or 'openai(chatCompletions)' etc.
+  if ((providerLabel === 'openai' || providerLabel.startsWith('openai(')) && parsed.usage && typeof parsed.usage === 'object') {
+    const model = typeof parsed.model === 'string' ? parsed.model : parseRequestModel(requestBody);
+    if (model) {
+      recordUsageCapture({
+        provider: 'openai',
+        model,
+        usage: parsed.usage as OpenAIUsage,
+      });
+    }
+    return;
+  }
+
+  if (providerLabel === 'anthropic' && parsed.usage && typeof parsed.usage === 'object') {
+    const model = typeof parsed.model === 'string' ? parsed.model : parseRequestModel(requestBody);
+    if (model) {
+      recordUsageCapture({
+        provider: 'anthropic',
+        model,
+        usage: parsed.usage as AnthropicUsage,
+      });
+    }
+  }
+}
+
 function buildTraceRequestId(testId: string): string {
   httpTraceRequestCounter += 1;
   return `${testId}-${httpTraceRequestCounter}`;
@@ -448,6 +522,7 @@ function createInstrumentedFetch(resolveProvider: () => string): typeof fetch {
         );
         responseLines.push(`  Body: ${formatBodyLine(body)}`);
         logResponse(responseLines);
+        captureUsageFromJsonResponse(provider, requestBody, body);
       })();
 
       if (testId) {
