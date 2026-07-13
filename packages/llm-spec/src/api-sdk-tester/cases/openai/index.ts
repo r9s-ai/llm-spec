@@ -103,6 +103,65 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
           return summarizeOpenAIResponse(response);
         },
       },
+      'prompt_cache_explicit_breakpoint_round_trip': {
+        description: 'prompt_cache_options explicit + prompt_cache_breakpoint round trip',
+        covers: ['prompt_cache_key', 'prompt_cache_options', 'prompt_cache_breakpoint'],
+        run: async () => {
+          const messages = [
+            {
+              role: (isReasoningModel(config.model) ? 'developer' : 'system') as 'developer' | 'system',
+              content: [
+                {
+                  type: 'text',
+                  text: `${'llm-spec explicit chat cache prefix. '.repeat(384)}Keep this shared prefix stable across identical requests.`,
+                  prompt_cache_breakpoint: {
+                    mode: 'explicit',
+                  },
+                },
+              ],
+            },
+            {
+              role: 'user' as const,
+              content: 'Reply with exactly: cache-ok',
+            },
+          ];
+          const runCacheRequest = () =>
+            client.chat.completions.create(
+              {
+                model: config.model,
+                messages,
+                prompt_cache_key: 'llm-spec-chat-explicit-cache-breakpoint-round-trip',
+                prompt_cache_options: {
+                  mode: 'explicit',
+                },
+                max_completion_tokens: outputLimit(64),
+              } as never,
+            );
+
+          const first = await runCacheRequest();
+          const second = await runCacheRequest();
+          const firstUsage = (first as {
+            usage?: {
+              prompt_tokens_details?: {
+                cached_tokens?: number;
+              };
+            };
+          }).usage;
+          const secondUsage = (second as {
+            usage?: {
+              prompt_tokens_details?: {
+                cached_tokens?: number;
+              };
+            };
+          }).usage;
+          const secondCached = secondUsage?.prompt_tokens_details?.cached_tokens;
+          if (typeof secondCached !== 'number' || secondCached <= 0) {
+            throw new Error(`expected second response cached_tokens > 0, got ${secondCached ?? 'n/a'}`);
+          }
+
+          return `first_cached=${firstUsage?.prompt_tokens_details?.cached_tokens ?? 'n/a'}, second_cached=${secondUsage?.prompt_tokens_details?.cached_tokens ?? 'n/a'}, ${summarizeOpenAIResponse(second)}`;
+        },
+      },
       'max_tokens_legacy': {
         description: 'legacy max_tokens',
         covers: ['max_tokens'],

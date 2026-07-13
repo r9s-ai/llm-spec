@@ -163,10 +163,32 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
   const haikuModel = config.haikuModel ?? config.model;
   const fastModeModel = config.fastModeModel ?? config.model;
   const baseMessages = [{ role: 'user', content: 'Reply with exactly: ok' }] as const;
-  const cacheProbeMessages = [
+  function buildCacheProbeMessages(label: string, ttl?: '5m' | '1h') {
+    const cacheControl: { type: 'ephemeral'; ttl?: '5m' | '1h' } = {
+      type: 'ephemeral',
+    };
+    if (ttl) {
+      cacheControl.ttl = ttl;
+    }
+
+    return [
+      {
+        role: 'user' as const,
+        content: [
+          {
+            type: 'text' as const,
+            text: `${`llm-spec anthropic stable cache probe segment ${label}. `.repeat(400)}Reply with exactly: cache-ok`,
+            cache_control: cacheControl,
+          },
+        ],
+      },
+    ];
+  }
+  const cacheProbeMessages = buildCacheProbeMessages('warm', '5m');
+  const topLevelCacheProbeMessages = [
     {
       role: 'user' as const,
-      content: `${'llm-spec anthropic cache prefix. '.repeat(384)}Reply with exactly: cache-ok`,
+      content: `${'llm-spec anthropic stable top-level cache probe segment. '.repeat(400)}Reply with exactly: cache-ok`,
     },
   ] as const;
   const echoTool = {
@@ -211,6 +233,35 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
     options?: Record<string, unknown>,
   ): Promise<unknown> {
     return createMessageUnsafe(body, options);
+  }
+
+  async function runCacheControlRoundTrip(
+    request: Record<string, unknown>,
+    failureLabel: string,
+  ): Promise<string> {
+    const first = await createMessage(request);
+    const second = await createMessage(request);
+    const firstUsage = (first as {
+      usage?: {
+        cache_creation_input_tokens?: number | null;
+        cache_read_input_tokens?: number | null;
+      };
+    }).usage;
+    const secondUsage = (second as {
+      usage?: {
+        cache_creation_input_tokens?: number | null;
+        cache_read_input_tokens?: number | null;
+      };
+    }).usage;
+    const secondReadTokens = secondUsage?.cache_read_input_tokens;
+
+    if (typeof secondReadTokens !== 'number' || secondReadTokens <= 0) {
+      throw new Error(
+        `expected second ${failureLabel} request to read prompt cache; first_creation=${firstUsage?.cache_creation_input_tokens ?? 'n/a'}, first_read=${firstUsage?.cache_read_input_tokens ?? 'n/a'}, second_creation=${secondUsage?.cache_creation_input_tokens ?? 'n/a'}, second_read=${secondUsage?.cache_read_input_tokens ?? 'n/a'}`,
+      );
+    }
+
+    return `first_creation=${firstUsage?.cache_creation_input_tokens ?? 'n/a'}, first_read=${firstUsage?.cache_read_input_tokens ?? 'n/a'}, second_creation=${secondUsage?.cache_creation_input_tokens ?? 'n/a'}, second_read=${secondUsage?.cache_read_input_tokens ?? 'n/a'}, ${summarizeAnthropicResponse(second)}`;
   }
 
   function summarizeOutputTokenDetails(response: unknown): string {
@@ -881,35 +932,59 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
       },
     },
     'cache_control_round_trip': {
-      description: 'cache_control round trip usage',
+      description: 'cache_control round trip usage (default TTL)',
       covers: ['cache_control'],
       run: async () => {
         const request = {
           model: config.model,
           max_tokens: 64,
-          messages: [...cacheProbeMessages],
+          messages: buildCacheProbeMessages('default'),
+        };
+
+        return runCacheControlRoundTrip(request, 'default cache_control');
+      },
+    },
+    'cache_control_round_trip_5m': {
+      description: 'cache_control round trip usage (ttl=5m)',
+      covers: ['cache_control'],
+      run: async () => {
+        const request = {
+          model: config.model,
+          max_tokens: 64,
+          messages: buildCacheProbeMessages('5m', '5m'),
+        };
+
+        return runCacheControlRoundTrip(request, 'ttl=5m cache_control');
+      },
+    },
+    'cache_control_round_trip_1h': {
+      description: 'cache_control round trip usage (ttl=1h)',
+      covers: ['cache_control'],
+      run: async () => {
+        const request = {
+          model: config.model,
+          max_tokens: 64,
+          messages: buildCacheProbeMessages('1h', '1h'),
+        };
+
+        return runCacheControlRoundTrip(request, 'ttl=1h cache_control');
+      },
+    },
+    'cache_control_round_trip_top_level': {
+      description: 'top-level cache_control round trip usage',
+      covers: ['cache_control'],
+      run: async () => {
+        const request = {
+          model: config.model,
+          max_tokens: 64,
+          messages: [...topLevelCacheProbeMessages],
           cache_control: {
             type: 'ephemeral' as const,
             ttl: '5m' as const,
           },
         };
 
-        const first = await createMessage(request);
-        const second = await createMessage(request);
-        const firstUsage = (first as {
-          usage?: {
-            cache_creation_input_tokens?: number | null;
-            cache_read_input_tokens?: number | null;
-          };
-        }).usage;
-        const secondUsage = (second as {
-          usage?: {
-            cache_creation_input_tokens?: number | null;
-            cache_read_input_tokens?: number | null;
-          };
-        }).usage;
-
-        return `first_creation=${firstUsage?.cache_creation_input_tokens ?? 'n/a'}, first_read=${firstUsage?.cache_read_input_tokens ?? 'n/a'}, second_creation=${secondUsage?.cache_creation_input_tokens ?? 'n/a'}, second_read=${secondUsage?.cache_read_input_tokens ?? 'n/a'}, ${summarizeAnthropicResponse(second)}`;
+        return runCacheControlRoundTrip(request, 'top-level cache_control');
       },
     },
     'max_tokens_zero_cache_warm': {

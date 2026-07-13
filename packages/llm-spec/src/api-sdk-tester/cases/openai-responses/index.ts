@@ -27,7 +27,9 @@ export const OPENAI_RESPONSES_PARAMS = [
   'parallel_tool_calls',
   'previous_response_id',
   'prompt',
+  'prompt_cache_breakpoint',
   'prompt_cache_key',
+  'prompt_cache_options',
   'prompt_cache_retention',
   'reasoning',
   'safety_identifier',
@@ -316,6 +318,65 @@ export function buildOpenAIResponsesCases({ client, config }: OpenAICaseContext)
           }).usage;
 
           return `retention=${appliedRetention}, first_cached=${firstUsage?.input_tokens_details?.cached_tokens ?? 'n/a'}, second_cached=${secondUsage?.input_tokens_details?.cached_tokens ?? 'n/a'}, ${summarizeOpenAIResponses(second)}`;
+        },
+      },
+      'responses_prompt_cache_explicit_breakpoint_round_trip': {
+        description: 'responses prompt_cache_options explicit + prompt_cache_breakpoint round trip',
+        covers: ['prompt_cache_key', 'prompt_cache_options', 'prompt_cache_breakpoint'],
+        run: async () => {
+          const input = [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'input_text',
+                  text: `${'llm-spec explicit responses cache prefix. '.repeat(384)}Keep this shared prefix stable across identical requests.`,
+                  prompt_cache_breakpoint: {
+                    mode: 'explicit',
+                  },
+                },
+                {
+                  type: 'input_text',
+                  text: 'Reply with exactly: cache-ok',
+                },
+              ],
+            },
+          ];
+          const runCacheRequest = () =>
+            client.responses.create(
+              {
+                model: config.model,
+                input,
+                prompt_cache_key: 'llm-spec-responses-explicit-cache-breakpoint-round-trip',
+                prompt_cache_options: {
+                  mode: 'explicit',
+                },
+                max_output_tokens: 32,
+              } as never,
+            );
+
+          const first = await runCacheRequest();
+          const second = await runCacheRequest();
+          const firstUsage = (first as {
+            usage?: {
+              input_tokens_details?: {
+                cached_tokens?: number;
+              };
+            };
+          }).usage;
+          const secondUsage = (second as {
+            usage?: {
+              input_tokens_details?: {
+                cached_tokens?: number;
+              };
+            };
+          }).usage;
+          const secondCached = secondUsage?.input_tokens_details?.cached_tokens;
+          if (typeof secondCached !== 'number' || secondCached <= 0) {
+            throw new Error(`expected second response cached_tokens > 0, got ${secondCached ?? 'n/a'}`);
+          }
+
+          return `first_cached=${firstUsage?.input_tokens_details?.cached_tokens ?? 'n/a'}, second_cached=${secondUsage?.input_tokens_details?.cached_tokens ?? 'n/a'}, ${summarizeOpenAIResponses(second)}`;
         },
       },
       'responses_prompt_cache_retention_24h': {

@@ -266,6 +266,7 @@ const STANDARD_TARGET_CASES: Record<StandardApiType, TargetCaseOption[]> = {
       'response_format_json_object_stream',
       'response_format_json_schema_stream',
       'tools_and_tool_choice_stream',
+      'prompt_cache_explicit_breakpoint_round_trip',
     ]),
     ...caseOptions('OpenAI-specific', [
       'n_choices',
@@ -319,6 +320,7 @@ const STANDARD_TARGET_CASES: Record<StandardApiType, TargetCaseOption[]> = {
       'responses_reasoning_stream',
       'responses_prompt',
       'responses_prompt_stream',
+      'responses_prompt_cache_explicit_breakpoint_round_trip',
     ]),
     ...modelCatalogCaseOptions(
       'OpenAI Responses model catalog',
@@ -339,6 +341,9 @@ const STANDARD_TARGET_CASES: Record<StandardApiType, TargetCaseOption[]> = {
       'thinking',
       'cache_control',
       'cache_control_round_trip',
+      'cache_control_round_trip_5m',
+      'cache_control_round_trip_1h',
+      'cache_control_round_trip_top_level',
       'inference_geo',
     ]),
     ...caseOptions('Streaming', [
