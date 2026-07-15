@@ -134,7 +134,7 @@ interface BackendRunJob {
 function getCorsHeaders(): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': process.env.LLM_SPEC_CORS_ORIGIN ?? '*',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
     'Access-Control-Allow-Headers': 'content-type,authorization',
   };
 }
