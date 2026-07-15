@@ -125,12 +125,13 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
               content: 'Reply with exactly: cache-ok',
             },
           ];
+          const promptCacheKey = `llm-spec-chat-cache-${Date.now()}`;
           const runCacheRequest = () =>
             client.chat.completions.create(
               {
                 model: config.model,
                 messages,
-                prompt_cache_key: 'llm-spec-chat-explicit-cache-breakpoint-round-trip',
+                prompt_cache_key: promptCacheKey,
                 prompt_cache_options: {
                   mode: 'explicit',
                 },
@@ -144,6 +145,7 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
             usage?: {
               prompt_tokens_details?: {
                 cached_tokens?: number;
+                cache_write_tokens?: number;
               };
             };
           }).usage;
@@ -151,15 +153,20 @@ export function buildOpenAIChatCases({ client, config }: OpenAICaseContext): Tes
             usage?: {
               prompt_tokens_details?: {
                 cached_tokens?: number;
+                cache_write_tokens?: number;
               };
             };
           }).usage;
+          const firstCacheWrite = firstUsage?.prompt_tokens_details?.cache_write_tokens;
+          if (typeof firstCacheWrite !== 'number' || firstCacheWrite <= 0) {
+            throw new Error(`expected first response cache_write_tokens > 0, got ${firstCacheWrite ?? 'n/a'}`);
+          }
           const secondCached = secondUsage?.prompt_tokens_details?.cached_tokens;
           if (typeof secondCached !== 'number' || secondCached <= 0) {
             throw new Error(`expected second response cached_tokens > 0, got ${secondCached ?? 'n/a'}`);
           }
 
-          return `first_cached=${firstUsage?.prompt_tokens_details?.cached_tokens ?? 'n/a'}, second_cached=${secondUsage?.prompt_tokens_details?.cached_tokens ?? 'n/a'}, ${summarizeOpenAIResponse(second)}`;
+          return `first_cache_write=${firstCacheWrite}, first_cached=${firstUsage?.prompt_tokens_details?.cached_tokens ?? 'n/a'}, second_cache_write=${secondUsage?.prompt_tokens_details?.cache_write_tokens ?? 'n/a'}, second_cached=${secondCached}, ${summarizeOpenAIResponse(second)}`;
         },
       },
       'max_tokens_legacy': {

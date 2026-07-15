@@ -16,7 +16,7 @@ import type {
   TestCaseHttpTrace,
 } from '../../../types';
 import type { AnthropicProviderConfig, ClaudeAgentProviderConfig } from '../../environment';
-import { getActiveTestContext } from '../../environment';
+import { createLoggingFetch, getActiveTestContext } from '../../environment';
 import { IMAGE_INPUT_FIXTURES, readFixtureBase64 } from '../../fixtures';
 import { registerTestPluginCase, unregisterTestPluginCase } from '../../plugins';
 import { formatError, summarizeAnthropicResponse, truncate } from '../runtime';
@@ -235,6 +235,128 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
     return createMessageUnsafe(body, options);
   }
 
+  type CacheUsage = {
+    cache_creation_input_tokens?: number | null;
+    cache_read_input_tokens?: number | null;
+  };
+  type StreamConsumeResult = {
+    eventCount: number;
+    text: string;
+    usage?: CacheUsage;
+  };
+
+  function consumeAnthropicStreamEvent(
+    event: unknown,
+    result: StreamConsumeResult,
+  ): void {
+    const eventObj = event as {
+      type?: string;
+      message?: { usage?: CacheUsage };
+      delta?: { type?: string; text?: string };
+      usage?: CacheUsage;
+    };
+    if (eventObj.type === 'content_block_delta' && eventObj.delta?.type === 'text_delta') {
+      result.text += eventObj.delta.text ?? '';
+    }
+    if (eventObj.type === 'message_start' && eventObj.message?.usage) {
+      result.usage = eventObj.message.usage;
+    }
+    if (eventObj.type === 'message_delta' && eventObj.usage) {
+      result.usage = eventObj.usage;
+    }
+  }
+
+  function resolveAnthropicMessagesUrl(): string {
+    const baseUrl = config.apiBaseUrl ?? 'https://api.anthropic.com';
+    const normalized = baseUrl.replace(/\/+$/, '');
+    return normalized.endsWith('/v1') ? `${normalized}/messages` : `${normalized}/v1/messages`;
+  }
+
+  function parseSseEvent(rawEvent: string): unknown | undefined {
+    const dataLines: string[] = [];
+    for (const line of rawEvent.split(/\r?\n/)) {
+      if (line.startsWith('data:')) {
+        dataLines.push(line.slice(5).trimStart());
+      }
+    }
+
+    const data = dataLines.join('\n').trim();
+    if (!data || data === '[DONE]') {
+      return undefined;
+    }
+
+    return JSON.parse(data);
+  }
+
+  async function consumeRawAnthropicSse(response: Response): Promise<StreamConsumeResult> {
+    if (!response.body) {
+      throw new Error('expected streaming response body');
+    }
+
+    let eventCount = 0;
+    const result: StreamConsumeResult = { eventCount: 0, text: '' };
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      let boundary = buffer.search(/\r?\n\r?\n/);
+      while (boundary >= 0) {
+        const rawEvent = buffer.slice(0, boundary);
+        const separatorLength = buffer.startsWith('\r\n\r\n', boundary) ? 4 : 2;
+        buffer = buffer.slice(boundary + separatorLength);
+        const event = parseSseEvent(rawEvent);
+        if (event) {
+          eventCount += 1;
+          result.eventCount = eventCount;
+          consumeAnthropicStreamEvent(event, result);
+        }
+        boundary = buffer.search(/\r?\n\r?\n/);
+      }
+    }
+
+    buffer += decoder.decode();
+    const event = parseSseEvent(buffer);
+    if (event) {
+      result.eventCount += 1;
+      consumeAnthropicStreamEvent(event, result);
+    }
+
+    return result;
+  }
+
+  async function createRawStreamingMessage(request: Record<string, unknown>): Promise<StreamConsumeResult> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+    try {
+      const response = await createLoggingFetch('anthropic')(resolveAnthropicMessagesUrl(), {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+          'x-api-key': config.apiKey ?? '',
+          ...(config.customHeaders ?? {}),
+        },
+        body: JSON.stringify({ ...request, stream: true }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`streaming request failed: ${response.status} ${response.statusText}; ${await response.text()}`);
+      }
+
+      return consumeRawAnthropicSse(response);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   async function runCacheControlRoundTrip(
     request: Record<string, unknown>,
     failureLabel: string,
@@ -262,6 +384,23 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
     }
 
     return `first_creation=${firstUsage?.cache_creation_input_tokens ?? 'n/a'}, first_read=${firstUsage?.cache_read_input_tokens ?? 'n/a'}, second_creation=${secondUsage?.cache_creation_input_tokens ?? 'n/a'}, second_read=${secondUsage?.cache_read_input_tokens ?? 'n/a'}, ${summarizeAnthropicResponse(second)}`;
+  }
+
+  async function runCacheControlStreamRoundTrip(
+    request: Record<string, unknown>,
+    failureLabel: string,
+  ): Promise<string> {
+    const firstResult = await createRawStreamingMessage(request);
+    const secondResult = await createRawStreamingMessage(request);
+    const secondReadTokens = secondResult.usage?.cache_read_input_tokens;
+
+    if (typeof secondReadTokens !== 'number' || secondReadTokens <= 0) {
+      throw new Error(
+        `expected second streaming ${failureLabel} request to read prompt cache; first_creation=${firstResult.usage?.cache_creation_input_tokens ?? 'n/a'}, first_read=${firstResult.usage?.cache_read_input_tokens ?? 'n/a'}, second_creation=${secondResult.usage?.cache_creation_input_tokens ?? 'n/a'}, second_read=${secondResult.usage?.cache_read_input_tokens ?? 'n/a'}`,
+      );
+    }
+
+    return `first_events=${firstResult.eventCount}, first_creation=${firstResult.usage?.cache_creation_input_tokens ?? 'n/a'}, first_read=${firstResult.usage?.cache_read_input_tokens ?? 'n/a'}, second_events=${secondResult.eventCount}, second_creation=${secondResult.usage?.cache_creation_input_tokens ?? 'n/a'}, second_read=${secondResult.usage?.cache_read_input_tokens ?? 'n/a'}, text="${truncate(secondResult.text)}"`;
   }
 
   function summarizeOutputTokenDetails(response: unknown): string {
@@ -1295,6 +1434,19 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
           }
         }
         return `events=${eventCount}, text="${truncate(text)}"`;
+      },
+    },
+    'cache_control_round_trip_stream': {
+      description: 'cache_control round trip usage (streaming)',
+      covers: ['cache_control', 'stream'],
+      run: async () => {
+        const request = {
+          model: config.model,
+          max_tokens: 64,
+          messages: buildCacheProbeMessages('stream', '5m'),
+        };
+
+        return runCacheControlStreamRoundTrip(request, 'streaming cache_control');
       },
     },
     'inference_geo_stream': {
