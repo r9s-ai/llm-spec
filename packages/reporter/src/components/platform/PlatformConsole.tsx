@@ -5,6 +5,7 @@ import {
   Check,
   ChevronsUpDown,
   Cloud,
+  Copy,
   Database,
   Download,
   Eye,
@@ -853,6 +854,27 @@ function toPortableProfile(profile: SavedProfile): Pick<SavedProfile, 'name' | '
   }
 }
 
+function siteConfigsEqual(left: SiteProfileConfig, right: SiteProfileConfig): boolean {
+  return JSON.stringify(toPortableSiteConfig(left)) === JSON.stringify(toPortableSiteConfig(right))
+}
+
+function createCopyProfileName(baseName: string, profiles: readonly SavedProfile[]): string {
+  const existingNames = new Set(profiles.map((profile) => profile.name))
+  const base = `${baseName || 'Environment'} copy`
+  if (!existingNames.has(base)) {
+    return base
+  }
+
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${base} ${index}`
+    if (!existingNames.has(candidate)) {
+      return candidate
+    }
+  }
+
+  return `${base} ${Date.now()}`
+}
+
 function normalizeRunSettings(value: unknown): RunSettings {
   const defaults = createDefaultRunSettings()
   if (!isRecord(value)) {
@@ -1487,13 +1509,15 @@ function ToggleButton<TValue extends string>(props: {
 function ConfigurationSelector(props: {
   profiles: SavedProfile[]
   selectedName: string | null
+  hasUnsavedChanges: boolean
   onSelect: (profile: SavedProfile) => void
   onAdd: () => void
   onEdit: (profile: SavedProfile) => void
+  onDuplicate: (profile: SavedProfile) => void
   onDelete: (name: string) => void
   onExport: (profile: SavedProfile) => void
 }) {
-  const { profiles, selectedName, onSelect, onAdd, onEdit, onDelete, onExport } = props
+  const { profiles, selectedName, hasUnsavedChanges, onSelect, onAdd, onEdit, onDuplicate, onDelete, onExport } = props
   const [open, setOpen] = useState(false)
   const selectedProfile = profiles.find((profile) => profile.name === selectedName)
 
@@ -1501,7 +1525,7 @@ function ConfigurationSelector(props: {
     return (
       <Button type="button" onClick={onAdd} className="w-full sm:w-auto">
         <Plus className="w-4 h-4" />
-        Add Site
+        Add Environment
       </Button>
     )
   }
@@ -1517,14 +1541,16 @@ function ConfigurationSelector(props: {
           className="h-10 w-full justify-between gap-3 sm:w-72"
         >
           <span className="min-w-0 truncate text-left">
-            {selectedProfile?.name ?? 'Select site'}
+            {selectedProfile?.name
+              ? `${selectedProfile.name}${hasUnsavedChanges ? ' *' : ''}`
+              : 'Select environment'}
           </span>
           <ChevronsUpDown className="h-4 w-4 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-0">
         <div className="border-b border-slate-100 px-3 py-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sites</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Environments</span>
         </div>
         <ScrollArea className="max-h-72">
           <div className="p-1">
@@ -1567,6 +1593,18 @@ function ConfigurationSelector(props: {
                     className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-900"
                     onClick={(event) => {
                       event.stopPropagation()
+                      onDuplicate(profile)
+                      setOpen(false)
+                    }}
+                    aria-label={`Duplicate ${profile.name}`}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-900"
+                    onClick={(event) => {
+                      event.stopPropagation()
                       onEdit(profile)
                       setOpen(false)
                     }}
@@ -1601,7 +1639,7 @@ function ConfigurationSelector(props: {
             }}
           >
             <Plus className="w-4 h-4" />
-            Add Site
+            Add Environment
           </Button>
         </div>
       </PopoverContent>
@@ -2316,6 +2354,10 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
     () => profiles.find((profile) => profile.name === selectedProfileName),
     [profiles, selectedProfileName],
   )
+  const hasUnsavedEnvironmentChanges = useMemo(
+    () => selectedProfile ? !siteConfigsEqual(selectedProfile.config, siteConfig) : false,
+    [selectedProfile, siteConfig],
+  )
   const activeTargets = useMemo(
     () => runDraft.targets.filter((target) => target.enabled),
     [runDraft.targets],
@@ -2465,6 +2507,15 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
   }, [editingProfileName, profileName, profiles, siteConfig])
 
   const handleLoadProfile = useCallback((profile: SavedProfile) => {
+    if (
+      selectedProfileName
+      && selectedProfileName !== profile.name
+      && hasUnsavedEnvironmentChanges
+      && !window.confirm('Discard unsaved environment changes and switch?')
+    ) {
+      return
+    }
+
     setSiteConfig(profile.config)
     if (profile.legacyDraft) {
       setRunDraft(profile.legacyDraft)
@@ -2473,9 +2524,18 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
     setProfileName(profile.name)
     setLocalError(null)
     setBackendStatus(null)
-  }, [])
+  }, [hasUnsavedEnvironmentChanges, selectedProfileName])
 
   const handleEditProfile = useCallback((profile: SavedProfile) => {
+    if (
+      selectedProfileName
+      && selectedProfileName !== profile.name
+      && hasUnsavedEnvironmentChanges
+      && !window.confirm('Discard unsaved environment changes and edit another environment?')
+    ) {
+      return
+    }
+
     setSiteConfig(profile.config)
     if (profile.legacyDraft) {
       setRunDraft(profile.legacyDraft)
@@ -2486,9 +2546,13 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
     setLocalError(null)
     setBackendStatus(null)
     setConfigDialogOpen(true)
-  }, [])
+  }, [hasUnsavedEnvironmentChanges, selectedProfileName])
 
   const handleDeleteProfile = useCallback((name: string) => {
+    if (!window.confirm(`Delete environment "${name}"?`)) {
+      return
+    }
+
     const updated = profiles.filter((profile) => profile.name !== name)
     saveProfiles(updated)
     setProfiles(updated)
@@ -2502,6 +2566,28 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
       setEditingProfileName(null)
     }
   }, [editingProfileName, profileName, profiles, selectedProfileName])
+
+  const handleDuplicateProfile = useCallback((profile: SavedProfile) => {
+    if (
+      selectedProfileName
+      && selectedProfileName !== profile.name
+      && hasUnsavedEnvironmentChanges
+      && !window.confirm('Discard unsaved environment changes and duplicate another environment?')
+    ) {
+      return
+    }
+
+    setSiteConfig({ ...(profile.name === selectedProfileName ? siteConfig : profile.config) })
+    if (profile.legacyDraft) {
+      setRunDraft(profile.legacyDraft)
+    }
+    setSelectedProfileName(null)
+    setProfileName(createCopyProfileName(profile.name, profiles))
+    setEditingProfileName(null)
+    setLocalError(null)
+    setBackendStatus(null)
+    setConfigDialogOpen(true)
+  }, [hasUnsavedEnvironmentChanges, profiles, selectedProfileName, siteConfig])
 
   const handleExportSites = useCallback(() => {
     const payload: SitesExportPayload = {
@@ -2919,9 +3005,11 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
             <ConfigurationSelector
               profiles={profiles}
               selectedName={selectedProfile?.name ?? null}
+              hasUnsavedChanges={hasUnsavedEnvironmentChanges}
               onSelect={handleLoadProfile}
               onAdd={handleAddConfiguration}
               onEdit={handleEditProfile}
+              onDuplicate={handleDuplicateProfile}
               onDelete={handleDeleteProfile}
               onExport={handleExportSite}
             />
@@ -2952,15 +3040,17 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
               <h2 className="text-lg font-bold text-slate-800">Run Console</h2>
               <Button type="button" variant="outline" onClick={handleOpenConfiguration}>
                 <Settings2 className="h-4 w-4" />
-                Site
+                Environment
               </Button>
             </div>
 
             <div className="flex-grow space-y-6 p-6">
               <dl className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
                 <SummaryField
-                  label="Site"
-                  value={selectedProfile?.name ?? 'Unsaved site'}
+                  label="Environment"
+                  value={selectedProfile?.name
+                    ? `${selectedProfile.name}${hasUnsavedEnvironmentChanges ? ' *' : ''}`
+                    : 'Unsaved environment'}
                   muted={!selectedProfile}
                 />
                 <SummaryField
@@ -3334,7 +3424,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                   </div>
                   <div className="flex items-center gap-2">
                     <Server className="h-3 w-3 text-slate-400" />
-                    {selectedProfile?.name ?? 'Unsaved site'}
+                    {selectedProfile?.name ?? 'Unsaved environment'}
                   </div>
                   <div className="flex items-center gap-2">
                     {requiresBackend ? <Server className="h-3 w-3 text-slate-400" /> : <Wifi className="h-3 w-3 text-slate-400" />}
@@ -3355,7 +3445,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
         <Dialog open={configDialogOpen} onOpenChange={handleConfigDialogOpenChange}>
           <DialogContent className="max-h-[90vh] max-w-[920px] gap-0 overflow-hidden p-0">
             <DialogHeader className="border-b border-slate-100 px-6 py-5 pr-12">
-              <DialogTitle>{editingProfileName ? 'Edit Site Profile' : 'Site Profile'}</DialogTitle>
+              <DialogTitle>{editingProfileName ? 'Edit Environment' : 'Environment'}</DialogTitle>
               <DialogDescription>
                 Save connection details separately from the editable test matrix.
               </DialogDescription>
@@ -3365,7 +3455,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
               <div className="space-y-6 p-6">
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                   <Field
-                    label="Site Name"
+                    label="Environment Name"
                     value={profileName}
                     onChange={setProfileName}
                     placeholder="e.g. Gemini OpenAI Gateway"
@@ -3487,7 +3577,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
               </Button>
               <Button type="button" onClick={handleSaveProfile} disabled={!profileName.trim()}>
                 <Save className="h-4 w-4" />
-                Save Site
+                Save Environment
               </Button>
             </DialogFooter>
           </DialogContent>
