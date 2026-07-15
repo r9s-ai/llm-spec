@@ -163,6 +163,10 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
   const haikuModel = config.haikuModel ?? config.model;
   const fastModeModel = config.fastModeModel ?? config.model;
   const baseMessages = [{ role: 'user', content: 'Reply with exactly: ok' }] as const;
+  function createCacheProbeRunLabel(caseId: string) {
+    return `${caseId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
   function buildCacheProbeMessages(label: string, ttl?: '5m' | '1h') {
     const cacheControl: { type: 'ephemeral'; ttl?: '5m' | '1h' } = {
       type: 'ephemeral',
@@ -177,7 +181,7 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
         content: [
           {
             type: 'text' as const,
-            text: `${`llm-spec anthropic stable cache probe segment ${label}. `.repeat(400)}Reply with exactly: cache-ok`,
+            text: `${`llm-spec anthropic stable cache probe segment ${label}. `.repeat(200)}Reply with exactly: cache-ok`,
             cache_control: cacheControl,
           },
         ],
@@ -185,12 +189,14 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
     ];
   }
   const cacheProbeMessages = buildCacheProbeMessages('warm', '5m');
-  const topLevelCacheProbeMessages = [
-    {
-      role: 'user' as const,
-      content: `${'llm-spec anthropic stable top-level cache probe segment. '.repeat(400)}Reply with exactly: cache-ok`,
-    },
-  ] as const;
+  function buildTopLevelCacheProbeMessages(label: string) {
+    return [
+      {
+        role: 'user' as const,
+        content: `${`llm-spec anthropic stable top-level cache probe segment ${label}. `.repeat(200)}Reply with exactly: cache-ok`,
+      },
+    ];
+  }
   const echoTool = {
     name: 'echo',
     description: 'Echoes the provided text.',
@@ -1074,10 +1080,11 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
       description: 'cache_control round trip usage (default TTL)',
       covers: ['cache_control'],
       run: async () => {
+        const runLabel = createCacheProbeRunLabel('default');
         const request = {
           model: config.model,
           max_tokens: 64,
-          messages: buildCacheProbeMessages('default'),
+          messages: buildCacheProbeMessages(runLabel),
         };
 
         return runCacheControlRoundTrip(request, 'default cache_control');
@@ -1087,10 +1094,11 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
       description: 'cache_control round trip usage (ttl=5m)',
       covers: ['cache_control'],
       run: async () => {
+        const runLabel = createCacheProbeRunLabel('5m');
         const request = {
           model: config.model,
           max_tokens: 64,
-          messages: buildCacheProbeMessages('5m', '5m'),
+          messages: buildCacheProbeMessages(runLabel, '5m'),
         };
 
         return runCacheControlRoundTrip(request, 'ttl=5m cache_control');
@@ -1100,10 +1108,11 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
       description: 'cache_control round trip usage (ttl=1h)',
       covers: ['cache_control'],
       run: async () => {
+        const runLabel = createCacheProbeRunLabel('1h');
         const request = {
           model: config.model,
           max_tokens: 64,
-          messages: buildCacheProbeMessages('1h', '1h'),
+          messages: buildCacheProbeMessages(runLabel, '1h'),
         };
 
         return runCacheControlRoundTrip(request, 'ttl=1h cache_control');
@@ -1113,10 +1122,11 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
       description: 'top-level cache_control round trip usage',
       covers: ['cache_control'],
       run: async () => {
+        const runLabel = createCacheProbeRunLabel('top-level');
         const request = {
           model: config.model,
           max_tokens: 64,
-          messages: [...topLevelCacheProbeMessages],
+          messages: buildTopLevelCacheProbeMessages(runLabel),
           cache_control: {
             type: 'ephemeral' as const,
             ttl: '5m' as const,
@@ -1440,10 +1450,11 @@ export function buildAnthropicCases({ client, config }: AnthropicCaseContext): T
       description: 'cache_control round trip usage (streaming)',
       covers: ['cache_control', 'stream'],
       run: async () => {
+        const runLabel = createCacheProbeRunLabel('stream');
         const request = {
           model: config.model,
           max_tokens: 64,
-          messages: buildCacheProbeMessages('stream', '5m'),
+          messages: buildCacheProbeMessages(runLabel, '5m'),
         };
 
         return runCacheControlStreamRoundTrip(request, 'streaming cache_control');
