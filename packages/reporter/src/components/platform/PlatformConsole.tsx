@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent, ReactNode } from 'react'
+import type { CSSProperties, ChangeEvent, ReactNode } from 'react'
 import {
   Bot,
   Check,
   ChevronsUpDown,
-  Cloud,
   Copy,
   Database,
   Download,
@@ -1587,7 +1586,7 @@ function ConfigurationSelector(props: {
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="h-10 w-full justify-between gap-3 sm:w-72"
+          className="h-10 min-w-0 flex-1 justify-between gap-3"
         >
           <span className="min-w-0 truncate text-left">
             {selectedProfile?.name
@@ -1597,7 +1596,7 @@ function ConfigurationSelector(props: {
           <ChevronsUpDown className="h-4 w-4 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-0">
+      <PopoverContent align="end" className="w-[min(25rem,calc(100vw-2rem))] p-0">
         <div className="border-b border-slate-100 px-3 py-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Environments</span>
         </div>
@@ -2360,10 +2359,40 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
   const [historyItems, setHistoryItems] = useState<BackendRunHistoryEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
+  const [runConsoleHeight, setRunConsoleHeight] = useState<number | null>(null)
+  const runConsoleRef = useRef<HTMLDivElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const siteImportInputRef = useRef<HTMLInputElement | null>(null)
   const initialProfileLoadedRef = useRef(false)
   const backendJobPollingRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const element = runConsoleRef.current
+    if (!element) {
+      return undefined
+    }
+
+    const updateHeight = () => {
+      setRunConsoleHeight(Math.ceil(element.getBoundingClientRect().height))
+    }
+
+    updateHeight()
+    window.addEventListener('resize', updateHeight)
+
+    if (typeof ResizeObserver === 'undefined') {
+      return () => {
+        window.removeEventListener('resize', updateHeight)
+      }
+    }
+
+    const observer = new ResizeObserver(updateHeight)
+    observer.observe(element)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateHeight)
+    }
+  }, [])
 
   useEffect(() => {
     if (initialProfileLoadedRef.current) {
@@ -3021,6 +3050,28 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
     }
   }, [siteConfig.backendUrl])
 
+  const handleClearHistory = useCallback(async () => {
+    if (historyItems.length === 0 || !window.confirm(`Clear all ${historyItems.length} backend history records?`)) {
+      return
+    }
+
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      await Promise.all(historyItems.map((entry) => deleteBackendRunHistory(siteConfig.backendUrl, entry.id)))
+      setHistoryItems([])
+    } catch (historyErrorValue) {
+      setHistoryError(formatUnknownError(historyErrorValue))
+      try {
+        setHistoryItems(await listBackendRunHistory(siteConfig.backendUrl))
+      } catch {
+        // Keep the original clear error visible.
+      }
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [historyItems, siteConfig.backendUrl])
+
   useEffect(() => {
     if (requiresBackend) {
       void handleRefreshHistory()
@@ -3036,14 +3087,14 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
   }, [onLoadFile])
 
   return (
-    <div className="min-h-screen bg-[#F8F9FB] p-6 font-sans text-slate-900 md:p-10">
-      <div className="mx-auto max-w-[1280px]">
-        <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="min-h-screen bg-[#F8F9FB] p-4 font-sans text-slate-900 md:p-5">
+      <div className="mx-auto max-w-[1760px]">
+        <header className="mb-5 grid grid-cols-1 items-center gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
           <div className="flex items-center text-xl font-bold tracking-wide text-slate-900">
             <Layers className="mr-3 h-6 w-6 text-slate-700" />
             LLM Spec Platform
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <input
               ref={siteImportInputRef}
               type="file"
@@ -3083,9 +3134,12 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
           </div>
         </header>
 
-        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
-          <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] lg:col-span-8">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6 py-5">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
+          <div
+            ref={runConsoleRef}
+            className="flex flex-col overflow-hidden rounded-lg border border-slate-200/80 bg-white shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)]"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
               <h2 className="text-lg font-bold text-slate-800">Run Console</h2>
               <Button type="button" variant="outline" onClick={handleOpenConfiguration}>
                 <Settings2 className="h-4 w-4" />
@@ -3093,8 +3147,8 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
               </Button>
             </div>
 
-            <div className="flex-grow space-y-6 p-6">
-              <dl className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="flex-grow space-y-5 p-5">
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
                 <SummaryField
                   label="Environment"
                   value={selectedProfile?.name
@@ -3115,7 +3169,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                 />
               </dl>
 
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-12">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
                 <div className="md:col-span-3">
                   <Field
                     label="Timeout Ms"
@@ -3148,25 +3202,54 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-2.5">
+                <div className="flex flex-wrap items-start justify-between gap-2">
                   <h3 className="text-base font-bold text-slate-800">Test Matrix</h3>
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={handleAddStandardTarget}>
-                      <Plus className="h-4 w-4" />
-                      API Target
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={handleAddAgentTarget}>
-                      <Bot className="h-4 w-4" />
-                      Agent Target
-                    </Button>
+                  <div className="flex min-w-0 flex-col items-stretch gap-1.5">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <button
+                        type="button"
+                        className="flex w-full transform items-center justify-center rounded-lg bg-slate-900 px-6 py-2 text-sm font-semibold text-white shadow-md transition-all duration-150 hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-lg disabled:pointer-events-none disabled:opacity-50 sm:w-auto"
+                        onClick={handleRun}
+                        disabled={running || loading}
+                      >
+                        {running ? <RotateCcw className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" fill="currentColor" />}
+                        {running ? 'Running...' : 'Run Tests'}
+                      </button>
+                      <Button type="button" variant="outline" size="sm" onClick={handleAddStandardTarget}>
+                        <Plus className="h-4 w-4" />
+                        API Target
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={handleAddAgentTarget}>
+                        <Bot className="h-4 w-4" />
+                        Agent Target
+                      </Button>
+                    </div>
+                    <div className="flex w-full items-center justify-end gap-2 sm:w-[40rem]">
+                      <span className={cn('w-56 truncate text-right text-xs font-semibold', progressTextColor)}>
+                        {progressStatusText}
+                      </span>
+                      <span className="relative flex h-2.5 w-2.5 shrink-0">
+                        {running && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />}
+                        <span className={cn('relative inline-flex h-2.5 w-2.5 rounded-full', progressDotColor)} />
+                      </span>
+                      <div className="h-2 w-72 shrink-0 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className={cn('h-full rounded-full transition-[width] duration-300 ease-out', progressBarColor)}
+                          style={{ width: `${hasRunProgress ? runProgress.percent : 0}%` }}
+                        />
+                      </div>
+                      <span className="w-10 shrink-0 text-right text-xs font-medium text-slate-500">
+                        {hasRunProgress ? `${runProgress.percent}%` : 'Idle'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
                   <div className="min-w-[860px]">
-                    <div className="grid grid-cols-[3rem_7rem_13rem_13rem_minmax(18rem,1fr)_5.5rem] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      <div>On</div>
+                    <div className="grid grid-cols-[2.25rem_7rem_13rem_13rem_minmax(18rem,1fr)_5.5rem] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <div className="text-center">On</div>
                       <div>Kind</div>
                       <div>Surface</div>
                       <div>Model</div>
@@ -3174,16 +3257,16 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                       <div className="text-right">Actions</div>
                     </div>
                     {runDraft.targets.length === 0 ? (
-                      <div className="px-4 py-10 text-center text-sm text-slate-500">
+                      <div className="px-4 py-8 text-center text-sm text-slate-500">
                         No targets configured.
                       </div>
                     ) : (
                       runDraft.targets.map((target) => (
                         <div
                           key={target.id}
-                          className="grid grid-cols-[3rem_7rem_13rem_13rem_minmax(18rem,1fr)_5.5rem] items-start gap-3 border-b border-slate-100 px-3 py-3 last:border-b-0"
+                          className="grid grid-cols-[2.25rem_7rem_13rem_13rem_minmax(18rem,1fr)_5.5rem] items-start gap-3 border-b border-slate-100 px-3 py-2.5 last:border-b-0"
                         >
-                          <div className="pt-2">
+                          <div className="flex h-[46px] items-center justify-center">
                             <Checkbox
                               checked={target.enabled}
                               onCheckedChange={(checked) => {
@@ -3268,33 +3351,24 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-4 border-t border-slate-100 bg-slate-50/50 px-6 py-4">
-              <button
-                type="button"
-                className="flex w-full transform items-center justify-center rounded-lg bg-slate-900 px-6 py-2 text-sm font-semibold text-white shadow-md transition-all duration-150 hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-lg disabled:pointer-events-none disabled:opacity-50 sm:w-auto"
-                onClick={handleRun}
-                disabled={running || loading}
-              >
-                {running ? <RotateCcw className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" fill="currentColor" />}
-                {running ? 'Running...' : 'Run Tests'}
-              </button>
-            </div>
-
             {backendStatus && (
-              <div className="mx-6 mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              <div className="mx-5 mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                 {backendStatus}
               </div>
             )}
             {displayError && (
-              <div className="mx-6 mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              <div className="mx-5 mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {displayError}
               </div>
             )}
           </div>
 
-          <div className="space-y-6 lg:col-span-4">
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)]">
-              <h3 className="mb-5 text-lg font-bold text-slate-800">Report</h3>
+          <div
+            className="flex min-h-0 flex-col gap-4 lg:h-[var(--run-console-height)]"
+            style={{ '--run-console-height': runConsoleHeight ? `${runConsoleHeight}px` : 'auto' } as CSSProperties}
+          >
+            <div className="rounded-lg border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)]">
+              <h3 className="mb-4 text-lg font-bold text-slate-800">Report</h3>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -3302,10 +3376,10 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                 className="hidden"
                 onChange={handleFileChange}
               />
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 <button
                   type="button"
-                  className="group flex w-full items-center rounded-xl border border-slate-200 px-4 py-3 text-left shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+                  className="group flex w-full items-center rounded-lg border border-slate-200 px-4 py-2.5 text-left shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
                   onClick={() => { fileInputRef.current?.click() }}
                   disabled={loading}
                 >
@@ -3315,7 +3389,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
 
                 <button
                   type="button"
-                  className="group flex w-full items-center rounded-xl border border-slate-200 px-4 py-3 text-left shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+                  className="group flex w-full items-center rounded-lg border border-slate-200 px-4 py-2.5 text-left shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
                   onClick={onLoadSample}
                   disabled={loading}
                 >
@@ -3344,21 +3418,32 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)]">
-              <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex min-h-0 flex-col rounded-lg border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] lg:flex-1">
+              <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="flex min-w-0 items-center text-base font-bold text-slate-800">
                   <History className="mr-2 h-4 w-4 shrink-0 text-slate-500" />
                   <span className="truncate">Backend History</span>
                 </h3>
-                <button
-                  type="button"
-                  className="rounded-md p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-50"
-                  onClick={() => { void handleRefreshHistory() }}
-                  disabled={historyLoading}
-                  aria-label="Refresh backend history"
-                >
-                  <RefreshCw className={cn('h-4 w-4', historyLoading && 'animate-spin')} />
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    className="rounded-md p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-50"
+                    onClick={() => { void handleRefreshHistory() }}
+                    disabled={historyLoading}
+                    aria-label="Refresh backend history"
+                  >
+                    <RefreshCw className={cn('h-4 w-4', historyLoading && 'animate-spin')} />
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 disabled:pointer-events-none disabled:opacity-50"
+                    onClick={() => { void handleClearHistory() }}
+                    disabled={historyLoading || historyItems.length === 0}
+                    aria-label="Clear backend history"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               {historyError && (
@@ -3367,9 +3452,9 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                 </div>
               )}
 
-              <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
+              <div className="max-h-96 min-h-0 space-y-2 overflow-y-auto pr-1 lg:max-h-none lg:flex-1">
                 {historyItems.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-500">
+                  <div className="rounded-lg border border-dashed border-slate-200 px-3 py-5 text-center text-sm text-slate-500">
                     {historyLoading ? 'Loading history...' : 'No saved backend runs'}
                   </div>
                 ) : (
@@ -3377,7 +3462,7 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                     <div
                       key={entry.id}
                       className={cn(
-                        'group flex w-full items-start gap-2 rounded-lg border border-slate-200 px-3 py-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50',
+                        'group flex w-full items-start gap-2 rounded-lg border border-slate-200 px-3 py-2.5 text-left transition-colors hover:border-slate-300 hover:bg-slate-50',
                         (historyLoading || running) && 'opacity-50',
                       )}
                     >
@@ -3430,62 +3515,6 @@ export function PlatformConsole({ onReport, onLoadFile, onLoadSample, loading, e
                     </div>
                   ))
                 )}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)]">
-              <h3 className="mb-4 text-base font-bold text-slate-800">Progress</h3>
-
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <span className="relative flex h-3 w-3">
-                    {running && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />}
-                    <span className={cn('relative inline-flex h-3 w-3 rounded-full', progressDotColor)} />
-                  </span>
-                  <span className={cn('text-sm font-semibold', progressTextColor)}>
-                    {progressStatusText}
-                  </span>
-                </div>
-
-                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className={cn('h-full rounded-full transition-[width] duration-300 ease-out', progressBarColor)}
-                    style={{ width: `${hasRunProgress ? runProgress.percent : 0}%` }}
-                  />
-                </div>
-
-                <div className="space-y-1.5 pt-1 text-xs text-slate-500">
-                  <div className="flex items-center gap-2">
-                    <Check className="h-3 w-3 text-slate-400" />
-                    {hasRunProgress
-                      ? `${runProgress.detailText} (${runProgress.percent}%)`
-                      : 'Waiting for a run'}
-                  </div>
-                  {hasRunProgress && (
-                    <div className="flex items-center gap-2">
-                      <Check className="h-3 w-3 text-emerald-500" />
-                      {runProgress.passed} passed, {runProgress.failed} failed, {runProgress.skipped} skipped
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <Cloud className="h-3 w-3 text-slate-400" />
-                    {activeTargets.length} enabled target{activeTargets.length === 1 ? '' : 's'}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Server className="h-3 w-3 text-slate-400" />
-                    {selectedProfile?.name ?? 'Unsaved environment'}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {requiresBackend ? <Server className="h-3 w-3 text-slate-400" /> : <Wifi className="h-3 w-3 text-slate-400" />}
-                    {executionSummary}
-                  </div>
-                  {activeBackendJob && (
-                    <div className="flex items-center gap-2">
-                      <Server className="h-3 w-3 text-slate-400" />
-                      Job {activeBackendJob.id}
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
           </div>
