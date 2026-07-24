@@ -1,0 +1,29 @@
+apiVersion: deploy.r9s.net/v1alpha1
+kind: InternalService
+metadata:
+  name: r9s-llm-spec
+spec:
+  deploymentMode: container-blue-green
+  hostname: llm-spec.inner.r9s.net
+  owner: r9s-ai
+  runner:
+    labels:
+      - self-hosted
+      - linux
+      - r9s-llm-spec-cicd
+  container:
+    engine: podman
+    image: r9s-llm-spec
+    internalPort: 8788
+    bluePort: 3092
+    greenPort: 3093
+  health:
+    path: /api/health
+    timeoutSeconds: 300
+    revisionField: revision
+  nginx:
+    upstreamName: r9s_llm_spec
+    drainSeconds: 10
+  github:
+    environment: production
+    concurrencyGroup: r9s-llm-spec-production

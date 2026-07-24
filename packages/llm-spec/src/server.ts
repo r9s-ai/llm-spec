@@ -1389,6 +1389,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     sendJson(response, 200, {
       ok: true,
       service: 'llm-spec-backend',
+      revision,
       agentTests: true,
       backendRun: true,
       targetMatrixRun: true,
@@ -1462,6 +1463,11 @@ const server = createServer((request, response) => {
 
 const port = Number(process.env.LLM_SPEC_BACKEND_PORT ?? process.env.PORT ?? DEFAULT_BACKEND_PORT);
 const host = process.env.LLM_SPEC_BACKEND_HOST ?? process.env.HOST ?? '0.0.0.0';
+const revision = process.env.LLM_SPEC_REVISION ?? 'unknown';
+
+if (!/^(unknown|[0-9a-f]{40})$/.test(revision)) {
+  throw new Error('LLM_SPEC_REVISION must be a full Git commit SHA');
+}
 
 server.on('error', (error: Error & { code?: string }) => {
   console.error(`llm-spec backend failed to start: ${error.message}`);
