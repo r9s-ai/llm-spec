@@ -188,7 +188,9 @@ verify_revision_url() {
   deadline=$((SECONDS + timeout))
   while ((SECONDS < deadline)); do
     body="$(curl --fail --silent --show-error --max-time 15 "$url/api/health" 2>/dev/null || true)"
-    grep -Fq "\"revision\":\"$revision\"" <<<"$body" && return 0
+    if grep -Eq "\"revision\"[[:space:]]*:[[:space:]]*\"$revision\"" <<<"$body"; then
+      return 0
+    fi
     sleep 1
   done
   return 1
