@@ -1,0 +1,5 @@
+# Managed by r9s-ai/llm-spec deployment. Do not edit on the runner.
+upstream r9s_llm_spec {
+    server 127.0.0.1:__LLM_SPEC_UPSTREAM_PORT__;
+    keepalive 32;
+}

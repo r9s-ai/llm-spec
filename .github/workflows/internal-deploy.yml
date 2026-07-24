@@ -1,0 +1,89 @@
+name: Deploy internal LLM Spec
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm type-check
+      - run: pnpm lint
+      - run: pnpm build:service
+      - run: bash -n scripts/deploy_internal_site.sh
+
+  build:
+    needs: check
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Package immutable deployment artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle_dir="${RUNNER_TEMP}/r9s-llm-spec-bundle"
+          mkdir -p "${bundle_dir}/nginx"
+          tar --exclude-vcs --exclude=node_modules --exclude=dist \
+            -czf "${bundle_dir}/source.tar.gz" \
+            package.json pnpm-lock.yaml pnpm-workspace.yaml packages
+          cp deploy/internal/Dockerfile "${bundle_dir}/Dockerfile"
+          cp scripts/deploy_internal_site.sh "${bundle_dir}/deploy_internal_site.sh"
+          cp deploy/internal/nginx/llm-spec.inner.r9s.net.conf "${bundle_dir}/nginx/llm-spec.inner.r9s.net.conf"
+          cp deploy/internal/nginx/r9s-llm-spec-upstream.conf.template "${bundle_dir}/nginx/r9s-llm-spec-upstream.conf.template"
+          printf '%s\n' "${GITHUB_SHA}" > "${bundle_dir}/revision.txt"
+          (
+            cd "${bundle_dir}"
+            sha256sum Dockerfile deploy_internal_site.sh revision.txt source.tar.gz \
+              nginx/llm-spec.inner.r9s.net.conf \
+              nginx/r9s-llm-spec-upstream.conf.template > SHA256SUMS
+          )
+      - uses: actions/upload-artifact@v7
+        with:
+          name: r9s-llm-spec-${{ github.sha }}
+          path: ${{ runner.temp }}/r9s-llm-spec-bundle
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy:
+    needs: [check, build]
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, linux, r9s-llm-spec-cicd]
+    environment: production
+    timeout-minutes: 30
+    concurrency:
+      group: r9s-llm-spec-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: r9s-llm-spec-${{ github.sha }}
+          path: ${{ runner.temp }}/r9s-llm-spec-bundle
+      - name: Deploy validated internal service artifact
+        shell: bash
+        env:
+          LLM_SPEC_BUNDLE_DIR: ${{ runner.temp }}/r9s-llm-spec-bundle
+          LLM_SPEC_PUBLIC_URL: https://llm-spec.inner.r9s.net
+          LLM_SPEC_BLUE_PORT: '3092'
+          LLM_SPEC_GREEN_PORT: '3093'
+          CONTAINER_CLI: podman
+        run: bash "${LLM_SPEC_BUNDLE_DIR}/deploy_internal_site.sh"
