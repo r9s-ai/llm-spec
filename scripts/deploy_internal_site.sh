@@ -98,7 +98,9 @@ verify_bundle() {
       || die "unsafe path in source archive: $entry"
   done < <(tar -tzf "$bundle_dir/source.tar.gz")
   listing="$(tar -tvzf "$bundle_dir/source.tar.gz")"
-  grep -Eq '^[lh]' <<<"$listing" && die "source archive must not contain links"
+  if grep -Eq '^[lh]' <<<"$listing"; then
+    die "source archive must not contain links"
+  fi
 }
 
 container_exists() { container_engine container inspect "$1" >/dev/null 2>&1; }
